@@ -15,3 +15,21 @@ CIFDB_PATH = os.path.join(base_path, "cif_protein_only.lmdb")
 CCD_DB_PATH = os.path.join(base_path, "ligand_info.lmdb")
 IDEAL_LIGAND_PATH = os.path.join(base_path, "metadata/ideal_ligand_list.pkl")
 SIGNALP_PATH = os.path.join(base_path, "signalp")
+
+__all__ = [
+    "CONTACT_GRAPH_PATH",
+    "MSA_PATH",
+    "CIF_PATH",
+    "SEQ_TO_HASH_PATH",
+    "GRAPH_HASH_PATH",
+    "GRAPH_CLUSTER_PATH",
+    "MSADB_PATH",
+    "CIFDB_PATH",
+    "CCD_DB_PATH",
+    "IDEAL_LIGAND_PATH",
+    "SIGNALP_PATH"
+]
+
+for path in __all__:
+    if not os.path.exists(path):
+        raise FileNotFoundError(f"{path} does not exist. Please check the path.")
