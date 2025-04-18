@@ -1,4 +1,3 @@
-./example_cif/
-./biggest_cluster_connectivity.npy
-./dataloader.py
-./log/
+example_cif/
+dataloader.py
+log/
