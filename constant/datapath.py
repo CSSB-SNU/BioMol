@@ -1,0 +1,11 @@
+CONTACT_GRAPH_PATH = "/data/psk6950/PDB_2024Mar18/protein_graph/"
+MSA_PATH = "/data/psk6950/PDB_2024Mar18/a3m/"
+CIF_PATH = "/data/psk6950/PDB_2024Mar18/cif/"
+SEQ_TO_HASH_PATH = "/data/psk6950/PDB_2024Mar18/entity/sequence_hashes.pkl"
+GRAPH_HASH_PATH = '/data/psk6950/PDB_2024Mar18/protein_graph/level0_cluster.csv'
+GRAPH_CLUSTER_PATH = '/data/psk6950/PDB_2024Mar18/cluster/graph_hash_to_graph_cluster.txt'
+MSADB_PATH = "/data/psk6950/PDB_2024Mar18/MSA.lmdb"
+CIFDB_PATH = "/data/psk6950/PDB_2024Mar18/cif_protein_only.lmdb"
+CCD_DB_PATH = "/data/psk6950/CCD/ligand_info.lmdb"
+IDEAL_LIGAND_PATH = "/data/psk6950/PDB_2024Mar18/metadata/ideal_ligand_list.pkl"
+SIGNALP_PATH = "/data/psk6950/PDB_2024Mar18/signalp"

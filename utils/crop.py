@@ -1,0 +1,166 @@
+import os
+from typing import List, Tuple, Dict, Any, overload
+import torch
+from constant.chemical import *
+from utils.parser import parse_cif, parse_simple_pdb
+from utils.hierarchy import BioMolStructure
+from utils.MSA import MSA, ComplexMSA
+from utils.contact_graph import ContactGraph
+import random
+
+def get_chain_crop_indices(residue_chain_break : Dict[str,Tuple[int,int]],
+                           crop_indices : torch.Tensor) -> Dict[str,torch.Tensor]:
+    chain_crop = {}
+    for chain in residue_chain_break.keys():
+        chain_start, chain_end = residue_chain_break[chain]
+        minus_start = crop_indices - chain_start
+        minus_end = crop_indices - chain_end
+        crop_chain = (minus_start >= 0) & (minus_end <= 0)
+        if crop_chain.sum() == 0:
+            continue
+        chain_crop[chain] = crop_indices[crop_chain] - chain_start
+    return chain_crop
+
+def crop_contiguous(biomolstructure : BioMolStructure, 
+                    crop_size : int) -> Tuple[torch.Tensor, Dict[str,torch.Tensor]]:
+    '''
+    Crop the structure and sequence into a contiguous region
+    '''
+    residue_chain_break = biomolstructure.residue_chain_break
+    n_added = 0
+    chain_id = list(residue_chain_break.keys())
+    n_remaining = residue_chain_break[chain_id[-1]][1] + 1
+    shuffled_chain_id = random.sample(chain_id, len(chain_id))
+
+    crop_indices = []
+
+    for chain in shuffled_chain_id:
+        chain_start = residue_chain_break[chain][0]
+        chain_end = residue_chain_break[chain][1]
+        n_k = chain_end - chain_start + 1
+        n_remaining -= n_k
+        crop_max = min(crop_size-n_added,n_k)
+        crop_min = min(n_k,max(0,crop_size-n_remaining-n_added))
+        crop = random.randint(crop_min,crop_max)
+        n_added += crop
+        crop_start = random.randint(0,n_k-crop) + chain_start
+        crop_indices.extend(list(range(crop_start,crop_start+crop)))
+    crop_indices = sorted(crop_indices)
+    crop_indices = torch.tensor(crop_indices)
+
+    chain_crop = get_chain_crop_indices(residue_chain_break, crop_indices)
+
+    return crop_indices, chain_crop
+
+def crop_spatial(bimolstructure : BioMolStructure,
+                 crop_size : int) -> Tuple[torch.Tensor, Dict[str,torch.Tensor]]:
+    '''
+    Crop the structure and sequence into a spatial region
+    '''
+    residue_chain_break = bimolstructure.residue_chain_break
+    residue_tensor = bimolstructure.residue_tensor
+    valid_residue_indices, = torch.where(residue_tensor[:,4] == 1)
+    valid_residue_num = valid_residue_indices.size(0)
+    if valid_residue_num < crop_size:
+        return valid_residue_indices
+    
+    chain_list = list(residue_chain_break.keys())
+    pivot_chain = random.choice(chain_list)
+    pivot_chain_residue_idx = list(range(residue_chain_break[pivot_chain][0],residue_chain_break[pivot_chain][1]+1))
+    pivot_residue = random.choice(pivot_chain_residue_idx)
+
+    residue_xyz = residue_tensor[:,5:8]
+    residue_mask = residue_tensor[:,4] == 1
+    missing_indices = torch.where(~residue_mask)[0]
+    pivot_residue_tensor = residue_tensor[pivot_residue]
+    pivot_residue_xyz = pivot_residue_tensor[5:8]
+
+    distance_map = torch.norm(residue_xyz - pivot_residue_xyz, dim=1)
+    distance_map[~residue_mask] = float('inf')
+
+    crop_indices = torch.topk(distance_map, crop_size, largest=False).indices
+    
+    # remove missing residues
+    crop_indices = crop_indices[~torch.isin(crop_indices, missing_indices)]
+    crop_indices = torch.sort(crop_indices).values
+
+    crop_chain = []
+    for chain in chain_list:
+        chain_residue_idx = torch.arange(residue_chain_break[chain][0],residue_chain_break[chain][1]+1)
+        if torch.any(torch.isin(crop_indices, chain_residue_idx)):
+            crop_chain.append(chain)
+
+    chain_crop = get_chain_crop_indices(residue_chain_break, crop_indices)
+
+    return crop_indices, chain_crop
+    
+def crop_spatial_interface(bimolstructure : BioMolStructure,
+                            crop_size : int) -> Tuple[torch.Tensor, Dict[str,torch.Tensor]]:
+    '''
+    Crop the structure and sequence into a spatial region
+    '''
+    interface_distance_cutoff = 15.0
+
+    residue_chain_break = bimolstructure.residue_chain_break
+    residue_tensor = bimolstructure.residue_tensor
+    valid_residue_indices, = torch.where(residue_tensor[:,4] == 1)
+    valid_residue_num = valid_residue_indices.size(0)
+    if valid_residue_num < crop_size:
+        return valid_residue_indices
+    
+    chain_list = list(residue_chain_break.keys())
+    pivot_chain = random.choice(chain_list)
+    pivot_chain_id = chain_list.index(pivot_chain)
+
+    contact_graph = bimolstructure.contact_graph
+    contact_nodes = contact_graph.get_contact_node(None, pivot_chain_id)
+    crop_nodes = contact_nodes
+    crop_chains = [chain_list[i] for i in crop_nodes]
+    crop_chains_residue_idx = []
+    for chain in crop_chains:
+        crop_chains_residue_idx.extend(list(range(residue_chain_break[chain][0],residue_chain_break[chain][1]+1)))
+    crop_chains_residue_idx = sorted(crop_chains_residue_idx)
+    crop_chains_residue_tensor = residue_tensor[crop_chains_residue_idx]
+    crop_chains_residue_xyz = crop_chains_residue_tensor[:,5:8]
+    crop_chain_residue_mask = crop_chains_residue_tensor[:,4] == 1
+
+    pivot_chain_residues_idx = list(range(residue_chain_break[pivot_chain][0],residue_chain_break[pivot_chain][1]+1))
+    pivot_chain_residue_tensor = residue_tensor[pivot_chain_residues_idx]
+    pivot_chain_residue_xyz = pivot_chain_residue_tensor[:,5:8]
+    pivot_chain_residue_mask = pivot_chain_residue_tensor[:,4] == 1
+
+    distance_map = pivot_chain_residue_xyz[:,None] - crop_chains_residue_xyz[None]
+    distance_map = torch.norm(distance_map, dim=2)
+    distance_map[~pivot_chain_residue_mask,:] = float('inf')
+    distance_map[:,~crop_chain_residue_mask] = float('inf')
+    interface_residues = distance_map.min(dim=1).values < interface_distance_cutoff
+    interface_residue_indices = torch.where(interface_residues)[0]
+    pivot_residue_idx = random.choice(interface_residue_indices)
+    pivot_residue_idx += residue_chain_break[pivot_chain][0]
+
+    # pivot_residue = random.choice(pivot_chain_residue_idx)
+
+    residue_xyz = residue_tensor[:,5:8]
+    residue_mask = residue_tensor[:,4] == 1
+    missing_indices = torch.where(~residue_mask)[0]
+    pivot_residue_tensor = residue_tensor[pivot_residue_idx]
+    pivot_residue_xyz = pivot_residue_tensor[5:8]
+
+    distance_map = torch.norm(residue_xyz - pivot_residue_xyz, dim=1)
+    distance_map[~residue_mask] = float('inf')
+
+    crop_indices = torch.topk(distance_map, crop_size, largest=False).indices
+    
+    # remove missing residues
+    crop_indices = crop_indices[~torch.isin(crop_indices, missing_indices)]
+    crop_indices = torch.sort(crop_indices).values
+    
+    crop_chain = []
+    for chain in chain_list:
+        chain_residue_idx = torch.arange(residue_chain_break[chain][0],residue_chain_break[chain][1]+1)
+        if torch.any(torch.isin(crop_indices, chain_residue_idx)):
+            crop_chain.append(chain)
+
+    chain_crop = get_chain_crop_indices(residue_chain_break, crop_indices)
+
+    return crop_indices, chain_crop

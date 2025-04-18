@@ -1,0 +1,2 @@
+ /home/bsoohyuncd/software/cd-hit-v4.8.1-2019-0228/cd-hit -i /public_data/psk6950/PDB_2024Mar18/AbAg/H3.fasta -o /public_data/psk6950/PDB_2024Mar18/AbAg/cd_hit_pdb_2024MAr18.dat -c 0.9 -n 2 -M 256000 -d 0 -T 0 -l 1 -s 0.8 -aL 0.8 -aS 0.8 -g 1
+ /home/bsoohyuncd/software/cd-hit-v4.8.1-2019-0228/cd-hit -i /public_data/psk6950/PDB_2024Mar18/AbAg/H3L3.fasta -o /public_data/psk6950/PDB_2024Mar18/AbAg/cd_hit_pdb_2024MAr18.dat -c 0.9 -n 2 -M 256000 -d 0 -T 0 -l 1 -s 0.8 -aL 0.8 -aS 0.8 -g 1

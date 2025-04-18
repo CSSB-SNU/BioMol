@@ -1,0 +1,17 @@
+Traceback (most recent call last):
+  File "/home/psk6950/biomol/./statistics/graph_analysis.py", line 371, in <module>
+    unittest_level2_Cluster(level0_save_path2, './level2_cluster.txt')
+  File "/home/psk6950/biomol/./statistics/graph_analysis.py", line 310, in unittest_level2_Cluster
+    print(is_connected(connectivity))
+  File "/home/psk6950/biomol/./statistics/graph_analysis.py", line 256, in is_connected
+    dfs(0)
+  File "/home/psk6950/biomol/./statistics/graph_analysis.py", line 253, in dfs
+    dfs(neighbor)
+  File "/home/psk6950/biomol/./statistics/graph_analysis.py", line 253, in dfs
+    dfs(neighbor)
+  File "/home/psk6950/biomol/./statistics/graph_analysis.py", line 253, in dfs
+    dfs(neighbor)
+  [Previous line repeated 993 more times]
+  File "/home/psk6950/biomol/./statistics/graph_analysis.py", line 250, in dfs
+    for neighbor in range(n):
+RecursionError: maximum recursion depth exceeded in comparison
