@@ -228,45 +228,17 @@ if __name__ == "__main__":
     cif_path = os.path.join(cif_dir, 'ko/6koo.cif.gz')
     load_cif_start = time.time()
     biomol = BioMol(cif=cif_path, 
-                    # cif_config="./cif_configs/protein_only.json",
-                    cif_config="./cif_configs/base.json",
+                    # cif_config="./configs/cif//protein_only.json",
+                    cif_config="./configs/cif/base.json",
                     remove_signal_peptide=True,
                     use_lmdb=True)
     biomol.choose('1', '1', '.')
-    load_cif_end = time.time()
-
-    cif_path = os.path.join(cif_dir, 'r5/7r5k.cif.gz')
-    load_cif_start = time.time()
-    biomol = BioMol(cif=cif_path, 
-                    # cif_config="./cif_configs/protein_only.json",
-                    cif_config="./cif_configs/base.json",
-                    remove_signal_peptide=True,
-                    use_lmdb=True)
-    # biomol.choose('1', '1', '.')
     load_cif_end = time.time()
     print(f"Load cif time: {load_cif_end - load_cif_start:.2f}s")
     breakpoint()
     biomol.choose('1', '1', '.')
-    biomol.structure.to_mmcif('6qiz.cif')
+    biomol.structure.to_mmcif('test.cif')
 
-    
-    cif_path = os.path.join(cif_dir, 'qi/6qiy.cif.gz')
-    load_cif_start = time.time()
-    biomol = BioMol(cif=cif_path, 
-                    cif_config="./cif_configs/protein_only.json",
-                    remove_signal_peptide=True,
-                    use_lmdb=False)
-    load_cif_end = time.time()
-    biomol.choose('1', '1', '.')
-    biomol.structure.to_mmcif('6qiy.cif')
-
-
-    crop_start = time.time()
     # biomol.crop_and_load_msa({'method_prob': [0.2, 0.4, 0.4], 'crop_size': 384})
-    crop_end = time.time()
-    # print(f"Load cif time: {load_cif_end - load_cif_start:.2f}s")
-    # print(f"Crop time: {crop_end - crop_start:.2f}s")
-    # breakpoint()
-    # # biomol.bioassembly['1']['1']['.'].save_entities()
-    # # biomol.bioassembly['1']['1']['.'].chem_comp_dict
-    # breakpoint()
+    # biomol.bioassembly['1']['1']['.'].save_entities()
+    # biomol.bioassembly['1']['1']['.'].chem_comp_dict

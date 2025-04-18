@@ -11,9 +11,6 @@ from utils.parser_utils import *
 from constant.chemical import stereo_config_map, num2residue
 from constant.datapath import IDEAL_LIGAND_PATH
 
-base_cif_config_path = "./cif_configs/base.json"
-with open(base_cif_config_path, 'r') as f :
-    base_cif_config = json.load(f)
 
 # read ideal_ligand_list using pickle
 with open(IDEAL_LIGAND_PATH, "rb") as f:
@@ -799,11 +796,8 @@ def parse_cif(cif_path, cif_configs=None, remove_signal_peptide=False):
     Returns:
         BioAssembly: A BioAssembly object containing the parsed data.
     '''
-    if cif_configs is None : 
-        cif_configs = base_cif_config
-    else :
-        with open(cif_configs, 'r') as f:
-            cif_configs = json.load(f)
+    with open(cif_configs, 'r') as f:
+        cif_configs = json.load(f)
     types = cif_configs['types']
     cif_ID = cif_path.split("/")[-1].split(".cif")[0]
 
@@ -1000,7 +994,7 @@ def parse_cif(cif_path, cif_configs=None, remove_signal_peptide=False):
 
     return bioassembly
 
-def parse_simple_pdb(pdb_path):
+def parse_simple_pdb(pdb_path, cif_configs=None):
     '''
     This function is used to parse a simple pdb file like fb pdb data.
 
@@ -1071,7 +1065,8 @@ def parse_simple_pdb(pdb_path):
     deposition_date = None
     resolution = None
     
-    cif_configs = base_cif_config
+    with open(cif_configs, 'r') as f:
+        cif_configs = json.load(f)
     types = cif_configs['types']
     cif_ID = pdb_path.split("/")[-1].split(".cif")[0]
 
