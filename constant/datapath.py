@@ -1,5 +1,4 @@
 import os
-# load base path from ./configs/datapath.json
 import json
 with open("configs/datapath.json", "r") as f:
     base_path = json.load(f)["base_path"]
