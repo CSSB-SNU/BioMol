@@ -36,7 +36,7 @@ def configure(config_file):
         raise SystemExit(1) from err
 
     # 2) Check required keys
-    required = ["CCD_PATH", "CIF_PATH"]
+    required = ["CCD_PATH", "DB_PATH"]
     missing = [k for k in required if k not in cfg_data]
     if missing:
         click.echo(
