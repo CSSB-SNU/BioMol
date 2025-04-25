@@ -8,4 +8,4 @@
 
 # python -u ./preprocessing/check_MSA.py
 export PYTHONPATH="~/biomol:$PYTHONPATH"
-python -u ./preprocessing/cif_lmdb.py
+python -u ./BioMol/lmdb/cif_lmdb.py

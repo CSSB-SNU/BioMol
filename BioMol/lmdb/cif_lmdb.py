@@ -1,16 +1,18 @@
 import os
 import lmdb
 import torch
-from utils.parser import parse_cif
 import pickle
 import gzip
 from joblib import Parallel, delayed
-from constant.datapath import CIFDB_PATH
+# from BioMol import CIFDB_PATH
+from BioMol.utils.parser import parse_cif
+
 
 db_env = "/data/psk6950/PDB_2024Mar18/cif_protein_only.lmdb"
 protein_graph_dir = "/data/psk6950/PDB_2024Mar18/protein_graph/"
 cif_dir = "/data/psk6950/PDB_2024Mar18/cif/"
-cif_config_path = "./cif_configs/protein_only.json"
+cif_config_path = "./BioMol/configs/types/protein_only.json"
+CIFDB_PATH = "/data/psk6950/PDB_2024Mar18/cif_protein_only.lmdb"
 remove_signal_peptide = True
 
 
@@ -27,12 +29,12 @@ def already_parsed(env_path=db_env):
 def get_cif_files(cif_dir, protein_graph_dir=protein_graph_dir):
     # Walk through cif_dir to gather all .cif.gz files
     protein_graph_files = []
-    for root, dirs, files in os.walk(protein_graph_dir):
+    for _, _, files in os.walk(protein_graph_dir):
         for file in files:
             if file.endswith(".graph"):
                 protein_graph_files.append(file.split(".")[0])
     cif_files = []
-    for root, dirs, files in os.walk(cif_dir):
+    for root, _, files in os.walk(cif_dir):
         for file in files:
             if file.endswith(".cif.gz"):
                 cif_ID = file.split(".")[0]
@@ -70,8 +72,7 @@ def lmdb_cif(env_path=db_env, n_jobs=-1, batch=200):
     # Parallel processing of files using joblib.
     env = lmdb.open(env_path, map_size=1 * 1024**4)  # 1TB
     # n_jobs=-1 uses all available cores. Adjust as needed.
-    for bb in range(0, len(files_to_process), batch):
-        files_batch = files_to_process[bb : bb + batch]
+    for _ in range(0, len(files_to_process), batch):
         results = Parallel(n_jobs=n_jobs)(
             delayed(process_file)(cif_path) for cif_path in files_to_process
         )

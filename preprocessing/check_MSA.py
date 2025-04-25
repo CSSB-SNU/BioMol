@@ -2,21 +2,22 @@ import os
 import pickle
 from joblib import Parallel, delayed
 
+
 def check_MSA():
     hash_file = "/data/psk6950/PDB_2024Mar18/entity/sequence_hashes.pkl"
     metadata_csv = "/data/psk6950/PDB_2024Mar18/metadata/metadata_psk.csv"
     if not os.path.exists(hash_file):
         print(f"Hash file {hash_file} does not exist.")
         return False
-    with open(hash_file, 'rb') as pf:
+    with open(hash_file, "rb") as pf:
         seq_hashes = pickle.load(pf)
     hash_to_seq = {v: k for k, v in seq_hashes.items()}
 
     hash_list = []
-    with open(metadata_csv, 'r') as f:
+    with open(metadata_csv, "r") as f:
         lines = f.readlines()
         lines = lines[1:]  # Skip the header
-        lines = [line.strip().split(',') for line in lines]
+        lines = [line.strip().split(",") for line in lines]
         hash_list = [line[3] for line in lines]
 
     hash_list = list(set(hash_list))
@@ -25,7 +26,9 @@ def check_MSA():
     a3m_dir1 = "/data/psk6950/PDB_2024Mar18/a3m"
     a3m_dir2 = "/data/psk6950/PDB_2024Mar18/new_hash_a3m"
     a3m_files1 = os.listdir(a3m_dir1)
-    a3m_files1 = [file.split('.a3m.gz')[0] for file in a3m_files1 if file.endswith(".a3m.gz")]
+    a3m_files1 = [
+        file.split(".a3m.gz")[0] for file in a3m_files1 if file.endswith(".a3m.gz")
+    ]
     a3m_files2 = os.listdir(a3m_dir2)
     error_list = []
 
@@ -48,7 +51,7 @@ def check_MSA():
         else:
             print(f"File {a3m_path} does not exist.")
             error_list.append(inner_dir)
-    
+
     breakpoint()
 
 
@@ -58,21 +61,24 @@ def process_seq(seq_hash, a3m_dir1, a3m_dir2):
         # Copy the file
         dest_path = os.path.join(a3m_dir1, f"{seq_hash}.a3m")
         os.system(f"cp {a3m_path} {dest_path}")
-        if os.path.exists(f'{dest_path}.gz'):
-            os.remove(f'{dest_path}.gz')
+        if os.path.exists(f"{dest_path}.gz"):
+            os.remove(f"{dest_path}.gz")
         # Gzip the file
         os.system(f"gzip {dest_path}")
     else:
         print(f"File {a3m_path} does not exist.")
 
+
 def copy_MSA():
     a3m_dir1 = "/data/psk6950/PDB_2024Mar18/a3m"
     a3m_dir2 = "/data/psk6950/PDB_2024Mar18/new_hash_a3m"
     seq_hashes = os.listdir(a3m_dir2)
-    
-    # Run the processing in parallel using all available cores
-    Parallel(n_jobs=-1)(delayed(process_seq)(seq_hash, a3m_dir1, a3m_dir2) for seq_hash in seq_hashes)
-    
 
-if __name__ == '__main__':
+    # Run the processing in parallel using all available cores
+    Parallel(n_jobs=-1)(
+        delayed(process_seq)(seq_hash, a3m_dir1, a3m_dir2) for seq_hash in seq_hashes
+    )
+
+
+if __name__ == "__main__":
     copy_MSA()

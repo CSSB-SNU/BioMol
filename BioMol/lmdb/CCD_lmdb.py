@@ -1,10 +1,20 @@
 import os
 from Bio.PDB.MMCIF2Dict import MMCIF2Dict as mmcif2dict
-from utils.feature import *
-from utils.hierarchy import ChemComp
-from constant.chemical import stereo_config_map
 import pickle
 import lmdb
+import torch
+
+from BioMol.utils.feature import (
+    FeatureLevel,
+    Feature0D,
+    Feature1D,
+    FeaturePair,
+    FeatureMap0D,
+    FeatureMap1D,
+    FeatureMapPair,
+)
+from BioMol.utils.hierarchy import ChemComp
+from BioMol.constant.chemical import stereo_config_map
 
 ligand_configs = {
     "0D": {
@@ -26,7 +36,7 @@ ligand_configs = {
 def split_cif(cif_path, temp_dir):
     if not os.path.exists(temp_dir):
         os.makedirs(temp_dir)
-    with open(cif_path, "r") as f:
+    with open(cif_path) as f:
         lines = f.readlines()
 
     # split components.cif into individual files ("data_{three-letter-code}.cif")
@@ -72,9 +82,6 @@ def parse_cif(cif_path):
 
     full_atoms = mmcif_dict["_chem_comp_atom.atom_id"]
     one_letter_atoms = mmcif_dict["_chem_comp_atom.type_symbol"]
-    # hydrogen_mask = [atom != 'H' for atom in one_letter_atoms]
-    # full_atoms = [atom for atom, mask in zip(full_atoms, hydrogen_mask) if mask]
-    # one_letter_atoms = [atom for atom, mask in zip(one_letter_atoms, hydrogen_mask) if mask]
     full_atoms_mask = [d != "?" for d in full_atoms]
     one_letter_atoms_mask = [d != "?" for d in one_letter_atoms]
 
@@ -122,7 +129,8 @@ def parse_cif(cif_path):
         output_1D.pop(key)
     output_1D = FeatureMap1D(output_1D)
 
-    head = 5  # (atom_idx1) (atom_idx2) (single, double, triple), (aromatic, non-aromatic), (stereo, non-stereo)
+    # (atom_idx1) (atom_idx2) (single, double, triple), \
+    # (aromatic, non-aromatic), (stereo, non-stereo)
 
     if "_chem_comp_bond.atom_id_1" in mmcif_dict:
         _chem_comp_bond_atom_id1 = mmcif_dict["_chem_comp_bond.atom_id_1"]
@@ -178,7 +186,7 @@ def parse_cif(cif_path):
 def save_ligand_info(temp_dir, env_path):
     env = lmdb.open(env_path, map_size=1024**3)
     big_dict = {}
-    for root, dirs, files in os.walk(temp_dir):
+    for root, _, files in os.walk(temp_dir):
         for file in files:
             if file.endswith(".cif"):
                 cif_path = os.path.join(root, file)
@@ -197,6 +205,6 @@ def save_ligand_info(temp_dir, env_path):
 
 if __name__ == "__main__":
     save_ligand_info(
-        "/public_data/psk6950/CCD/components_tmp/",
-        "/public_data/psk6950/CCD/ligand_info.lmdb",
+        "/data/psk6950/CCD/components_tmp/",
+        "/data/psk6950/CCD/ligand_info.lmdb",
     )

@@ -13,6 +13,7 @@ from itertools import combinations
 # Regex pattern to capture the three groups inside the tuple
 pattern = re.compile(r"\('([^']+)', '([^']+)', '([^']+)'\)")
 
+
 class custom_graph(nx.Graph):
     def __init__(self, graph: nx.Graph):
         super().__init__(graph)
@@ -21,6 +22,7 @@ class custom_graph(nx.Graph):
     def get_edges(self):
         return self.graph.edges()
 
+
 def format_tuple(s):
     match = pattern.search(s)
     if match:
@@ -28,49 +30,53 @@ def format_tuple(s):
         return f"{match.group(1)}_{match.group(2)}_{match.group(3)}"
     return None
 
-def parse_graph(file_path : str) -> List[nx.Graph]:
-    graph_ID = file_path.split('/')[-1].split('.')[0]
+
+def parse_graph(file_path: str) -> List[nx.Graph]:
+    graph_ID = file_path.split("/")[-1].split(".")[0]
     G_dict = {}
     G = nx.Graph()  # Use nx.DiGraph() for directed graphs
     with open(file_path) as f:
         for line in f:
             parts = line.strip().split()
-            if not parts: 
+            if not parts:
                 continue
-            if parts[0] == 't':  # New graph line: "t ID"
+            if parts[0] == "t":  # New graph line: "t ID"
                 if G.number_of_nodes() > 0:
                     G_dict[ID] = G
                     G = nx.Graph()
                 parts = line.strip().split("#")
                 ID = format_tuple(parts[1])
                 ID = f"{graph_ID}_{ID}"
-            elif parts[0] == 'v':  # Vertex line: "v id label"
+            elif parts[0] == "v":  # Vertex line: "v id label"
                 node_id = int(parts[1])
                 label = parts[2]
                 G.add_node(node_id, label=label)
-            elif parts[0] == 'e':  # Edge line: "e src tgt"
+            elif parts[0] == "e":  # Edge line: "e src tgt"
                 src, tgt = int(parts[1]), int(parts[2])
                 G.add_edge(src, tgt)
         if G.number_of_nodes() > 0:
             G_dict[ID] = G
     return G_dict
 
+
 def has_common_node(G1, G2):
     # same node label
-    labels_G1 = {data.get('label') for node, data in G1.nodes(data=True)}
-    labels_G2 = {data.get('label') for node, data in G2.nodes(data=True)}
+    labels_G1 = {data.get("label") for node, data in G1.nodes(data=True)}
+    labels_G2 = {data.get("label") for node, data in G2.nodes(data=True)}
     if labels_G1.intersection(labels_G2):
         return True
     return False
+
 
 def get_edge_labels(graph):
     edge_labels = set()
     for u, v in graph.edges():
         # 각 노드의 label을 가져온 후, 정렬된 튜플로 만듦 (방향 없는 edge이므로)
-        label_u = graph.nodes[u].get('label')
-        label_v = graph.nodes[v].get('label')
+        label_u = graph.nodes[u].get("label")
+        label_v = graph.nodes[v].get("label")
         edge_labels.add(tuple(sorted((label_u, label_v))))
     return edge_labels
+
 
 def has_common_edge(G1, G2):
     edge_labels_G1 = get_edge_labels(G1)
@@ -79,13 +85,17 @@ def has_common_edge(G1, G2):
         return True
     return False
 
+
 def graph_isomorphism(graph1, graph2):
-    node_match = lambda attr1, attr2: attr1.get('label') == attr2.get('label')
+    node_match = lambda attr1, attr2: attr1.get("label") == attr2.get("label")
     GM = nx.isomorphism.GraphMatcher(graph1, graph2, node_match=node_match)
     return GM.is_isomorphic()
 
+
 import os
 from joblib import Parallel, delayed
+
+
 def unique_graphs(graphs):
     """
     Given a list of graphs, return a list of unique graphs (up to isomorphism),
@@ -96,7 +106,7 @@ def unique_graphs(graphs):
     for graph_id, G in graphs:
         # Compute the WL hash for the graph using the node label attribute.
         try:
-            graph_hash = nx.weisfeiler_lehman_graph_hash(G, node_attr='label')
+            graph_hash = nx.weisfeiler_lehman_graph_hash(G, node_attr="label")
         except:
             breakpoint()
         # If the hash is not seen before, store the graph.
@@ -105,16 +115,19 @@ def unique_graphs(graphs):
         graph_map[graph_id] = graph_hash
     return unique, graph_map
 
+
 def level0_graph_cluster(graph_dir, save_path1, save_path2):
     # 1. Collect all graph file paths.
     graph_files = []
     for root, dirs, files in os.walk(graph_dir):
         for file in files:
-            if file.endswith('.graph'):
+            if file.endswith(".graph"):
                 graph_files.append(os.path.join(root, file))
-    
+
     # 2. Parse graphs in parallel.
-    results = Parallel(n_jobs=-1)(delayed(parse_graph)(graph_path) for graph_path in graph_files)
+    results = Parallel(n_jobs=-1)(
+        delayed(parse_graph)(graph_path) for graph_path in graph_files
+    )
     graph_dict = {}
     for d in results:
         graph_dict.update(d)
@@ -138,31 +151,37 @@ def level0_graph_cluster(graph_dir, save_path1, save_path2):
     for n_nodes in sorted(groups.keys()):
         group = groups[n_nodes]
         cluster_start_time = time.time()
-        print(F"{n_nodes} : {len(group)}")
+        print(f"{n_nodes} : {len(group)}")
         _unique_graph, _graph_hash_map = unique_graphs(group)
         unique_graph.update(_unique_graph)
         graph_hash_map.update(_graph_hash_map)
-    
+
         print(f"cluster time : {time.time() - cluster_start_time}")
     hash_list = list(graph_hash_map.values())
     hash_set = set(hash_list)
     hash_list = list(hash_set)
     hash_map = {hash_val: i for i, hash_val in enumerate(hash_list)}
-    graph_hash_map = {graph_id: hash_map[hash_val] for graph_id, hash_val in graph_hash_map.items()}
-    unique_graph = {hash_map[hash_val]: graph for hash_val, graph in unique_graph.items()}
-    print(f"total unique graphs : {len(unique_graph)}")    
+    graph_hash_map = {
+        graph_id: hash_map[hash_val] for graph_id, hash_val in graph_hash_map.items()
+    }
+    unique_graph = {
+        hash_map[hash_val]: graph for hash_val, graph in unique_graph.items()
+    }
+    print(f"total unique graphs : {len(unique_graph)}")
 
     # 6. Save clustering results.
-    with open(save_path1, 'w') as f:
+    with open(save_path1, "w") as f:
         for graph_id, graph_hash in graph_hash_map.items():
-            f.write(f'{graph_id},{graph_hash}\n')
+            f.write(f"{graph_id},{graph_hash}\n")
 
     # 7. Save unique graphs.
-    with open(save_path2, 'wb') as f:
+    with open(save_path2, "wb") as f:
         pickle.dump(unique_graph, f, protocol=pickle.HIGHEST_PROTOCOL)
     gc.collect()
 
     # For debugging
+
+
 def _check_edge(task):
     # Unpack task: (i, j, graph1, graph2)
     graph1, graph2 = task
@@ -170,50 +189,53 @@ def _check_edge(task):
     hash2, graph2 = graph2
     return (hash1, hash2) if has_common_edge(graph1, graph2) else None
 
+
 def level1_graph_cluster(pickle_path, save_path):
-    with open(pickle_path, 'rb') as f:
+    with open(pickle_path, "rb") as f:
         unique_graph = pickle.load(f)
-    
+
     # Compute the number of nodes per graph
     hash_to_len = {h: len(graph.nodes()) for h, graph in unique_graph.items()}
     hash_list = sorted(unique_graph.keys())
-    
+
     # Select only graphs with more than one node
     not_len1_list = [h for h in hash_list if hash_to_len[h] != 1]
     num_len1 = len(hash_list) - len(not_len1_list)
-    
+
     # Build mapping from hash to index in the sorted list
     hash_to_idx = {h: i for i, h in enumerate(hash_list)}
-    
+
     # Precompute lists of indices and graphs for non-singleton graphs
     indices = [hash_to_idx[h] for h in not_len1_list]
-    graphs = [(h,unique_graph[h]) for h in not_len1_list]
-    
+    graphs = [(h, unique_graph[h]) for h in not_len1_list]
+
     # Use combinations to generate tasks without the nested loop overhead.
     print(f"start")
-    tasks = [(graphs[i], graphs[j]) for i, j in combinations(range(len(not_len1_list)), 2)]
+    tasks = [
+        (graphs[i], graphs[j]) for i, j in combinations(range(len(not_len1_list)), 2)
+    ]
     print(f"len tasks : {len(tasks)}")
 
     # Create meta-graph as an identity matrix
     graph_num = len(hash_list)
     meta_graph = torch.eye(graph_num)
-    
+
     # Parallel processing of the edge check
     results = Parallel(n_jobs=-1)(delayed(_check_edge)(task) for task in tasks)
-    
+
     # Update the meta-graph with the results
     for res in results:
         if res is not None:
             i, j = res
             meta_graph[i, j] = 1
             meta_graph[j, i] = 1
-    
+
     meta_graph = meta_graph.bool()
-    
+
     # save meta_graph
-    with open(save_path, 'wb') as f:
+    with open(save_path, "wb") as f:
         pickle.dump(meta_graph, f, protocol=pickle.HIGHEST_PROTOCOL)
-    gc.collect()    
+    gc.collect()
 
 
 def _check_node(task):
@@ -225,15 +247,15 @@ def _check_node(task):
 
 
 def level2_graph_cluster(pickle_path, save_path):
-    with open(pickle_path, 'rb') as f:
+    with open(pickle_path, "rb") as f:
         unique_graph = pickle.load(f)
-    
+
     # Compute the number of nodes per graph
     hash_list = sorted(unique_graph.keys())
-    
+
     # Precompute lists of indices and graphs for non-singleton graphs
-    graphs = [(h,unique_graph[h]) for h in hash_list]
-    
+    graphs = [(h, unique_graph[h]) for h in hash_list]
+
     # Use combinations to generate tasks without the nested loop overhead.
     print(f"start")
     tasks = [(graphs[i], graphs[j]) for i, j in combinations(range(len(hash_list)), 2)]
@@ -242,23 +264,23 @@ def level2_graph_cluster(pickle_path, save_path):
     # Create meta-graph as an identity matrix
     graph_num = len(hash_list)
     meta_graph = torch.eye(graph_num)
-    
+
     # Parallel processing of the edge check
     results = Parallel(n_jobs=-1)(delayed(_check_node)(task) for task in tasks)
-    
+
     # Update the meta-graph with the results
     for res in results:
         if res is not None:
             i, j = res
             meta_graph[i, j] = 1
             meta_graph[j, i] = 1
-    
+
     meta_graph = meta_graph.bool()
-    
+
     # save meta_graph
-    with open(save_path, 'wb') as f:
+    with open(save_path, "wb") as f:
         pickle.dump(meta_graph, f, protocol=pickle.HIGHEST_PROTOCOL)
-    gc.collect()    
+    gc.collect()
 
 
 def extract_clusters(meta_graph_path, unique_graph_path, save_path):
@@ -269,22 +291,22 @@ def extract_clusters(meta_graph_path, unique_graph_path, save_path):
     """
 
     # Load the meta-graph
-    with open(meta_graph_path, 'rb') as f:
+    with open(meta_graph_path, "rb") as f:
         meta_graph = pickle.load(f)
 
     # Load the unique graphs
-    with open(unique_graph_path, 'rb') as f:
+    with open(unique_graph_path, "rb") as f:
         unique_graph = pickle.load(f)
 
     # # Compute the number of nodes per graph
     # hash_to_len = {h: len(graph.nodes()) for h, graph in unique_graph.items()}
     # hash_list = sorted(unique_graph.keys())
-    
+
     # # Select only graphs with more than one node
     # not_len1_list = [h for h in hash_list if hash_to_len[h] != 1]
     # num_len1 = len(hash_list) - len(not_len1_list)
     # not_len1 = len(not_len1_list)
-    
+
     # # fix meta_graph
     # num_hash = len(hash_list)
     # meta_graph_fixed = torch.eye(num_hash).bool()
@@ -306,12 +328,12 @@ def extract_clusters(meta_graph_path, unique_graph_path, save_path):
     clusters = [{hash_list[i] for i in comp} for comp in clusters_indices]
 
     # Save the clusters
-    with open(save_path, 'wb') as f:
+    with open(save_path, "wb") as f:
         pickle.dump(clusters, f, protocol=pickle.HIGHEST_PROTOCOL)
 
     # save as txt
     save_txt = "./level2_cluster.txt"
-    with open(save_txt, 'w') as f:
+    with open(save_txt, "w") as f:
         for cluster in clusters:
             f.write(f"{cluster}\n")
 
@@ -319,15 +341,18 @@ def extract_clusters(meta_graph_path, unique_graph_path, save_path):
 
     return clusters
 
-def separate_graphs(meta_data_txt, 
-                    graph_hash_to_graph_cluster_path,
-                    train_graph_hash_path,
-                    valid_graph_hash_path,):
+
+def separate_graphs(
+    meta_data_txt,
+    graph_hash_to_graph_cluster_path,
+    train_graph_hash_path,
+    valid_graph_hash_path,
+):
     """
     Given a meta_data_txt file containing graph identifiers and their corresponding cluster IDs,
     this function separates the graphs into different folders based on their cluster IDs.
     """
-    with open(meta_data_txt, 'r') as f:
+    with open(meta_data_txt, "r") as f:
         lines = f.readlines()
 
     # Create a dictionary to store the clusters
@@ -346,7 +371,7 @@ def separate_graphs(meta_data_txt,
         for graph in cluster[1]:
             hash_to_cluster[graph] = ii + 1
 
-    with open(graph_hash_to_graph_cluster_path, 'w') as f:
+    with open(graph_hash_to_graph_cluster_path, "w") as f:
         for graph, cluster in hash_to_cluster.items():
             f.write(f"{graph},{cluster}\n")
 
@@ -360,7 +385,7 @@ def separate_graphs(meta_data_txt,
             if add_to_train:
                 train_clusters.append(graph)
                 train_num += 1
-            else :
+            else:
                 valid_clusters.append(graph)
         if train_num >= total_num * train_valid_split:
             add_to_train = False
@@ -369,14 +394,15 @@ def separate_graphs(meta_data_txt,
     train_clusters = sorted(train_clusters, key=lambda x: int(x))
     valid_clusters = sorted(valid_clusters, key=lambda x: int(x))
 
-    with open(train_graph_hash_path, 'w') as f:
+    with open(train_graph_hash_path, "w") as f:
         for graph in train_clusters:
             f.write(f"{graph}\n")
-    with open(valid_graph_hash_path, 'w') as f:
+    with open(valid_graph_hash_path, "w") as f:
         for graph in valid_clusters:
             f.write(f"{graph}\n")
     print(f"train num : {len(train_clusters)}")
-    
+
+
 def unittest_level1_graph(meta_graph_path, unique_graph_path):
     """
     Given a meta_graph (a torch.bool matrix where meta_graph[i,j] is True if graph i and j share an edge)
@@ -387,9 +413,9 @@ def unittest_level1_graph(meta_graph_path, unique_graph_path):
          they do not also share a common edge.
     """
     # Load meta-graph and unique graphs
-    with open(meta_graph_path, 'rb') as f:
+    with open(meta_graph_path, "rb") as f:
         meta_graph = pickle.load(f)
-    with open(unique_graph_path, 'rb') as f:
+    with open(unique_graph_path, "rb") as f:
         unique_graph = pickle.load(f)
 
     # Get the sorted list of graph identifiers
@@ -416,23 +442,31 @@ def unittest_level1_graph(meta_graph_path, unique_graph_path):
                     at_least_one_common_edge = True
                     break
             if not at_least_one_common_edge:
-                print(f"Error: Graph {graph_id} in cluster {cluster} does not share an edge with any other graph.")
+                print(
+                    f"Error: Graph {graph_id} in cluster {cluster} does not share an edge with any other graph."
+                )
                 breakpoint()  # For debugging purposes; you can remove or replace this as needed.
 
     # Parallelize test 1 across clusters with more than one element
-    Parallel(n_jobs=-1)(delayed(test_cluster)(cluster) for cluster in clusters if len(cluster) > 1)
+    Parallel(n_jobs=-1)(
+        delayed(test_cluster)(cluster) for cluster in clusters if len(cluster) > 1
+    )
 
     # Test 2: Randomly sample pairs and ensure that if two graphs share a common node, they do not also share a common edge.
     sample_num = 1000
+
     def test_pair(_):
         i, j = np.random.choice(len(hash_list), 2)
         g1, g2 = unique_graph[hash_list[i]], unique_graph[hash_list[j]]
         if has_common_node(g1, g2):
             if has_common_edge(g1, g2):
-                print(f"Error: Graphs {hash_list[i]} and {hash_list[j]} (sampled pair) share both a common node and a common edge.")
+                print(
+                    f"Error: Graphs {hash_list[i]} and {hash_list[j]} (sampled pair) share both a common node and a common edge."
+                )
 
     # Parallelize the random pair tests
     Parallel(n_jobs=-1)(delayed(test_pair)(_) for _ in range(sample_num))
+
 
 def write_PDBID_to_graph_hash(level0_save_path, PDBID_to_graph_hash_path):
     """
@@ -442,7 +476,7 @@ def write_PDBID_to_graph_hash(level0_save_path, PDBID_to_graph_hash_path):
     """
 
     # Load the meta-graph
-    with open(level0_save_path, 'r') as f:
+    with open(level0_save_path, "r") as f:
         lines = f.readlines()
 
     # Create a dictionary to store the clusters
@@ -459,17 +493,17 @@ def write_PDBID_to_graph_hash(level0_save_path, PDBID_to_graph_hash_path):
     # sort the clusters
     for graph_hash in hash_to_PDBID:
         hash_to_PDBID[graph_hash] = sorted(hash_to_PDBID[graph_hash], key=lambda x: x)
-    # sort the hash 
+    # sort the hash
     hash_list = sorted(hash_to_PDBID.keys(), key=lambda x: int(x))
     # save as txt
-    with open(PDBID_to_graph_hash_path, 'w') as f:
+    with open(PDBID_to_graph_hash_path, "w") as f:
         for graph_hash in hash_list:
             pdb_IDs = hash_to_PDBID[graph_hash]
             pdb_IDs = ",".join(pdb_IDs)
             f.write(f"{graph_hash}:{pdb_IDs}\n")
-    
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     # graph_dir = '/data/psk6950/PDB_2024Mar18/protein_graph/'
     # level0_save_path1 = '/data/psk6950/PDB_2024Mar18/protein_graph/level0_cluster.csv'
     # level0_save_path2 = '/data/psk6950/PDB_2024Mar18/protein_graph/unique_graphs.pkl'
@@ -489,7 +523,6 @@ if __name__ == '__main__':
     # level2_save_path = '/data/psk6950/PDB_2024Mar18/protein_graph/level2_meta_graph.pkl'
     # level2_graph_cluster(unique_graph_pickle_path, level2_save_path)
 
-    
     # meta_graph_path = '/data/psk6950/PDB_2024Mar18/protein_graph/level2_meta_graph.pkl'
     # unique_graph_path = '/data/psk6950/PDB_2024Mar18/protein_graph/unique_graphs.pkl'
     # level2_cluster_path = '/data/psk6950/PDB_2024Mar18/protein_graph/level2_cluster.pkl'
@@ -498,10 +531,12 @@ if __name__ == '__main__':
     # graph_hash_to_graph_cluster_path = '/data/psk6950/PDB_2024Mar18/cluster/graph_hash_to_graph_cluster.txt'
     # train_graph_hash_path = '/data/psk6950/PDB_2024Mar18/cluster/train_graph_hash.txt'
     # valid_graph_hash_path = '/data/psk6950/PDB_2024Mar18/cluster/valid_graph_hash.txt'
-    # separate_graphs('/data/psk6950/PDB_2024Mar18/cluster/level2_cluster.txt', 
+    # separate_graphs('/data/psk6950/PDB_2024Mar18/cluster/level2_cluster.txt',
     #                 graph_hash_to_graph_cluster_path,
     #                 train_graph_hash_path,
     #                 valid_graph_hash_path)
-    level0_save_path1 = '/data/psk6950/PDB_2024Mar18/protein_graph/level0_cluster.csv'
-    PDBID_to_graph_hash_path = '/data/psk6950/PDB_2024Mar18/cluster/PDBID_to_graph_hash.txt'
+    level0_save_path1 = "/data/psk6950/PDB_2024Mar18/protein_graph/level0_cluster.csv"
+    PDBID_to_graph_hash_path = (
+        "/data/psk6950/PDB_2024Mar18/cluster/PDBID_to_graph_hash.txt"
+    )
     write_PDBID_to_graph_hash(level0_save_path1, PDBID_to_graph_hash_path)

@@ -1,0 +1,58 @@
+[build-system]
+# PEP 517/518 빌드 백엔드 설정 (Hatchling 사용)
+requires = ["hatchling>=1.0.0"]
+build-backend = "hatchling.build"
+
+[project]
+name = "BioMol"
+version = "0.1.0"
+description = "Biomolecule data loader library"
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [{ name = "Sanggeun Park", email = "psk6950@snu.ac.kr" }]
+dependencies = [
+    "torch>=2.6.0,<3",
+    "biopython>=1.85,<2",
+    "click>=8.1.8,<9",
+    "ruff>=0.11.6,<0.12",
+]
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["BioMol*"]
+
+[tool.ruff]
+line-length = 89
+target-version = "py310"
+unsafe-fixes = true
+
+[tool.ruff.lint]
+select = ["B", "C4", "E", "F", "W", "UP"]
+ignore = ["E731", "B905", "E741"]
+
+[tool.pixi.project]
+channels = ["conda-forge"]
+platforms = ["linux-64"]
+
+
+[tool.pixi.pypi-dependencies]
+BioMol = { path = ".", editable = true }
+
+[tool.pixi.host-dependencies]
+python = "~=3.10.16"
+black = ">=25.1.0,<26"
+flake8 = ">=7.1.2,<8"
+ruff = ">=0.11.6,<0.12"
+
+[tool.pixi.dependencies]
+click = ">=8.1.8,<9"
+matplotlib = ">=3.10.1,<4"
+lmdb = ">=0.9.31,<0.10"
+joblib = ">=1.4.2,<2"
+python-lmdb = ">=1.6.2,<2"
+
+[project.scripts]
+biomol = "BioMol.cli:cli"

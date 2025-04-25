@@ -1,0 +1,264 @@
+num2residue = [
+    "ALA",
+    "ARG",
+    "ASN",
+    "ASP",
+    "CYS",
+    "GLN",
+    "GLU",
+    "GLY",
+    "HIS",
+    "ILE",
+    "LEU",
+    "LYS",
+    "MET",
+    "PHE",
+    "PRO",
+    "SER",
+    "THR",
+    "TRP",
+    "TYR",
+    "VAL",
+    "SEC",
+    "UNK",
+    "mas",
+    "DA",
+    "DC",
+    "DG",
+    "DT",
+    "DN",
+    "A",
+    "C",
+    "G",
+    "U",
+    "N",
+    "pad",  # padding (lower case because there is PAD in CCD),
+]
+
+
+num2AA = [
+    "A",
+    "R",
+    "N",
+    "D",
+    "C",
+    "Q",
+    "E",
+    "G",
+    "H",
+    "I",
+    "L",
+    "K",
+    "M",
+    "F",
+    "P",
+    "S",
+    "T",
+    "W",
+    "Y",
+    "V",
+    "U",
+    "X",
+    "-",
+    "0",  # unknown, gap, padding
+]
+AA2num = {x: i for i, x in enumerate(num2AA)}
+
+# following AF3
+AA2num["B"] = 3
+AA2num["J"] = 20
+AA2num["O"] = 20
+AA2num["U"] = 4
+AA2num["Z"] = 6
+
+num2DNA = ["A", "C", "G", "U", "T", "I", "N", "X", "-", "0"]
+
+num2RNA = ["A", "C", "G", "U", "T", "I", "N", "X", "-", "0"]
+
+num2NA = [
+    "A",
+    "C",
+    "G",
+    "U",
+    "T",
+    "I",
+    "N",
+    "DA",
+    "DC",
+    "DG",
+    "DU",
+    "DT",
+    "DI",
+    "DN",
+    "X",
+    "-",
+    "0",
+]
+
+DNA2num = {x: i for i, x in enumerate(num2DNA)}
+RNA2num = {x: i for i, x in enumerate(num2RNA)}
+NA2num = {x: i for i, x in enumerate(num2NA)}
+
+atom_mapping = {
+    "H": 0,
+    "HE": 1,
+    "LI": 2,
+    "BE": 3,
+    "B": 4,
+    "C": 5,
+    "N": 6,
+    "O": 7,
+    "F": 8,
+    "NE": 9,
+    "NA": 10,
+    "MG": 11,
+    "AL": 12,
+    "SI": 13,
+    "P": 14,
+    "S": 15,
+    "CL": 16,
+    "AR": 17,
+    "K": 18,
+    "CA": 19,
+    "SC": 20,
+    "TI": 21,
+    "V": 22,
+    "CR": 23,
+    "MN": 24,
+    "FE": 25,
+    "CO": 26,
+    "NI": 27,
+    "CU": 28,
+    "ZN": 29,
+    "GA": 30,
+    "GE": 31,
+    "AS": 32,
+    "SE": 33,
+    "BR": 34,
+    "KR": 35,
+    "RB": 36,
+    "SR": 37,
+    "Y": 38,
+    "ZR": 39,
+    "NB": 40,
+    "MO": 41,
+    "TC": 42,
+    "RU": 43,
+    "RH": 44,
+    "PD": 45,
+    "AG": 46,
+    "CD": 47,
+    "IN": 48,
+    "SN": 49,
+    "SB": 50,
+    "TE": 51,
+    "I": 52,
+    "XE": 53,
+    "CS": 54,
+    "BA": 55,
+    "LA": 56,
+    "CE": 57,
+    "PR": 58,
+    "ND": 59,
+    "PM": 60,
+    "SM": 61,
+    "EU": 62,
+    "GD": 63,
+    "TB": 64,
+    "DY": 65,
+    "HO": 66,
+    "ER": 67,
+    "TM": 68,
+    "YB": 69,
+    "LU": 70,
+    "HF": 71,
+    "TA": 72,
+    "W": 73,
+    "RE": 74,
+    "OS": 75,
+    "IR": 76,
+    "PT": 77,
+    "AU": 78,
+    "HG": 79,
+    "TL": 80,
+    "PB": 81,
+    "BI": 82,
+    "PO": 83,
+    "AT": 84,
+    "RN": 85,
+    "FR": 86,
+    "RA": 87,
+    "AC": 88,
+    "TH": 89,
+    "PA": 90,
+    "U": 91,
+    "NP": 92,
+    "PU": 93,
+    "AM": 94,
+    "CM": 95,
+    "BK": 96,
+    "CF": 97,
+    "ES": 98,
+    "FM": 99,
+    "MD": 100,
+    "NO": 101,
+    "LR": 102,
+    "RF": 103,
+    "DB": 104,
+    "SG": 105,
+    "BH": 106,
+    "HS": 107,
+    "MT": 108,
+    "DS": 109,
+    "RG": 110,
+    "CN": 111,
+    "NH": 112,
+    "FL": 113,
+    "MC": 114,
+    "LV": 115,
+    "TS": 116,
+    "OG": 117,
+    "X": 118,  # for unknown atoms
+    "D": 119,  # for deuterium
+}
+num_to_atom = {v: k for k, v in atom_mapping.items()}
+
+_struct_conn_type = {
+    "none": -1,
+    "primary": 0,  # for 1) polymer canonical bonds, 2) chem comp bonds
+    "polymer": 1,
+    "covale": 2,
+    "metalc": 3,
+    "disulf": 4,
+    "hydrog": 5,
+    "other": 6,
+}
+
+bond_order_map = {
+    "SING": 0,
+    "DOUB": 1,
+    "TRIP": 2,
+    "QUAD": 3,
+    "sing": 0,
+    "doub": 1,
+    "trip": 2,
+    "quad": 3,
+    "?": -1,
+}
+
+stereo_config_map = {
+    "N": 0,
+    "E": 1,
+    "Z": 2,
+    "X": -1,
+}
+
+residue2num = {x: i for i, x in enumerate(num2residue)}
+
+NUM_CLASSES = 20 + 2 + 10 + 1  # 20 AAs, UNK, MASK, 8 NAs, 1 pad
+UNK_IDX = 20
+GAP_IDX = 21
+MASK_IDX = 22
+PAD_IDX = 23
+
+MASKINDEX = 21  # protein mask

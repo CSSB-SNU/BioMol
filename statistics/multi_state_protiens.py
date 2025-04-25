@@ -1,6 +1,6 @@
 import os
 import torch
-from biomol import BioMol
+from BioMol import BioMol
 import copy
 from joblib import Parallel, delayed
 import pickle
@@ -10,70 +10,73 @@ merged_fasta_path = "/data/psk6950/PDB_2024Mar18/entity/merged_protein.fasta"
 protein_graph_path = "/data/psk6950/PDB_2024Mar18/cluster/PDBID_to_graph_hash.txt"
 sequence_hash_path = "/data/psk6950/PDB_2024Mar18/entity/sequence_hashes.pkl"
 
-with open(sequence_hash_path, 'rb') as pf:
+with open(sequence_hash_path, "rb") as pf:
     sequence_hashes = pickle.load(pf)
 
+
 def parse_protein_ID(protein_id: str) -> str:
-    pdb_ID, bioasssembly_id, model_id, alt_id = protein_id.split('_')
+    pdb_ID, bioasssembly_id, model_id, alt_id = protein_id.split("_")
     return pdb_ID, bioasssembly_id, model_id, alt_id
+
 
 def parse_protein_graph():
     """
     Parse the protein graph file and extract protein IDs and their corresponding graph hashes.
     """
     assert os.path.exists(protein_graph_path), f"File not found: {protein_graph_path}"
-    
-    with open(protein_graph_path, 'r') as f:
+
+    with open(protein_graph_path, "r") as f:
         lines = f.readlines()
-    
+
     protein_id_data = {}
-    
+
     for line in lines:
         line = line.strip()
         if line:
-            graph_hash, protein_ids = line.split(':')
-            protein_ids = protein_ids.split(',')
+            graph_hash, protein_ids = line.split(":")
+            protein_ids = protein_ids.split(",")
             protein_ids = [id.strip() for id in protein_ids]
             for protein_id in protein_ids:
                 pdb_ID, bioasssembly_id, model_id, alt_id = parse_protein_ID(protein_id)
                 if pdb_ID not in protein_id_data:
                     protein_id_data[pdb_ID] = []
-                protein_id_data[pdb_ID].append({
-                    'bioasssembly_id': bioasssembly_id,
-                    'model_id': model_id,
-                    'alt_id': alt_id,
-                    'graph_hash': graph_hash
-                })
+                protein_id_data[pdb_ID].append(
+                    {
+                        "bioasssembly_id": bioasssembly_id,
+                        "model_id": model_id,
+                        "alt_id": alt_id,
+                        "graph_hash": graph_hash,
+                    }
+                )
 
-    
     return protein_id_data
 
-def get_multi_state_protein_seqs(length_filter = (128, 512)):
+
+def get_multi_state_protein_seqs(length_filter=(128, 512)):
     """
     Parse the merged fasta file and extract protein sequences.
     """
     assert os.path.exists(merged_fasta_path), f"File not found: {merged_fasta_path}"
-    
-    with open(merged_fasta_path, 'r') as f:
+
+    with open(merged_fasta_path, "r") as f:
         lines = f.readlines()
-    
+
     protein_sequences = {}
     current_id = None
     current_sequence = []
-    
+
     for line in lines:
-        if line.startswith('>'):
+        if line.startswith(">"):
             if current_id is not None:
-                protein_sequences[current_id] = ''.join(current_sequence)
+                protein_sequences[current_id] = "".join(current_sequence)
             current_id = line[1:].strip()
-            current_id = current_id.split('|')[0].strip()
+            current_id = current_id.split("|")[0].strip()
             current_sequence = []
         else:
             current_sequence.append(line.strip())
-    
-    if current_id is not None:
-        protein_sequences[current_id] = ''.join(current_sequence)
 
+    if current_id is not None:
+        protein_sequences[current_id] = "".join(current_sequence)
 
     sequences_to_chain_ID = {}
     for protein_id, sequence in protein_sequences.items():
@@ -88,7 +91,7 @@ def get_multi_state_protein_seqs(length_filter = (128, 512)):
     for sequence, chain_ids in sequences_to_chain_ID.items():
         num_of_ids = 0
         for chain_id in chain_ids:
-            pdb_ID = chain_id.split('_')[0]
+            pdb_ID = chain_id.split("_")[0]
             if pdb_ID in protein_id_data:
                 num_of_ids += len(protein_id_data[pdb_ID])
         if num_of_ids == 1:
@@ -97,18 +100,31 @@ def get_multi_state_protein_seqs(length_filter = (128, 512)):
             multi_state_sequences[sequence] = chain_ids
 
     # filter by length
-    single_state_sequences = {k: v for k, v in single_state_sequences.items() if length_filter[0] <= len(k) <= length_filter[1]}
-    multi_state_sequences = {k: v for k, v in multi_state_sequences.items() if length_filter[0] <= len(k) <= length_filter[1]}
+    single_state_sequences = {
+        k: v
+        for k, v in single_state_sequences.items()
+        if length_filter[0] <= len(k) <= length_filter[1]
+    }
+    multi_state_sequences = {
+        k: v
+        for k, v in multi_state_sequences.items()
+        if length_filter[0] <= len(k) <= length_filter[1]
+    }
 
-    single_state_sequences = {sequence_hashes[k]: v for k, v in single_state_sequences.items()}
-    multi_state_sequences = {sequence_hashes[k]: v for k, v in multi_state_sequences.items()}
+    single_state_sequences = {
+        sequence_hashes[k]: v for k, v in single_state_sequences.items()
+    }
+    multi_state_sequences = {
+        sequence_hashes[k]: v for k, v in multi_state_sequences.items()
+    }
 
     print(f"Number of single state sequences: {len(single_state_sequences)}")
     print(f"Number of multi state sequences: {len(multi_state_sequences)}")
-    
+
     return single_state_sequences, multi_state_sequences
 
-def extract_chain_ids(biomol : BioMol, chain_ID, assembly_id, model_id, alt_id):
+
+def extract_chain_ids(biomol: BioMol, chain_ID, assembly_id, model_id, alt_id):
     """
     Extract chain IDs from the biomol object.
     """
@@ -119,26 +135,27 @@ def extract_chain_ids(biomol : BioMol, chain_ID, assembly_id, model_id, alt_id):
 
     find_chain = False
     for ch in residue_chain_id_list:
-        if chain_ID == ch.split('_')[0]:
+        if chain_ID == ch.split("_")[0]:
             chain_ID = ch
             find_chain = True
             break
 
     if not find_chain:
         return None
-    
+
     residue_start, residue_end = residue_chain_break[chain_ID]
     residue_tensor = residue_tensor[residue_start:residue_end]
     return residue_tensor
 
-def get_contact_pair(residue_tensor, contact_threshold = 8.0):
-    xyz = residue_tensor[:, 5:8] # (L, 3)
-    mask = residue_tensor[:, 4] # (L, 1)
+
+def get_contact_pair(residue_tensor, contact_threshold=8.0):
+    xyz = residue_tensor[:, 5:8]  # (L, 3)
+    mask = residue_tensor[:, 4]  # (L, 1)
     L = xyz.shape[0]
     valid_reisude = torch.where(mask == 1)[0].tolist()
-    dist_map = ((xyz[:, None, :] - xyz[None, :, :]) ** 2).sum(-1) ** 0.5 # (L, L)
-    dist_map = dist_map * mask[:, None] * mask[None, :] # (L, L)
-    sequence_contact_map = torch.arange(L)[:, None] - torch.arange(L)[None, :] # (L, L)
+    dist_map = ((xyz[:, None, :] - xyz[None, :, :]) ** 2).sum(-1) ** 0.5  # (L, L)
+    dist_map = dist_map * mask[:, None] * mask[None, :]  # (L, L)
+    sequence_contact_map = torch.arange(L)[:, None] - torch.arange(L)[None, :]  # (L, L)
     sequence_contact_map = torch.abs(sequence_contact_map)
     sequence_contact_map = sequence_contact_map < 16
 
@@ -152,6 +169,7 @@ def get_contact_pair(residue_tensor, contact_threshold = 8.0):
     # to set
     contact_pair = set(map(tuple, contact_pair))
     return contact_pair, valid_reisude
+
 
 def cal_contact_diff(contact_pair1, contact_pair2, mask1, mask2):
     """
@@ -172,7 +190,8 @@ def cal_contact_diff(contact_pair1, contact_pair2, mask1, mask2):
     diff2 = contact_pair2 - contact_pair1
     intersection = contact_pair1.intersection(contact_pair2)
     diff = diff1.union(diff2)
-    return len(diff) / (1+len(intersection))
+    return len(diff) / (1 + len(intersection))
+
 
 # def filter_multi_state_sequences(multi_state_sequences):
 #     """
@@ -185,7 +204,7 @@ def cal_contact_diff(contact_pair1, contact_pair2, mask1, mask2):
 #         'conformation_change' : (0.4, 0.6),
 #         'dynamic' : (0.6, 1.0),
 #     }
-    
+
 #     cif_dir = '/data/psk6950/PDB_2024Mar18/cif/'
 #     protein_id_data = parse_protein_graph()
 
@@ -201,7 +220,7 @@ def cal_contact_diff(contact_pair1, contact_pair2, mask1, mask2):
 #             pdb_ID = chain_id.split('_')[0]
 #             cif_path = os.path.join(cif_dir, f"{pdb_ID[1:3]}/{pdb_ID}.cif.gz")
 
-#             biomol = BioMol(cif=cif_path, 
+#             biomol = BioMol(cif=cif_path,
 #                             cif_config="./cif_configs/protein_only.json",
 #                             remove_signal_peptide=True,
 #                             use_lmdb=False)
@@ -219,7 +238,7 @@ def cal_contact_diff(contact_pair1, contact_pair2, mask1, mask2):
 #                 # Get contact pairs
 #                 contact_pair, mask = get_contact_pair(residue_tensor)
 #                 merged_ID = f"{pdb_ID}_{bioasssembly_id}_{model_id}_{alt_id}"
-                
+
 #                 contact_pairs[merged_ID] = (contact_pair, mask)
 #                 residue_tensor_dict[merged_ID] = residue_tensor
 #         diffs = {}
@@ -249,6 +268,7 @@ def cal_contact_diff(contact_pair1, contact_pair2, mask1, mask2):
 #             print(f"num of dynamic sequences: {len(dynamic_sequences)}")
 #             breakpoint()
 
+
 def process_sequence(sequence_hash, chain_ids, protein_id_data, cif_dir, criteria):
     """
     Process a single multi-state sequence.
@@ -256,24 +276,28 @@ def process_sequence(sequence_hash, chain_ids, protein_id_data, cif_dir, criteri
     contact_pairs = {}
     residue_tensor_dict = {}
     for chain_id in chain_ids:
-        pdb_ID = chain_id.split('_')[0]
+        pdb_ID = chain_id.split("_")[0]
         cif_path = os.path.join(cif_dir, f"{pdb_ID[1:3]}/{pdb_ID}.cif.gz")
-        
+
         # Initialize the BioMol object
-        biomol = BioMol(cif=cif_path, 
-                        cif_config="./cif_configs/protein_only.json",
-                        remove_signal_peptide=True,
-                        use_lmdb=False)
-        
+        biomol = BioMol(
+            cif=cif_path,
+            cif_config="./cif_configs/protein_only.json",
+            remove_signal_peptide=True,
+            use_lmdb=False,
+        )
+
         # Look up protein id data
         ID_list = protein_id_data[pdb_ID]
         for ID in ID_list:
-            bioasssembly_id = ID['bioasssembly_id']
-            model_id = ID['model_id']
-            alt_id = ID['alt_id']
-            chain_ID = chain_id.split('_')[1]
+            bioasssembly_id = ID["bioasssembly_id"]
+            model_id = ID["model_id"]
+            alt_id = ID["alt_id"]
+            chain_ID = chain_id.split("_")[1]
 
-            residue_tensor = extract_chain_ids(biomol, chain_ID, bioasssembly_id, model_id, alt_id)
+            residue_tensor = extract_chain_ids(
+                biomol, chain_ID, bioasssembly_id, model_id, alt_id
+            )
             if residue_tensor is None:
                 continue
 
@@ -282,7 +306,7 @@ def process_sequence(sequence_hash, chain_ids, protein_id_data, cif_dir, criteri
             merged_ID = f"{pdb_ID}_{chain_ID}_{bioasssembly_id}_{model_id}_{alt_id}"
             contact_pairs[merged_ID] = (contact_pair, mask)
             residue_tensor_dict[merged_ID] = residue_tensor
-            
+
         del biomol
         gc.collect()
 
@@ -305,40 +329,43 @@ def process_sequence(sequence_hash, chain_ids, protein_id_data, cif_dir, criteri
     diff_max = diffs[diff_max_ID]
 
     # Determine the category based on the criteria
-    if diff_max < criteria['single_state'][1]:
-        category = 'single_state'
-    elif diff_max < criteria['flexible'][1]:
-        category = 'flexible'
-    elif diff_max < criteria['conformation_change'][1]:
-        category = 'conformation_change'
-    elif diff_max < criteria['dynamic'][1]:
-        category = 'dynamic'
+    if diff_max < criteria["single_state"][1]:
+        category = "single_state"
+    elif diff_max < criteria["flexible"][1]:
+        category = "flexible"
+    elif diff_max < criteria["conformation_change"][1]:
+        category = "conformation_change"
+    elif diff_max < criteria["dynamic"][1]:
+        category = "dynamic"
     else:
         category = None
 
     return (sequence_hash, chain_ids, diff_max_ID, diff_max, category)
+
 
 def filter_multi_state_sequences(multi_state_sequences):
     """
     Filter multi-state sequences based on specific criteria using parallel processing.
     """
     criteria = {
-        'single_state'       : (0, 0.15),
-        'flexible'           : (0.15, 0.4),
-        'conformation_change': (0.4, 0.6),
-        'dynamic'            : (0.6, 1.0),
+        "single_state": (0, 0.15),
+        "flexible": (0.15, 0.4),
+        "conformation_change": (0.4, 0.6),
+        "dynamic": (0.6, 1.0),
     }
-    
-    cif_dir = '/data/psk6950/PDB_2024Mar18/cif/'
+
+    cif_dir = "/data/psk6950/PDB_2024Mar18/cif/"
     protein_id_data = parse_protein_graph()
-    
+
     # test_hash = 481129
     # result = process_sequence(test_hash, multi_state_sequences[test_hash], protein_id_data, cif_dir, criteria)
     # breakpoint()
 
     # Process each sequence in parallel. Using n_jobs=-1 uses all available cores.
     results = Parallel(n_jobs=-1)(
-        delayed(process_sequence)(sequence_hash, chain_ids, protein_id_data, cif_dir, criteria)
+        delayed(process_sequence)(
+            sequence_hash, chain_ids, protein_id_data, cif_dir, criteria
+        )
         for sequence_hash, chain_ids in multi_state_sequences.items()
     )
     # results = []
@@ -356,30 +383,40 @@ def filter_multi_state_sequences(multi_state_sequences):
     for sequence_hash, chain_ids, diff_max_ID, diff_max, category in results:
         if sequence_hash is None:
             continue
-        if category == 'single_state':
+        if category == "single_state":
             single_state_sequences[sequence_hash] = (chain_ids, diff_max_ID, diff_max)
-        elif category == 'flexible':
+        elif category == "flexible":
             flexible_sequences[sequence_hash] = (chain_ids, diff_max_ID, diff_max)
-        elif category == 'conformation_change':
-            conformation_change_sequences[sequence_hash] = (chain_ids, diff_max_ID, diff_max)
-        elif category == 'dynamic':
+        elif category == "conformation_change":
+            conformation_change_sequences[sequence_hash] = (
+                chain_ids,
+                diff_max_ID,
+                diff_max,
+            )
+        elif category == "dynamic":
             dynamic_sequences[sequence_hash] = (chain_ids, diff_max_ID, diff_max)
 
-    save_dir = '/data/psk6950/PDB_2024Mar18/statistics/'
+    save_dir = "/data/psk6950/PDB_2024Mar18/statistics/"
     if not os.path.exists(save_dir):
         os.makedirs(save_dir)
 
     # pickle the results
-    with open(os.path.join(save_dir, 'single_state_sequences.pkl'), 'wb') as pf:
+    with open(os.path.join(save_dir, "single_state_sequences.pkl"), "wb") as pf:
         pickle.dump(single_state_sequences, pf, protocol=pickle.HIGHEST_PROTOCOL)
-    with open(os.path.join(save_dir, 'flexible_sequences.pkl'), 'wb') as pf:
+    with open(os.path.join(save_dir, "flexible_sequences.pkl"), "wb") as pf:
         pickle.dump(flexible_sequences, pf, protocol=pickle.HIGHEST_PROTOCOL)
-    with open(os.path.join(save_dir, 'conformation_change_sequences.pkl'), 'wb') as pf:
+    with open(os.path.join(save_dir, "conformation_change_sequences.pkl"), "wb") as pf:
         pickle.dump(conformation_change_sequences, pf, protocol=pickle.HIGHEST_PROTOCOL)
-    with open(os.path.join(save_dir, 'dynamic_sequences.pkl'), 'wb') as pf:
+    with open(os.path.join(save_dir, "dynamic_sequences.pkl"), "wb") as pf:
         pickle.dump(dynamic_sequences, pf, protocol=pickle.HIGHEST_PROTOCOL)
 
-    return single_state_sequences, flexible_sequences, conformation_change_sequences, dynamic_sequences
+    return (
+        single_state_sequences,
+        flexible_sequences,
+        conformation_change_sequences,
+        dynamic_sequences,
+    )
+
 
 if __name__ == "__main__":
     single_state_sequences, multi_state_sequences = get_multi_state_protein_seqs()

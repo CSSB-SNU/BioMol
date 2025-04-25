@@ -2,6 +2,9 @@ example_cif/
 dataloader.py
 log/
 __pycache__/
+backup/
+.vscode/
+.ruff_cache/
 
 # pixi environments
 .pixi

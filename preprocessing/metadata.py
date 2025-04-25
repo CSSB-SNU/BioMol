@@ -3,15 +3,15 @@ from joblib import Parallel, delayed
 import csv
 from filelock import FileLock
 import gc
-from biomol import BioMol
+from BioMol import BioMol
 import pickle
 
-chainID_to_cluster_path = '/public_data/psk6950/PDB_2024Mar18/protein_seq_clust/mmseqs2_seqid30_cov80_covmode0_clustmode1_chainID_to_cluster.pkl'
-with open(chainID_to_cluster_path, 'rb') as f:
+chainID_to_cluster_path = "/public_data/psk6950/PDB_2024Mar18/protein_seq_clust/mmseqs2_seqid30_cov80_covmode0_clustmode1_chainID_to_cluster.pkl"
+with open(chainID_to_cluster_path, "rb") as f:
     chainID_to_cluster = pickle.load(f)
 
-seq_to_hash_path = '/public_data/psk6950/PDB_2024Mar18/entity/sequence_hashes.pkl'
-with open(seq_to_hash_path, 'rb') as f:
+seq_to_hash_path = "/public_data/psk6950/PDB_2024Mar18/entity/sequence_hashes.pkl"
+with open(seq_to_hash_path, "rb") as f:
     seq_to_hash = pickle.load(f)
 
 
@@ -23,16 +23,17 @@ def _save_deposition_resolution(cif_path, save_path, lock_path):
     deposition_date = biomol.bioassembly.deposition_date
     resolution = biomol.bioassembly.resolution
     if resolution is None:
-        resoultion = '?'
-    
+        resoultion = "?"
+
     # Write the result immediately, using a file lock to avoid conflicts.
     with FileLock(lock_path):
-        with open(save_path, 'a') as f:
+        with open(save_path, "a") as f:
             f.write(f"{ID},{deposition_date},{resolution}\n")
 
     # gc.collect()
-    
+
     return cif_path
+
 
 def save_deposition_resolution(cif_dir, save_path="passed_cif.csv"):
     # Define a lock file path (it will create a lock file alongside your CSV)
@@ -46,7 +47,7 @@ def save_deposition_resolution(cif_dir, save_path="passed_cif.csv"):
             continue
 
         for file_name in os.listdir(inner_dir_path):
-            if file_name.endswith('.cif') or file_name.endswith('.cif.gz'):
+            if file_name.endswith(".cif") or file_name.endswith(".cif.gz"):
                 full_path = os.path.join(inner_dir_path, file_name)
                 cif_path_list.append(full_path)
 
@@ -57,9 +58,8 @@ def save_deposition_resolution(cif_dir, save_path="passed_cif.csv"):
         for cif_path in cif_path_list
     )
 
-def make_metadata(merged_fasta_path, 
-                  chainID_to_deposition_csv,
-                  save_path):
+
+def make_metadata(merged_fasta_path, chainID_to_deposition_csv, save_path):
     header = "CHAINID,DEPOSITION,RESOLUTION,HASH,CLUSTER,SEQUENCE\n"
     lines = [header]
 
@@ -67,60 +67,63 @@ def make_metadata(merged_fasta_path,
     cluster_digits = 5
 
     ID_to_deposition = {}
-    with open(chainID_to_deposition_csv, 'r') as f:
+    with open(chainID_to_deposition_csv, "r") as f:
         for line in f:
             line = line.strip()
-            ID, deposition_date, resolution = line.split(',')
+            ID, deposition_date, resolution = line.split(",")
             ID_to_deposition[ID] = (deposition_date, resolution)
 
-    with open(merged_fasta_path, 'r') as f:
+    with open(merged_fasta_path, "r") as f:
         for line in f:
             line = line.strip()
-            if line.startswith('>'):
-                ID = line.split('|')[0][1:].strip()
-            else :
+            if line.startswith(">"):
+                ID = line.split("|")[0][1:].strip()
+            else:
                 seq = line
                 hash = seq_to_hash[seq]
                 cluster = chainID_to_cluster[ID]
-                deposition_date, resolution = ID_to_deposition[ID.split('_')[0]]
-                if resolution == 'None' or resolution is None:
+                deposition_date, resolution = ID_to_deposition[ID.split("_")[0]]
+                if resolution == "None" or resolution is None:
                     resolution = -1
                 # hash -> 6 digits (123 -> 000123)
                 # cluster -> 5 digits (123 -> 00123)
                 hash = str(hash).zfill(hash_digits)
                 cluster = str(cluster).zfill(cluster_digits)
-                lines.append(f"{ID},{deposition_date},{resolution},{hash},{cluster},{seq}\n")
-    
+                lines.append(
+                    f"{ID},{deposition_date},{resolution},{hash},{cluster},{seq}\n"
+                )
+
     # sort by deposition date
     header = lines[0]
     lines = lines[1:]
-    lines = sorted(lines, key=lambda x: x.split(',')[1])
+    lines = sorted(lines, key=lambda x: x.split(",")[1])
     lines = [header] + lines
 
-    with open(save_path, 'w') as f:
+    with open(save_path, "w") as f:
         f.writelines(lines)
 
 
 def read_large_csv_parallel(file_path, chunk_size=10**4, n_jobs=-1):
     """
     Reads a large CSV file in parallel using joblib and Python's built-in csv module.
-    
+
     Parameters:
         file_path (str): Path to the CSV file.
         chunk_size (int): Number of lines per chunk for parallel processing.
         n_jobs (int): Number of CPU cores to use (-1 for all cores).
-    
+
     Returns:
         list: A list of rows from the CSV file.
     """
+
     def get_file_line_count(file_path):
-        """ Counts the total number of lines in the file. """
-        with open(file_path, 'r', encoding='utf-8') as f:
+        """Counts the total number of lines in the file."""
+        with open(file_path, "r", encoding="utf-8") as f:
             return sum(1 for _ in f)
 
     def read_chunk(start, end, file_path):
-        """ Reads a chunk of CSV data from a file using Python's built-in csv module. """
-        with open(file_path, 'r', newline='', encoding='utf-8') as f:
+        """Reads a chunk of CSV data from a file using Python's built-in csv module."""
+        with open(file_path, "r", newline="", encoding="utf-8") as f:
             reader = csv.reader(f)
             return [line for i, line in enumerate(reader) if start <= i < end]
 
@@ -128,7 +131,9 @@ def read_large_csv_parallel(file_path, chunk_size=10**4, n_jobs=-1):
     total_lines = get_file_line_count(file_path)
 
     # Generate chunk indices
-    chunk_indices = [(i, min(i + chunk_size, total_lines)) for i in range(0, total_lines, chunk_size)]
+    chunk_indices = [
+        (i, min(i + chunk_size, total_lines)) for i in range(0, total_lines, chunk_size)
+    ]
 
     # Read and process chunks in parallel
     results = Parallel(n_jobs=n_jobs)(
@@ -139,7 +144,9 @@ def read_large_csv_parallel(file_path, chunk_size=10**4, n_jobs=-1):
     return [row for chunk in results for row in chunk]
 
 
-def compare(new_meta_csv, old_meta_csv, save_dir = '/public_data/psk6950/PDB_2024Mar18/metadata'):
+def compare(
+    new_meta_csv, old_meta_csv, save_dir="/public_data/psk6950/PDB_2024Mar18/metadata"
+):
     old = read_large_csv_parallel(old_meta_csv)
     new = read_large_csv_parallel(new_meta_csv)
 
@@ -178,13 +185,13 @@ def compare(new_meta_csv, old_meta_csv, save_dir = '/public_data/psk6950/PDB_202
             else:
                 candidate = None
                 for ii, (old_res, new_res) in enumerate(zip(old_seq, new_seq)):
-                    if old_res == new_res :
+                    if old_res == new_res:
                         continue
-                    elif old_res == 'X':
-                        if candidate != 'mmcif fasta discrepancy':
-                            candidate = 'unknown residue mapping'
-                    else :
-                        candidate = 'mmcif fasta discrepancy (maybe mmcif update)'
+                    elif old_res == "X":
+                        if candidate != "mmcif fasta discrepancy":
+                            candidate = "unknown residue mapping"
+                    else:
+                        candidate = "mmcif fasta discrepancy (maybe mmcif update)"
                 if candidate is None:
                     breakpoint()
                 assert candidate is not None
@@ -193,18 +200,18 @@ def compare(new_meta_csv, old_meta_csv, save_dir = '/public_data/psk6950/PDB_202
             valid_keys.append(key)
     valid_keys = set(valid_keys)
     # save weird changes to save_dir + weird_changes.csv
-    with open(os.path.join(save_dir, 'weird_changes.csv'), 'w') as f:
+    with open(os.path.join(save_dir, "weird_changes.csv"), "w") as f:
         for key in weird_changes:
             f.write(f"{key},{weird_changes[key]}\n")
 
     hash_map = {}
-    for key in valid_keys :
+    for key in valid_keys:
         old_hash = old_dict[key][3]
         new_hash = new_dict[key][3]
         hash_map[old_hash] = new_hash
 
     # save hash_map to save_dir + hash_map.csv
-    with open(os.path.join(save_dir, 'hash_map.csv'), 'w') as f:
+    with open(os.path.join(save_dir, "hash_map.csv"), "w") as f:
         for key in hash_map:
             f.write(f"{key},{hash_map[key]}\n")
 
@@ -222,30 +229,32 @@ def compare(new_meta_csv, old_meta_csv, save_dir = '/public_data/psk6950/PDB_202
     # >hash
     # seq
     for hash, seq in have_to_find_msa_hash:
-        with open(os.path.join(save_dir, f"fasta/{hash}.fasta"), 'w') as f:
+        with open(os.path.join(save_dir, f"fasta/{hash}.fasta"), "w") as f:
             f.write(f">{hash}\n{seq}\n")
-    
+
+
 def run_hhblit(command):
     os.system(command)
 
-def run_hhblits(evalue,
-                cov,
-                fasta_dir, 
-                a3m_dir,
-                db = '/public_data/db_protSeq/uniref30/2022_02/UniRef30_2022_02'):
+
+def run_hhblits(
+    evalue,
+    cov,
+    fasta_dir,
+    a3m_dir,
+    db="/public_data/db_protSeq/uniref30/2022_02/UniRef30_2022_02",
+):
     # run hhblits
     # hhblits -i {hash}.fasta -oa3m {hash}.a3m -d {db} -cov {cov} -evalue {evalue}
     fasta_files = os.listdir(fasta_dir)
     commands = []
     for fasta_file in fasta_files:
-        hash = fasta_file.split('.')[0]
+        hash = fasta_file.split(".")[0]
         command = f"hhblits -i {fasta_dir}/{fasta_file} -oa3m {a3m_dir}/{hash}.a3m -d {db} -cov {cov} -evalue {evalue}"
         commands.append(command)
-    
+
     breakpoint()
-    Parallel(n_jobs=-1)(
-        delayed(run_hhblit)(command) for command in commands
-    )
+    Parallel(n_jobs=-1)(delayed(run_hhblit)(command) for command in commands)
     pass
 
 
