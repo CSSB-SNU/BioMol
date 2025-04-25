@@ -39,8 +39,6 @@ def get_paths():
         "DB_PATH": base,
         "CCD_PATH": ccd,
         "CONTACT_GRAPH_PATH":      os.path.join(base, "protein_graph"),
-        "MSA_PATH":                os.path.join(base, "a3m"),
-        "CIF_PATH":                os.path.join(base, "cif"),
         "SEQ_TO_HASH_PATH":        os.path.join(base, "entity", "sequence_hashes.pkl"),
         "GRAPH_HASH_PATH":         os.path.join(base, "protein_graph", "level0_cluster.csv"),  # noqa: E501
         "GRAPH_CLUSTER_PATH":      os.path.join(base, "cluster/graph_hash_to_graph_cluster.txt"),  # noqa: E501
