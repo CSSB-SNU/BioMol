@@ -43,7 +43,7 @@ SEQ_TO_HASH_PATH      = os.path.join(DB_PATH, "entity", "sequence_hashes.pkl")
 GRAPH_HASH_PATH       = os.path.join(DB_PATH, "protein_graph", "level0_cluster.csv")
 GRAPH_CLUSTER_PATH    = os.path.join(DB_PATH, "cluster", "graph_hash_to_graph_cluster.txt")  # noqa: E501
 MSADB_PATH            = os.path.join(DB_PATH, "MSA.lmdb")
-# CIFDB_PATH            = os.path.join(DB_PATH, "cif_protein_only.lmdb")
+CIFDB_PATH            = os.path.join(DB_PATH, "cif_protein_only.lmdb")
 IDEAL_LIGAND_PATH     = os.path.join(DB_PATH, "metadata", "ideal_ligand_list.pkl")
 SIGNALP_PATH          = os.path.join(DB_PATH, "signalp")
 CCD_DB_PATH           = os.path.join(CCD_PATH, "ligand_info.lmdb")
@@ -59,8 +59,8 @@ __all__ = [
     "GRAPH_HASH_PATH",
     "GRAPH_CLUSTER_PATH",
     "MSADB_PATH",
-    # "CIFDB_PATH",
-    # "CCD_DB_PATH",
+    "CIFDB_PATH",
+    "CCD_DB_PATH",
     "IDEAL_LIGAND_PATH",
     "SIGNALP_PATH",
 ]

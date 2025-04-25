@@ -1,7 +1,6 @@
 import os
 import torch
 from BioMol import BioMol
-import copy
 from joblib import Parallel, delayed
 import pickle
 import gc
@@ -22,10 +21,10 @@ def parse_protein_ID(protein_id: str) -> str:
 def parse_protein_graph():
     """
     Parse the protein graph file and extract protein IDs and their corresponding graph hashes.
-    """
+    """  # noqa: E501
     assert os.path.exists(protein_graph_path), f"File not found: {protein_graph_path}"
 
-    with open(protein_graph_path, "r") as f:
+    with open(protein_graph_path) as f:
         lines = f.readlines()
 
     protein_id_data = {}
@@ -58,7 +57,7 @@ def get_multi_state_protein_seqs(length_filter=(128, 512)):
     """
     assert os.path.exists(merged_fasta_path), f"File not found: {merged_fasta_path}"
 
-    with open(merged_fasta_path, "r") as f:
+    with open(merged_fasta_path) as f:
         lines = f.readlines()
 
     protein_sequences = {}
@@ -193,81 +192,6 @@ def cal_contact_diff(contact_pair1, contact_pair2, mask1, mask2):
     return len(diff) / (1 + len(intersection))
 
 
-# def filter_multi_state_sequences(multi_state_sequences):
-#     """
-#     Filter multi-state sequences based on specific criteria.
-#     """
-
-#     criteria = {
-#         'single_state' : (0,0.15),
-#         'flexible' : (0.15, 0.4),
-#         'conformation_change' : (0.4, 0.6),
-#         'dynamic' : (0.6, 1.0),
-#     }
-
-#     cif_dir = '/data/psk6950/PDB_2024Mar18/cif/'
-#     protein_id_data = parse_protein_graph()
-
-#     single_state_sequences = {}
-#     flexible_sequences = {}
-#     conformation_change_sequences = {}
-#     dynamic_sequences = {}
-#     test_num = 0
-#     for sequence, chain_ids in multi_state_sequences.items():
-#         contact_pairs = {}
-#         residue_tensor_dict = {}
-#         for chain_id in chain_ids:
-#             pdb_ID = chain_id.split('_')[0]
-#             cif_path = os.path.join(cif_dir, f"{pdb_ID[1:3]}/{pdb_ID}.cif.gz")
-
-#             biomol = BioMol(cif=cif_path,
-#                             cif_config="./cif_configs/protein_only.json",
-#                             remove_signal_peptide=True,
-#                             use_lmdb=False)
-#             ID_list = protein_id_data[pdb_ID]
-#             for ID in ID_list:
-#                 bioasssembly_id = ID['bioasssembly_id']
-#                 model_id = ID['model_id']
-#                 alt_id = ID['alt_id']
-#                 chain_ID = chain_id.split('_')[1]
-
-#                 residue_tensor = extract_chain_ids(biomol, chain_ID, bioasssembly_id, model_id, alt_id)
-#                 if residue_tensor is None:
-#                     continue
-
-#                 # Get contact pairs
-#                 contact_pair, mask = get_contact_pair(residue_tensor)
-#                 merged_ID = f"{pdb_ID}_{bioasssembly_id}_{model_id}_{alt_id}"
-
-#                 contact_pairs[merged_ID] = (contact_pair, mask)
-#                 residue_tensor_dict[merged_ID] = residue_tensor
-#         diffs = {}
-#         ID_list = list(contact_pairs.keys())
-#         for i in range(len(contact_pairs)):
-#             for j in range(i + 1, len(contact_pairs)):
-#                 ID1, ID2 = ID_list[i], ID_list[j]
-#                 contact_pair1, mask1 = contact_pairs[ID1]
-#                 contact_pair2, mask2 = contact_pairs[ID2]
-#                 diff = cal_contact_diff(contact_pair1, contact_pair2, mask1, mask2)
-#                 diffs[(ID1, ID2)] = diff
-#         diff_max_ID = max(diffs, key=diffs.get)
-#         diff_max = diffs[diff_max_ID]
-#         if diff_max < criteria['single_state'][1]:
-#             single_state_sequences[sequence] = (chain_ids, diff_max_ID, diff_max)
-#         elif diff_max < criteria['flexible'][1]:
-#             flexible_sequences[sequence] = (chain_ids, diff_max_ID, diff_max)
-#         elif diff_max < criteria['conformation_change'][1]:
-#             conformation_change_sequences[sequence] = (chain_ids, diff_max_ID, diff_max)
-#         elif diff_max < criteria['dynamic'][1]:
-#             dynamic_sequences[sequence] = (chain_ids, diff_max_ID, diff_max)
-#         test_num += 1
-#         if test_num % 5 == 0:
-#             print(f"num of single state sequences: {len(single_state_sequences)}")
-#             print(f"num of flexible sequences: {len(flexible_sequences)}")
-#             print(f"num of conformation change sequences: {len(conformation_change_sequences)}")
-#             print(f"num of dynamic sequences: {len(dynamic_sequences)}")
-#             breakpoint()
-
 
 def process_sequence(sequence_hash, chain_ids, protein_id_data, cif_dir, criteria):
     """
@@ -277,14 +201,11 @@ def process_sequence(sequence_hash, chain_ids, protein_id_data, cif_dir, criteri
     residue_tensor_dict = {}
     for chain_id in chain_ids:
         pdb_ID = chain_id.split("_")[0]
-        cif_path = os.path.join(cif_dir, f"{pdb_ID[1:3]}/{pdb_ID}.cif.gz")
 
         # Initialize the BioMol object
         biomol = BioMol(
-            cif=cif_path,
-            cif_config="./cif_configs/protein_only.json",
-            remove_signal_peptide=True,
-            use_lmdb=False,
+            pdb_ID = pdb_ID,
+            mol_types=["protein"],
         )
 
         # Look up protein id data
@@ -357,10 +278,6 @@ def filter_multi_state_sequences(multi_state_sequences):
     cif_dir = "/data/psk6950/PDB_2024Mar18/cif/"
     protein_id_data = parse_protein_graph()
 
-    # test_hash = 481129
-    # result = process_sequence(test_hash, multi_state_sequences[test_hash], protein_id_data, cif_dir, criteria)
-    # breakpoint()
-
     # Process each sequence in parallel. Using n_jobs=-1 uses all available cores.
     results = Parallel(n_jobs=-1)(
         delayed(process_sequence)(
@@ -370,7 +287,8 @@ def filter_multi_state_sequences(multi_state_sequences):
     )
     # results = []
     # for sequence_hash, chain_ids in multi_state_sequences.items():
-    #     result = process_sequence(sequence_hash, chain_ids, protein_id_data, cif_dir, criteria)
+    #     result = process_sequence(sequence_hash, chain_ids, protein_id_data, cif_dir,
+    # criteria)
     #     results.append(result)
     # 602833
 

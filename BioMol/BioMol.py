@@ -161,12 +161,6 @@ class BioMol:
 
         for name, value in self.__dict__.items():
             if name == "pdb_ID":
-                assert self.remove_signal_peptide and self.use_lmdb, (
-                    "If you want to load cif from ID, lmdb should be used and "
-                    "this DB is constructed with remove_signal_peptide=True and"
-                    " use_lmdb=True. If you don't want to use lmdb, please provide cif "
-                    "file."
-                )
                 self.load_cif_from_ID(
                     value
                 )

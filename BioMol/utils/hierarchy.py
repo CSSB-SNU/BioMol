@@ -2315,7 +2315,7 @@ class BioAssembly:
                                     model_id,
                                     alt_id,
                                 )
-                            except AltIDError:
+                            except Exception:
                                 continue
 
                             if (

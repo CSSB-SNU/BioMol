@@ -1,14 +1,13 @@
 from BioMol.BioMol import BioMol
-
+import time
 
 if __name__ == "__main__":
+    start = time.time()
     biomol = BioMol(
-        cif_ID="1v9u",
+        pdb_ID="1ubq",
         mol_types=["protein"],
-        remove_signal_peptide=True,
-        use_lmdb=True,
     )
     biomol.choose("1", "1", ".")
-    breakpoint()
-    biomol.choose("1", "1", ".")
+    print(f"loading time: {time.time() - start:.2f} seconds")
     biomol.structure.to_mmcif("test.cif")
+    breakpoint()
