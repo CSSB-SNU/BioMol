@@ -5,7 +5,9 @@ __pycache__/
 backup/
 .vscode/
 .ruff_cache/
+BioMol/configs/datapath.json
 
 # pixi environments
 .pixi
 *.egg-info
+test.cif
