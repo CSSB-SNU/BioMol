@@ -80,7 +80,8 @@ def check():
     # Load configuration file
     try:
         cfg = json.loads(CONFIG_PATH.read_text())
-        base_path = cfg["base_path"]
+        CCD_path = Path(cfg["CCD_PATH"])
+        DB_path = Path(cfg["DB_PATH"])
     except Exception as e:
         click.echo(f"❌ Failed to load configuration file: {e}", err=True)
         # Chain the SystemExit to the original exception
@@ -88,17 +89,17 @@ def check():
 
     # Define paths to check
     paths = {
-        "CONTACT_GRAPH_PATH": Path(base_path) / "protein_graph",
-        "MSA_PATH":            Path(base_path) / "a3m",
-        "CIF_PATH":            Path(base_path) / "cif",
-        "SEQ_TO_HASH_PATH":    Path(base_path) / "entity/sequence_hashes.pkl",
-        "GRAPH_HASH_PATH":     Path(base_path) / "protein_graph/level0_cluster.csv",
-        "GRAPH_CLUSTER_PATH":  Path(base_path) / "cluster/graph_hash_to_graph_cluster.txt",  # noqa: E501
-        "MSADB_PATH":          Path(base_path) / "MSA.lmdb",
-        "CIFDB_PATH":          Path(base_path) / "cif_protein_only.lmdb",
-        "CCD_DB_PATH":         Path(base_path) / "ligand_info.lmdb",
-        "IDEAL_LIGAND_PATH":   Path(base_path) / "metadata/ideal_ligand_list.pkl",
-        "SIGNALP_PATH":        Path(base_path) / "signalp",
+        "CONTACT_GRAPH_PATH": DB_path / "protein_graph",
+        "MSA_PATH":            DB_path / "a3m",
+        "CIF_PATH":            DB_path / "cif",
+        "SEQ_TO_HASH_PATH":    DB_path / "entity/sequence_hashes.pkl",
+        "GRAPH_HASH_PATH":     DB_path / "protein_graph/level0_cluster.csv",
+        "GRAPH_CLUSTER_PATH":  DB_path / "cluster/graph_hash_to_graph_cluster.txt",  # noqa: E501
+        "MSADB_PATH":          DB_path / "MSA.lmdb",
+        "CIFDB_PATH":          DB_path / "cif_protein_only.lmdb",
+        "CCD_DB_PATH":         CCD_path / "ligand_info.lmdb",
+        "IDEAL_LIGAND_PATH":   DB_path / "metadata/ideal_ligand_list.pkl",
+        "SIGNALP_PATH":        DB_path / "signalp",
     }
 
     # Check existence of each path
