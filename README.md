@@ -1,3 +1,5 @@
+## **⚠️ Warning: This library is in **beta** version. Use at your own risk.**
+
 ## Introduction
 
 `BioMol` is a library for loading structural data in mmCIF (from RCSB) or PDB formats (predicted structures).
