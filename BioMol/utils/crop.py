@@ -53,20 +53,28 @@ def crop_contiguous(
 
 
 def crop_spatial(
-    bimolstructure: BioMolStructure, crop_size: int
+    chain_bias: str | None,
+    biomolstructure: BioMolStructure,
+    crop_size: int
 ) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
     """
     Crop the structure and sequence into a spatial region
     """
-    residue_chain_break = bimolstructure.residue_chain_break
-    residue_tensor = bimolstructure.residue_tensor
+    residue_chain_break = biomolstructure.residue_chain_break
+    residue_tensor = biomolstructure.residue_tensor
     (valid_residue_indices,) = torch.where(residue_tensor[:, 4] == 1)
     valid_residue_num = valid_residue_indices.size(0)
     if valid_residue_num < crop_size:
         return valid_residue_indices
 
     chain_list = list(residue_chain_break.keys())
-    pivot_chain = random.choice(chain_list)
+    if chain_bias is not None:
+        assert chain_bias in chain_list, \
+            f"Invalid chain: {chain_bias} \
+            chain_list = {chain_list}"
+        pivot_chain = chain_bias
+    else:
+        pivot_chain = random.choice(chain_list)
     pivot_chain_residue_idx = list(
         range(
             residue_chain_break[pivot_chain][0], residue_chain_break[pivot_chain][1] + 1
@@ -103,28 +111,42 @@ def crop_spatial(
 
 
 def crop_spatial_interface(
-    bimolstructure: BioMolStructure, crop_size: int
+    interface_bias: tuple[str,str] | None,
+    biomolstructure: BioMolStructure,
+    crop_size: int
 ) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
     """
     Crop the structure and sequence into a spatial region
     """
     interface_distance_cutoff = 15.0
 
-    residue_chain_break = bimolstructure.residue_chain_break
-    residue_tensor = bimolstructure.residue_tensor
+    residue_chain_break = biomolstructure.residue_chain_break
+    residue_tensor = biomolstructure.residue_tensor
     (valid_residue_indices,) = torch.where(residue_tensor[:, 4] == 1)
     valid_residue_num = valid_residue_indices.size(0)
     if valid_residue_num < crop_size:
         return valid_residue_indices
 
     chain_list = list(residue_chain_break.keys())
-    pivot_chain = random.choice(chain_list)
+    if interface_bias is not None:
+        assert interface_bias[0] in chain_list, \
+            f"Invalid chain: {interface_bias[0]} \
+            chain_list = {chain_list}"
+        assert interface_bias[1] in chain_list, \
+            f"Invalid chain: {interface_bias[1]} \
+            chain_list = {chain_list}"
+        pivot_chain = interface_bias[0]
+    else:
+        pivot_chain = random.choice(chain_list)
     pivot_chain_id = chain_list.index(pivot_chain)
 
-    contact_graph = bimolstructure.contact_graph
-    contact_nodes = contact_graph.get_contact_node(None, pivot_chain_id)
-    crop_nodes = contact_nodes
-    crop_chains = [chain_list[i] for i in crop_nodes]
+    if interface_bias is not None:
+        crop_chains = [interface_bias[1]]
+    else :
+        contact_graph = biomolstructure.contact_graph
+        contact_nodes = contact_graph.get_contact_node(None, pivot_chain_id)
+        crop_nodes = contact_nodes
+        crop_chains = [chain_list[i] for i in crop_nodes]
     crop_chains_residue_idx = []
     for chain in crop_chains:
         crop_chains_residue_idx.extend(
@@ -179,5 +201,7 @@ def crop_spatial_interface(
             crop_chain.append(chain)
 
     chain_crop = get_chain_crop_indices(residue_chain_break, crop_indices)
+    if len(crop_chain) == 1:
+        breakpoint()
 
     return crop_indices, chain_crop

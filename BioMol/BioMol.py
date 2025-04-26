@@ -246,25 +246,40 @@ class BioMol:
         self.structure_loaded = True
         self.structure = self.bioassembly[bioassembly_id][model_id][label_alt_id]
 
-    def crop_and_load_msa(self, params: dict[str, Any]) -> None:
+    def crop_and_load_msa(
+            self, 
+            chain_bias = None, # for spatial crop
+            interaction_bias = None,  # for interface crop
+            params: dict[str, Any] = {
+                "method_prob": [0.2, 0.4, 0.4],
+                "crop_size": 384,
+            }
+                          ) -> None:
         assert self.structure_loaded, "Structure is not loaded."
 
         method_prob = params[
             "method_prob"
         ]  # 0.2 for contiguous, 0.4 for spatial, 0.4 for spatial interface
+        crop_size = params["crop_size"]
         method = random.choices(
             ["contiguous", "spatial", "interface"], weights=method_prob, k=1
         )[0]
 
         if method == "contiguous":
             crop_indices, crop_chain = crop_contiguous(
-                self.structure, params["crop_size"]
+                self.structure, 
+                crop_size
             )
         elif method == "spatial":
-            crop_indices, crop_chain = crop_spatial(self.structure, params["crop_size"])
+            crop_indices, crop_chain = crop_spatial(
+                chain_bias,
+                self.structure, 
+                crop_size)
         elif method == "interface":
             crop_indices, crop_chain = crop_spatial_interface(
-                self.structure, params["crop_size"]
+                interaction_bias,
+                self.structure, 
+                crop_size
             )
 
         crop_sequence_hash = {
@@ -274,6 +289,8 @@ class BioMol:
         msa_list = []
         for chain, seq_hash in crop_sequence_hash.items():
             chain_crop_indices = crop_chain[chain]
+            # Ex) 21022 -> 021022
+            seq_hash = seq_hash.zfill(6)
             msa = MSA(seq_hash, use_lmdb=True)
             msa.crop(chain_crop_indices.numpy())
             msa_list.append(msa)

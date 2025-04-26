@@ -1,6 +1,5 @@
 import torch
 from BioMol import BioMol
-from utils.parser import parse_cif
 from joblib import Parallel, delayed
 from filelock import FileLock
 import pickle

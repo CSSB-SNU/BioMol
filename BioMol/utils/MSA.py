@@ -10,7 +10,7 @@ import io
 import pickle
 
 from BioMol.constant.chemical import AA2num, num2AA
-from BioMol.utils.stoer_wagner_algorithm import stoer_wagner
+# from BioMol.utils.stoer_wagner_algorithm import stoer_wagner
 from BioMol import MSADB_PATH
 
 table = str.maketrans(dict.fromkeys(string.ascii_lowercase))
@@ -509,43 +509,45 @@ class ComplexMSA:
         }
         first_num_of_seqs += 1
 
-        # 2. Stoer-Wagner algorithm MSA pairing (2 clusters)
-        chain_weight = self._get_chain_weight(MSAs, first_common_species)
-        set_A, set_B, cut_weight = stoer_wagner(chain_weight)
-        list_A = list(set_A)
-        list_B = list(set_B)
-        msa_A = {ii: MSAs[ii] for ii in list_A}
-        msa_B = {ii: MSAs[ii] for ii in list_B}
+        # # 2. Stoer-Wagner algorithm MSA pairing (2 clusters)
+        # chain_weight = self._get_chain_weight(MSAs, first_common_species)
+        # set_A, set_B, cut_weight = stoer_wagner(chain_weight)
+        # list_A = list(set_A)
+        # list_B = list(set_B)
+        # msa_A = {ii: MSAs[ii] for ii in list_A}
+        # msa_B = {ii: MSAs[ii] for ii in list_B}
 
-        sw_msa_indces_A, sw_common_speceis_A, sw_num_of_seqs_A = self._pairing_MSAs(
-            msa_A, first_common_species
-        )
-        sw_msa_indces_B, sw_common_speceis_B, sw_num_of_seqs_B = self._pairing_MSAs(
-            msa_B, first_common_species
-        )
+        # sw_msa_indces_A, sw_common_speceis_A, sw_num_of_seqs_A = self._pairing_MSAs(
+        #     msa_A, first_common_species
+        # )
+        # sw_msa_indces_B, sw_common_speceis_B, sw_num_of_seqs_B = self._pairing_MSAs(
+        #     msa_B, first_common_species
+        # )
 
-        assert sw_common_speceis_A.intersection(sw_common_speceis_B) == set()
+        # assert sw_common_speceis_A.intersection(sw_common_speceis_B) == set()
 
-        min_sw_pair_num = min(sw_num_of_seqs_A, sw_num_of_seqs_B)
+        # min_sw_pair_num = min(sw_num_of_seqs_A, sw_num_of_seqs_B)
 
-        if min_sw_pair_num < sw_num_of_seqs_A:
-            sw_msa_indces_A = {
-                key: indices[:min_sw_pair_num]
-                for key, indices in sw_msa_indces_A.items()
-            }
-        if min_sw_pair_num < sw_num_of_seqs_B:
-            sw_msa_indces_B = {
-                key: indices[:min_sw_pair_num]
-                for key, indices in sw_msa_indces_B.items()
-            }
+        # if min_sw_pair_num < sw_num_of_seqs_A:
+        #     sw_msa_indces_A = {
+        #         key: indices[:min_sw_pair_num]
+        #         for key, indices in sw_msa_indces_A.items()
+        #     }
+        # if min_sw_pair_num < sw_num_of_seqs_B:
+        #     sw_msa_indces_B = {
+        #         key: indices[:min_sw_pair_num]
+        #         for key, indices in sw_msa_indces_B.items()
+        #     }
 
         paired_msa_indices = {key: [] for key in MSAs.keys()}
 
         for key in MSAs.keys():
-            if key in list_A:
-                paired_msa_indices[key] = first_msa_indices[key] + sw_msa_indces_A[key]
-            else:
-                paired_msa_indices[key] = first_msa_indices[key] + sw_msa_indces_B[key]
+            paired_msa_indices[key] = first_msa_indices[key]
+
+            # if key in list_A:
+            #     paired_msa_indices[key] = first_msa_indices[key] + sw_msa_indces_A[key]
+            # else:
+            #     paired_msa_indices[key] = first_msa_indices[key] + sw_msa_indces_B[key]
 
         self._test_uniqueness(paired_msa_indices)
 
@@ -603,8 +605,8 @@ class ComplexMSA:
         self.final_has_deletion = np.array(final_has_deletion)
         self.final_deletion_value = 2 * np.arctan(np.array(final_deletion) / 3) / np.pi
         self.num_of_paired = first_num_of_seqs
-        self.num_of_sw = min_sw_pair_num
-        self.num_of_unpaired = max_depth - first_num_of_seqs - min_sw_pair_num
+        # self.num_of_sw = min_sw_pair_num
+        self.num_of_unpaired = max_depth - first_num_of_seqs # - min_sw_pair_num
         self.total_depth = max_depth
 
     def to_a3m(self, annotations: list[str], sequence: np.ndarray, save_path: str):

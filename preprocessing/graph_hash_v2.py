@@ -11,7 +11,7 @@ import networkx as nx
 # 20250303, protein only
 
 chainID_to_cluster_path = (
-    "/data/psk6950/PDB_2024Mar18/protein_seq_clust/v2_chainID_to_cluster.pkl"
+    "/data/psk6950/PDB_2024Oct21/protein_seq_clust/v2_chainID_to_cluster.pkl"
 )
 with open(chainID_to_cluster_path, "rb") as f:
     chainID_to_cluster = pickle.load(f)
@@ -76,7 +76,7 @@ def get_graph_from_biomol_structure(biomol_structure):
     return node, edge
 
 
-save_dir = "/data/psk6950/PDB_2024Mar18/protein_graph/"
+save_dir = "/data/psk6950/PDB_2024Oct21/protein_graph/"
 
 
 def save_graph_from_cif(cif_path):
@@ -134,7 +134,7 @@ def save_graph_v2(cif_dir, Ab_fasta_path):
             remake_pdb_id.append(pdb_id)
     remake_pdb_id = list(set(remake_pdb_id))
 
-    save_dir = "/data/psk6950/PDB_2024Mar18/protein_graph/"
+    save_dir = "/data/psk6950/PDB_2024Oct21/protein_graph/"
 
     # Gather all CIF file paths from the inner directories.
     cif_path_list = []
@@ -232,7 +232,7 @@ def get_graph_from_biomol_structure_for_large(biomol_structure, device="cpu"):
 
 
 def save_graph_from_cif_large_protein(cif_path, device="cpu"):
-    save_dir = "/data/psk6950/PDB_2024Mar18/protein_graph/"
+    save_dir = "/data/psk6950/PDB_2024Oct21/protein_graph/"
     ID = cif_path.split("/")[-1].split(".")[0]
     save_path = f"{save_dir}{ID[1:3]}/{ID}.graph"
     # if os.path.exists(save_path):
@@ -285,7 +285,7 @@ def save_graph_v2_too_many_chain():
 
 if __name__ == "__main__":
     # fix the graph for AbAg
-    Ab_fasta_path = "/data/psk6950/PDB_2024Mar18/AbAg/Ab.fasta"
-    cif_dir = "/data/psk6950/PDB_2024Mar18/cif/"
-    # save_graph_v2(cif_dir, Ab_fasta_path)
-    save_graph_v2_too_many_chain()
+    Ab_fasta_path = "/data/psk6950/PDB_2024Oct21/AbAg/Ab.fasta"
+    cif_dir = "/data/psk6950/PDB_2024Oct21/cif/"
+    save_graph_v2(cif_dir, Ab_fasta_path)
+    # save_graph_v2_too_many_chain()

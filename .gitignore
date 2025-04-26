@@ -1,5 +1,6 @@
 example_cif/
 dataloader.py
+sampling.py
 log/
 __pycache__/
 backup/
@@ -10,4 +11,4 @@ BioMol/configs/datapath.json
 # pixi environments
 .pixi
 *.egg-info
-test.cif
+*.cif

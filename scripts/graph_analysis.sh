@@ -6,4 +6,5 @@
 #SBATCH -o ./log/graph_analysis2.out
 #SBATCH -e ./log/graph_analysis2.err
 
-python -u ./statistics/graph_analysis.py
+# python -u ./statistics/graph_analysis.py
+python -u ./statistics/get_edge_score.py
