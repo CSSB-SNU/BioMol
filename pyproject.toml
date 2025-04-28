@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "BioMol"
-version = "0.1.0"
+version = "0.1.1"
 description = "Biomolecule data loader library"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -14,9 +14,9 @@ dependencies = [
     "torch>=2.6.0,<3",
     "biopython>=1.85,<2",
     "click>=8.1.8,<9",
-    matplotlib = ">=3.10.1,<4"
-    joblib = ">=1.4.2,<2"
-    python-lmdb = ">=1.6.2,<2"
+    "matplotlib>=3.10.1,<4",
+    "joblib >=1.4.2,<2",
+    "lmdb>=1.6.2,<2",
 ]
 
 [tool.setuptools]
@@ -48,9 +48,6 @@ python = "~=3.10.16"
 black = ">=25.1.0,<26"
 flake8 = ">=7.1.2,<8"
 ruff = ">=0.11.6,<0.12"
-
-[tool.pixi.dependencies]
-click = ">=8.1.8,<9"
 
 [project.scripts]
 biomol = "BioMol.cli:cli"
