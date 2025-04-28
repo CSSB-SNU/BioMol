@@ -117,8 +117,8 @@ def get_frequency(unique_graph_path, node_save_path, edge_save_path):
 
 if __name__ == "__main__":
     unique_graphs_path = "/public_data/BioMolDB_2024Oct21/protein_graph/unique_graphs.pkl"
-    node_save_path = "/public_data/BioMolDB_2024Oct21/protein_graph/node_freq.pkl"
-    edge_save_path = "/public_data/BioMolDB_2024Oct21/protein_graph/edge_score_dict.pkl"
+    node_save_path = "/public_data/BioMolDB_2024Oct21/protein_graph/node_score.pkl"
+    edge_save_path = "/public_data/BioMolDB_2024Oct21/protein_graph/edge_score.pkl"
     get_frequency(unique_graphs_path, node_save_path, edge_save_path)
     # node_path = "./node_freq.png"
     # edge_path = "./edge_score_dict.png"

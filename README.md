@@ -31,7 +31,7 @@
 Install via pip:
 
 ```bash
-pip install git+ssh://git@github.com:CSSB-SNU/BioMol.git
+pip install git+https://github.com/CSSB-SNU/BioMol.git
 ```
 
 `BioMol` is designed for machine learning training efficiency, not just data parsing. It relies on precomputed databases for speed.
