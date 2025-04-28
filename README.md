@@ -39,7 +39,7 @@ pip install git+ssh://git@github.com:CSSB-SNU/BioMol.git
 Configure paths before use:
 
 ```bash
-biomol configure --config_file datapath.json
+biomol configure --config-file datapath.json
 ```
 
 - `datapath.json` should specify `DB_path` and `CCD_path`

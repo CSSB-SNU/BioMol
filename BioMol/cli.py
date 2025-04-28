@@ -90,7 +90,6 @@ def check():
     # Define paths to check
     paths = {
         "CONTACT_GRAPH_PATH": DB_path / "protein_graph",
-        "MSA_PATH":            DB_path / "a3m",
         "CIF_PATH":            DB_path / "cif",
         "SEQ_TO_HASH_PATH":    DB_path / "entity/sequence_hashes.pkl",
         "GRAPH_HASH_PATH":     DB_path / "protein_graph/level0_cluster.csv",
