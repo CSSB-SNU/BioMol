@@ -162,7 +162,7 @@
     ],
     "types": [
         "protein",
-        "na",
+        "nucleic_acid",
         "ligand"
     ]
 }

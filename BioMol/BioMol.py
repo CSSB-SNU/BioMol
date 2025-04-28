@@ -251,16 +251,12 @@ class BioMol:
             chain_bias = None, # for spatial crop
             interaction_bias = None,  # for interface crop
             crop_method_prob: list[float] = [0.2, 0.4, 0.4], # 0.2 for contiguous, 0.4 for spatial, 0.4 for spatial interface
-            crop_lenght: int = 384,
+            crop_length: int = 384,
                           ) -> None:
         assert self.structure_loaded, "Structure is not loaded."
 
-        method_prob = params[
-            "method_prob"
-        ]  # 0.2 for contiguous, 0.4 for spatial, 0.4 for spatial interface
-        crop_length = params["crop_length"]
         method = random.choices(
-            ["contiguous", "spatial", "interface"], weights=method_prob, k=1
+            ["contiguous", "spatial", "interface"], weights=crop_method_prob, k=1
         )[0]
 
         if method == "contiguous":
@@ -296,4 +292,5 @@ class BioMol:
         complex_msa = ComplexMSA(msa_list)
         self.structure.crop(crop_indices)
         self.MSA = complex_msa
+
 
