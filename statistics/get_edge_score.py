@@ -15,9 +15,12 @@ def get_unique_graphs(unique_graph_path):
 def get_frequency(unique_graph_path, node_save_path, edge_save_path):
     unique_graphs = get_unique_graphs(unique_graph_path)
 
-
     node_score_dict = {}
     edge_score_dict = {}
+
+    # sort by graph_hash
+    unique_graphs = dict(sorted(unique_graphs.items(), key=lambda x: x[0]))
+
     for graph_hash, graph in unique_graphs.items():
         node_num = len(graph.nodes())
         edge_num = len(graph.edges())
@@ -46,6 +49,7 @@ def get_frequency(unique_graph_path, node_save_path, edge_save_path):
             else:
                 node_score_dict[node_label] += node_score
             temp_node_label_data.append(node_label)
+        breakpoint()
 
     # print max and min edge score and its ID
     max_node, max_node_score = max(node_score_dict.items(), key=lambda kv: kv[1])

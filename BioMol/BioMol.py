@@ -249,7 +249,7 @@ class BioMol:
     def crop_and_load_msa(
             self, 
             chain_bias = None, # for spatial crop
-            interaction_bias = None,  # for interface crop
+            interface_bias = None,  # for interface crop
             crop_method_prob: list[float] = [0.2, 0.4, 0.4], # 0.2 for contiguous, 0.4 for spatial, 0.4 for spatial interface
             crop_length: int = 384,
                           ) -> None:
@@ -271,7 +271,7 @@ class BioMol:
                 crop_length)
         elif method == "interface":
             crop_indices, crop_chain = crop_spatial_interface(
-                interaction_bias,
+                interface_bias,
                 self.structure, 
                 crop_length
             )
