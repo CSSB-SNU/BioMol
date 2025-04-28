@@ -6,6 +6,7 @@ if __name__ == "__main__":
         pdb_ID="9dw6", # lower case
         mol_types=["protein"], # only protein
     )
+    breakpoint()
     # biomol = BioMol(
     #     cif="9dw6.cif", # This file should be from the PDB database.
     #     mol_types=["protein","nucleic_acid", "ligand"],

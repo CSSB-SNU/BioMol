@@ -20,7 +20,7 @@ def get_chain_crop_indices(
 
 
 def crop_contiguous(
-    biomolstructure: BioMolStructure, crop_size: int
+    biomolstructure: BioMolStructure, crop_length: int
 ) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
     """
     Crop the structure and sequence into a contiguous region
@@ -38,8 +38,8 @@ def crop_contiguous(
         chain_end = residue_chain_break[chain][1]
         n_k = chain_end - chain_start + 1
         n_remaining -= n_k
-        crop_max = min(crop_size - n_added, n_k)
-        crop_min = min(n_k, max(0, crop_size - n_remaining - n_added))
+        crop_max = min(crop_length - n_added, n_k)
+        crop_min = min(n_k, max(0, crop_length - n_remaining - n_added))
         crop = random.randint(crop_min, crop_max)
         n_added += crop
         crop_start = random.randint(0, n_k - crop) + chain_start
@@ -55,7 +55,7 @@ def crop_contiguous(
 def crop_spatial(
     chain_bias: str | None,
     biomolstructure: BioMolStructure,
-    crop_size: int
+    crop_length: int
 ) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
     """
     Crop the structure and sequence into a spatial region
@@ -64,7 +64,7 @@ def crop_spatial(
     residue_tensor = biomolstructure.residue_tensor
     (valid_residue_indices,) = torch.where(residue_tensor[:, 4] == 1)
     valid_residue_num = valid_residue_indices.size(0)
-    if valid_residue_num < crop_size:
+    if valid_residue_num < crop_length:
         return valid_residue_indices
 
     chain_list = list(residue_chain_break.keys())
@@ -91,7 +91,7 @@ def crop_spatial(
     distance_map = torch.norm(residue_xyz - pivot_residue_xyz, dim=1)
     distance_map[~residue_mask] = float("inf")
 
-    crop_indices = torch.topk(distance_map, crop_size, largest=False).indices
+    crop_indices = torch.topk(distance_map, crop_length, largest=False).indices
 
     # remove missing residues
     crop_indices = crop_indices[~torch.isin(crop_indices, missing_indices)]
@@ -113,7 +113,7 @@ def crop_spatial(
 def crop_spatial_interface(
     interface_bias: tuple[str,str] | None,
     biomolstructure: BioMolStructure,
-    crop_size: int
+    crop_length: int
 ) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
     """
     Crop the structure and sequence into a spatial region
@@ -124,7 +124,7 @@ def crop_spatial_interface(
     residue_tensor = biomolstructure.residue_tensor
     (valid_residue_indices,) = torch.where(residue_tensor[:, 4] == 1)
     valid_residue_num = valid_residue_indices.size(0)
-    if valid_residue_num < crop_size:
+    if valid_residue_num < crop_length:
         return valid_residue_indices
 
     chain_list = list(residue_chain_break.keys())
@@ -186,7 +186,7 @@ def crop_spatial_interface(
     distance_map = torch.norm(residue_xyz - pivot_residue_xyz, dim=1)
     distance_map[~residue_mask] = float("inf")
 
-    crop_indices = torch.topk(distance_map, crop_size, largest=False).indices
+    crop_indices = torch.topk(distance_map, crop_length, largest=False).indices
 
     # remove missing residues
     crop_indices = crop_indices[~torch.isin(crop_indices, missing_indices)]
