@@ -51,7 +51,7 @@ def parse_protein_graph():
     return protein_id_data
 
 
-def get_multi_state_protein_seqs(length_filter=(128, 512)):
+def get_multi_state_protein_seqs(length_filter=(128, 5120)):
     """
     Parse the merged fasta file and extract protein sequences.
     """
