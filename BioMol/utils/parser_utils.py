@@ -26,7 +26,6 @@ def read_lmdb_value(key: str):
     finally:
         env.close()
 
-
 def get_smaller_mmcif_dict(
     mmcif_dict,
     mmcif_dict_keys,

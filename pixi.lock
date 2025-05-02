@@ -96,7 +96,7 @@ packages:
 - pypi: .
   name: biomol
   version: 0.1.1
-  sha256: eee36257e8305d7495d602bef74ea30e3c30cf09d3c04104a76bfa3f7c357103
+  sha256: 2001b138efed4bb4b2baed78905c2aa559f21e97781d81da075fca0f0c92de77
   requires_dist:
   - torch>=2.6.0,<3
   - biopython>=1.85,<2

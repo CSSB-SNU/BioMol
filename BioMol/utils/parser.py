@@ -48,6 +48,8 @@ chem_comp_configs = {
     "1D": {
         "full_atoms": ("_chem_comp_atom.atom_id", str),
         "one_letter_atoms": ("_chem_comp_atom.type_symbol", str),
+        "charges": ("_chem_comp_atom.charge", float),
+        "ideal_coords": ("_chem_comp_atom.pdbx_model_Cartn_x_ideal", torch.Tensor),
     },
     "2D": {"bond": "_chem_comp_bond"},
 }
@@ -220,7 +222,6 @@ def compare_ideal_chem_comp(chem_comp):
     chem_comp = ChemComp(
         chem_comp["0D"], chem_comp["1D"], chem_comp["2D"], chem_comp["help"]
     )
-
     return chem_comp
 
 

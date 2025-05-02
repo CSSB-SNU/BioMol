@@ -13,6 +13,7 @@ from BioMol.utils.feature import (
     FeatureMap1D,
     FeatureMapPair,
 )
+from BioMol import CCD_PATH
 from BioMol.utils.hierarchy import ChemComp
 from BioMol.constant.chemical import stereo_config_map
 
@@ -25,6 +26,7 @@ ligand_configs = {
     "1D": {
         "full_atoms": ("_chem_comp_atom.atom_id", str),
         "one_letter_atoms": ("_chem_comp_atom.type_symbol", str),
+        "charge": ("_chem_comp_atom.charge", float),
         "ideal_x": ("_chem_comp_atom.pdbx_model_Cartn_x_ideal", float),
         "ideal_y": ("_chem_comp_atom.pdbx_model_Cartn_y_ideal", float),
         "ideal_z": ("_chem_comp_atom.pdbx_model_Cartn_z_ideal", float),
@@ -90,6 +92,13 @@ def parse_cif(cif_path):
     )
     output_1D["one_letter_atoms"] = Feature1D(
         "one_letter_atoms", one_letter_atoms, one_letter_atoms_mask, feature_level, None
+    )
+
+    # charge
+    charges = mmcif_dict["_chem_comp_atom.charge"]
+    charges = [float(d) if d != "?" else 0.0 for d in charges]
+    output_1D["charge"] = Feature1D(
+        "charge", torch.tensor(charges), torch.tensor(full_atoms_mask), feature_level, None
     )
 
     for key in ["ideal_x", "ideal_y", "ideal_z"]:
@@ -205,6 +214,6 @@ def save_ligand_info(temp_dir, env_path):
 
 if __name__ == "__main__":
     save_ligand_info(
-        "/data/psk6950/CCD/components_tmp/",
-        "/data/psk6950/CCD/ligand_info.lmdb",
+        f"{CCD_PATH}/components_tmp/",
+        f"{CCD_PATH}/ligand_info.lmdb",
     )

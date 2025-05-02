@@ -6,13 +6,14 @@ import gzip
 from joblib import Parallel, delayed
 # from BioMol import CIFDB_PATH
 from BioMol.utils.parser import parse_cif
+from BioMol import DB_PATH
 
 
-db_env = "/data/psk6950/PDB_2024Mar18/cif_protein_only.lmdb"
-protein_graph_dir = "/data/psk6950/PDB_2024Mar18/protein_graph/"
-cif_dir = "/data/psk6950/PDB_2024Mar18/cif/"
+db_env = f"{DB_PATH}/cif_protein_only.lmdb"
+protein_graph_dir = f"{DB_PATH}/protein_graph/"
+cif_dir = f"{DB_PATH}/cif/"
 cif_config_path = "./BioMol/configs/types/protein_only.json"
-CIFDB_PATH = "/data/psk6950/PDB_2024Mar18/cif_protein_only.lmdb"
+CIFDB_PATH = f"{DB_PATH}/cif_protein_only.lmdb"
 remove_signal_peptide = True
 
 
