@@ -97,8 +97,8 @@ def parse_cif(cif_path):
     # charge
     charges = mmcif_dict["_chem_comp_atom.charge"]
     charges = [float(d) if d != "?" else 0.0 for d in charges]
-    output_1D["charge"] = Feature1D(
-        "charge", torch.tensor(charges), torch.tensor(full_atoms_mask), feature_level, None
+    output_1D["charges"] = Feature1D(
+        "charges", torch.tensor(charges), torch.tensor(full_atoms_mask), feature_level, None
     )
 
     for key in ["ideal_x", "ideal_y", "ideal_z"]:

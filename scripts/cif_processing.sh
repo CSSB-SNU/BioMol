@@ -2,7 +2,7 @@
 #SBATCH -J cif_lmdb
 #SBATCH --mem=180g
 #SBATCH -p cpu
-#SBATCH -c 78
+#SBATCH -c 80
 #SBATCH -o ./log/cif_lmdb.out
 #SBATCH -e ./log/cif_lmdb.err
 
