@@ -313,12 +313,12 @@ class BioMol:
             chain_crop = get_chain_crop_indices(
                 self.structure.residue_chain_break, crop_indices
             )
-            for chain_id, crop_indices in chain_crop.items():
+            for chain_id, chain_crop_indices in chain_crop.items():
                 seq_hash = self.structure.sequence_hash[chain_id]
                 # Ex) 21022 -> 021022
                 seq_hash = seq_hash.zfill(6)
                 msa = MSA(seq_hash, use_lmdb=True)
-                msa.crop(crop_indices.numpy())
+                msa.crop(chain_crop_indices.numpy())
                 msa_list.append(msa)
 
             complex_msa = ComplexMSA(msa_list)
