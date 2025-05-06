@@ -301,7 +301,8 @@ class FeatureMapContainer:
 
         all_lengths = list(length_dict.values())
         if len(set(all_lengths)) != 1:
-            raise ValueError("Length of all 1D features should be same")
+            name = self.feature_map_0D["name"]
+            raise ValueError(f"Length of all 1D features should be same : {name}, {length_dict}")
 
     def __getitem__(
         self, idx: str | int | slice | tuple[int, int]

@@ -1,11 +1,10 @@
 #!/bin/sh 
-#SBATCH -J msa_proc
-#SBATCH -p cpu-farm
-#SBATCH --nodes=1
-#SBATCH --cpus-per-task=104
+#SBATCH -J seq_hash_DB
+#SBATCH --mem=480g
+#SBATCH -p cpu
+#SBATCH -c 80
 #SBATCH -o ./log/multistate_analysis.out
 #SBATCH -e ./log/multistate_analysis.err
 
 # python -u ./preprocessing/check_MSA.py
-export PYTHONPATH="~/biomol:$PYTHONPATH"
-python -u ./statistics/multi_state_protiens.py
+python -u ./statistics/multi_state_protiens2.py

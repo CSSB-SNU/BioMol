@@ -73,14 +73,13 @@ def lmdb_cif(env_path=db_env, n_jobs=-1, batch=200):
     # Parallel processing of files using joblib.
     env = lmdb.open(env_path, map_size=1 * 1024**4)  # 1TB
     # n_jobs=-1 uses all available cores. Adjust as needed.
-    for _ in range(0, len(files_to_process), batch):
-        results = Parallel(n_jobs=n_jobs)(
-            delayed(process_file)(cif_path) for cif_path in files_to_process
-        )
-        # Open LMDB environment for writing
-        with env.begin(write=True) as txn:
-            for cif_hash, compressed_data in results:
-                txn.put(cif_hash.encode(), compressed_data)
+    results = Parallel(n_jobs=n_jobs)(
+        delayed(process_file)(cif_path) for cif_path in files_to_process
+    )
+    # Open LMDB environment for writing
+    with env.begin(write=True) as txn:
+        for cif_hash, compressed_data in results:
+            txn.put(cif_hash.encode(), compressed_data)
     env.close()
 
 

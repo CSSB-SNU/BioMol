@@ -1,6 +1,6 @@
 #!/bin/sh 
 #SBATCH -J cif_lmdb
-#SBATCH --mem=180g
+#SBATCH --mem=480g
 #SBATCH -p cpu
 #SBATCH -c 80
 #SBATCH -o ./log/cif_lmdb.out

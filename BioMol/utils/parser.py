@@ -148,6 +148,7 @@ def compare_ideal_chem_comp(chem_comp):
     if chem_comp_id == "UNL":
         return ideal_chem_comp
 
+
     chem_comp_help = {}
 
     # compare 0d feature
@@ -168,6 +169,18 @@ def compare_ideal_chem_comp(chem_comp):
     chem_comp["0D"]["flag"] = Feature0D("flag", flag_0d, FeatureLevel.CHEMCOMP, None)
 
     # compare 1d feature
+    if "full_atoms" in chem_comp["1D"]:
+        input_full_atoms = chem_comp["1D"]["full_atoms"]
+        ideal_full_atoms = ideal_chem_comp.get_atoms(one_letter=False)
+        if input_full_atoms != ideal_full_atoms:
+            chem_comp_help["1D"] = (
+                f"full_atoms between loaded item and external source is \
+                    different. You should check it." # Ex) 3q4p M7G H82
+            )
+            # in this case, we only use ideal chem_comp for 1D features.
+            chem_comp["1D"] = {}
+
+
     key_1d = chem_comp_configs["1D"].keys()
     for key in key_1d:
         if key in chem_comp["1D"]:
@@ -1023,7 +1036,11 @@ def parse_cif(cif_path, cif_configs=None, remove_signal_peptide=False):
     chem_comp_dict = merge_dict(
         [_chem_comp_dict, _chem_comp_atom_dict, _chem_comp_bond_dict]
     )
-    chem_comp_dict = parse_chem_comp_dict(chem_comp_dict)
+    try:
+        chem_comp_dict = parse_chem_comp_dict(chem_comp_dict)
+    except ValueError:
+        print(f"Error in parsing chem_comp_dict {cif_path}")
+        raise
 
     # # structure parser using
     # parser = MMCIFParser()
@@ -1352,7 +1369,34 @@ def parse_simple_pdb(pdb_path, cif_configs=None):
 
 
 if __name__ == "__main__":
-    # parse_cif('example_cif/1qrs.cif')
-    pdb_test = "/public_data/ml/RF2_train/fb_af/pdb/ff/ff/UniRef50_W4HDV5.pdb"
-    bioassembly = parse_simple_pdb(pdb_test)
+    cif_config_path = "./BioMol/configs/types/protein_only.json"
+    cif_dir = "/public_data/BioMolDB_2024Oct21/cif/"
+    
+    cif_list = [
+    # "1ap8", "1ej1", "1ej4", "1ejh", "1jtf", "1rf8", "1v39", "1xmm",
+    # "2idv", "2jh8", "2vp3",
+    # "3m93", "3q4p",
+    # "4b6u", "4emf", "4or4", "4tqc",
+    # "5bv3", "5dto", "5f98", "5h1m", "5kqs", "5lop", "5me6", "5msg", "5n2v",
+    # "6c6k", "6evj", "6irz", "6is0", "6qcv", "6qcw", "6qcx", "6rr7", "6trq",
+    # "6vu1", "6vvj", "6wq3", "6zqg",
+    # "7jpe", "7jyy", "7jz0", "7l6r", "7l6t", "7sez", "7sf0",
+    # "8qoi", "8r6w", "8r6y", "8srr", "8suy", "8sx4", "8vuo",
+    # "9don"
+    "3q4p"
+    ]
+    # walk
+    for cif_ID in cif_list:
+        cif_path = "/public_data/BioMolDB_2024Oct21/cif/" + cif_ID[1:3] + "/" + cif_ID + ".cif.gz"
+        print(f"Parsing {cif_path}")
+        try:
+            bioassembly = parse_cif(cif_path, cif_config_path)
+        except Exception as e:
+            print(f"Error parsing {cif_path}: {e}")
+            breakpoint()
+            continue
+    # cif_test = "/public_data/BioMolDB_2024Oct21/cif/11/111d.cif.gz"
+    # parse_cif(cif_test, cif_config_path)
+    # pdb_test = "/public_data/ml/RF2_train/fb_af/pdb/ff/ff/UniRef50_W4HDV5.pdb"
+    # bioassembly = parse_simple_pdb(pdb_test)
     pass

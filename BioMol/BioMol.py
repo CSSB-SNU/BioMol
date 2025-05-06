@@ -1,10 +1,11 @@
 import os
 from typing import Any
 import random
+import torch
 
 from BioMol.utils.parser import parse_cif, parse_simple_pdb
 from BioMol.utils.MSA import MSA, ComplexMSA
-from BioMol.utils.crop import crop_contiguous, crop_spatial, crop_spatial_interface
+from BioMol.utils.crop import crop_contiguous, crop_spatial, crop_spatial_interface, get_chain_crop_indices
 from BioMol.utils.read_lmdb import read_cif_lmdb
 from BioMol import ALL_TYPE_CONFIG_PATH, PROTEIN_ONLY_CONFIG_PATH
 """
@@ -246,7 +247,7 @@ class BioMol:
         self.structure_loaded = True
         self.structure = self.bioassembly[bioassembly_id][model_id][label_alt_id]
 
-    def crop_and_load_msa(
+    def get_crop_indices(
             self, 
             chain_bias = None, # for spatial crop
             interface_bias = None,  # for interface crop
@@ -280,17 +281,46 @@ class BioMol:
             chain: self.structure.sequence_hash[chain] for chain in crop_chain
         }
 
-        msa_list = []
+        seq_hash_to_crop_indices = {}
         for chain, seq_hash in crop_sequence_hash.items():
-            chain_crop_indices = crop_chain[chain]
-            # Ex) 21022 -> 021022
-            seq_hash = seq_hash.zfill(6)
-            msa = MSA(seq_hash, use_lmdb=True)
-            msa.crop(chain_crop_indices.numpy())
-            msa_list.append(msa)
+            if seq_hash not in seq_hash_to_crop_indices:
+                seq_hash_to_crop_indices[seq_hash] = []
+            seq_hash_to_crop_indices[seq_hash].append(crop_chain[chain])
 
-        complex_msa = ComplexMSA(msa_list)
+        return crop_indices, seq_hash_to_crop_indices
+
+        # msa_list = []
+        # for chain, seq_hash in crop_sequence_hash.items():
+        #     chain_crop_indices = crop_chain[chain]
+        #     # Ex) 21022 -> 021022
+        #     seq_hash = seq_hash.zfill(6)
+        #     msa = MSA(seq_hash, use_lmdb=True)
+        #     msa.crop(chain_crop_indices.numpy())
+        #     msa_list.append(msa)
+
+        # complex_msa = ComplexMSA(msa_list)
+        # self.structure.crop(crop_indices)
+        # self.MSA = complex_msa
+        # breakpoint()
+
+    def crop(
+            self,
+            crop_indices: dict[str, torch.Tensor],
+            crop_MSA: bool = False,
+            ) -> None:
+        if crop_MSA :
+            msa_list = []
+            chain_crop = get_chain_crop_indices(
+                self.structure.residue_chain_break, crop_indices
+            )
+            for chain_id, crop_indices in chain_crop.items():
+                seq_hash = self.structure.sequence_hash[chain_id]
+                # Ex) 21022 -> 021022
+                seq_hash = seq_hash.zfill(6)
+                msa = MSA(seq_hash, use_lmdb=True)
+                msa.crop(crop_indices.numpy())
+                msa_list.append(msa)
+
+            complex_msa = ComplexMSA(msa_list)
         self.structure.crop(crop_indices)
         self.MSA = complex_msa
-
-

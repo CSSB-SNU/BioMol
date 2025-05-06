@@ -1,6 +1,6 @@
 import random
 import torch
-
+import itertools
 from BioMol.utils.hierarchy import BioMolStructure
 
 
@@ -205,3 +205,38 @@ def crop_spatial_interface(
         breakpoint()
 
     return crop_indices, chain_crop
+
+def get_crop_indices(
+    biomolstructure: BioMolStructure,
+    seq_hash_to_crop_indices: dict[str, torch.Tensor],
+    ) -> list[torch.Tensor]:
+    contact_graph = biomolstructure.contact_graph
+    chain_id_to_seq_hash = biomolstructure.sequence_hash
+    seq_hash_to_chain_id = {value: key for key, value in chain_id_to_seq_hash.items()}
+
+    biomolstructure_hash = set(biomolstructure.sequence_hash.values())
+    cropped_hash = set(seq_hash_to_crop_indices.keys())
+
+    assert cropped_hash.issubset(biomolstructure_hash), \
+        f"cropped_hash: {cropped_hash} \
+        biomolstructure_hash: {biomolstructure_hash}"
+
+    seq_hash_to_num = {}
+    for seq_hash in cropped_hash:
+        assert len(seq_hash_to_crop_indices[seq_hash]) <= len(seq_hash_to_chain_id[seq_hash]), \
+            f"seq_hash: {seq_hash} \
+            len(seq_hash_to_crop_indices[seq_hash]): {len(seq_hash_to_crop_indices[seq_hash])} \
+            len(seq_hash_to_chain_id[seq_hash]): {len(seq_hash_to_chain_id[seq_hash])}"
+        seq_hash_to_num[seq_hash] = len(seq_hash_to_crop_indices[seq_hash])
+    
+    # find all combinations of cropped_hash
+    seq_hash_to_combinations = {}
+    for seq_hash, num in seq_hash_to_num.items():
+        chain_ids = seq_hash_to_chain_id.get(seq_hash, [])
+        seq_hash_to_combinations[seq_hash] = list(itertools.combinations(chain_ids, num))
+
+
+
+    contact_nodes = contact_graph.get_contact_node(None, pivot_chain_id)
+
+

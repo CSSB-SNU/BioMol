@@ -5,6 +5,10 @@ from joblib import Parallel, delayed
 import pickle
 import gc
 
+'''
+This code requires seq_to_str DB.
+'''
+
 merged_fasta_path = "/data/psk6950/PDB_2024Mar18/entity/merged_protein.fasta"
 protein_graph_path = "/data/psk6950/PDB_2024Mar18/cluster/PDBID_to_graph_hash.txt"
 sequence_hash_path = "/data/psk6950/PDB_2024Mar18/entity/sequence_hashes.pkl"
@@ -143,64 +147,80 @@ def extract_chain_ids(biomol: BioMol, chain_ID, assembly_id, model_id, alt_id):
         return None
 
     residue_start, residue_end = residue_chain_break[chain_ID]
-    residue_tensor = residue_tensor[residue_start:residue_end]
+    residue_tensor = residue_tensor[residue_start:residue_end, 4:8] # (L, 4), mask, x, y, z
     return residue_tensor
 
 
-def get_contact_pair(residue_tensor, contact_threshold=8.0):
-    xyz = residue_tensor[:, 5:8]  # (L, 3)
-    mask = residue_tensor[:, 4]  # (L, 1)
-    L = xyz.shape[0]
-    valid_reisude = torch.where(mask == 1)[0].tolist()
-    dist_map = ((xyz[:, None, :] - xyz[None, :, :]) ** 2).sum(-1) ** 0.5  # (L, L)
-    dist_map = dist_map * mask[:, None] * mask[None, :]  # (L, L)
-    sequence_contact_map = torch.arange(L)[:, None] - torch.arange(L)[None, :]  # (L, L)
-    sequence_contact_map = torch.abs(sequence_contact_map)
-    sequence_contact_map = sequence_contact_map < 16
+# def get_contact_pair(residue_tensor, contact_threshold=8.0):
+#     xyz = residue_tensor[:, 1:]  # (L, 3)
+#     mask = residue_tensor[:,0]  # (L, 1)
+#     L = xyz.shape[0]
+#     valid_reisude = torch.where(mask == 1)[0].tolist()
+#     dist_map = ((xyz[:, None, :] - xyz[None, :, :]) ** 2).sum(-1) ** 0.5  # (L, L)
+#     dist_map = dist_map * mask[:, None] * mask[None, :]  # (L, L)
+#     sequence_contact_map = torch.arange(L)[:, None] - torch.arange(L)[None, :]  # (L, L)
+#     sequence_contact_map = torch.abs(sequence_contact_map)
+#     sequence_contact_map = sequence_contact_map < 16
 
-    # convert 0 to 999
-    dist_map[dist_map == 0] = 999
-    dist_map[sequence_contact_map] = 999
+#     # convert 0 to 999
+#     dist_map[dist_map == 0] = 999
+#     dist_map[sequence_contact_map] = 999
 
-    contact_map = dist_map < contact_threshold
-    contact_pair = torch.nonzero(contact_map)
-    contact_pair = contact_pair[contact_pair[:, 0] < contact_pair[:, 1]].tolist()
-    # to set
-    contact_pair = set(map(tuple, contact_pair))
-    return contact_pair, valid_reisude
-
-
-def cal_contact_diff(contact_pair1, contact_pair2, mask1, mask2):
-    """
-    Calculate the difference between two contact pairs.
-    """
-    new_contact_pair1 = []
-    new_contact_pair2 = []
-    for pair in contact_pair1:
-        if pair[0] in mask2 and pair[1] in mask2:
-            new_contact_pair1.append(pair)
-    for pair in contact_pair2:
-        if pair[0] in mask1 and pair[1] in mask1:
-            new_contact_pair2.append(pair)
-    contact_pair1 = set(map(tuple, new_contact_pair1))
-    contact_pair2 = set(map(tuple, new_contact_pair2))
-
-    diff1 = contact_pair1 - contact_pair2
-    diff2 = contact_pair2 - contact_pair1
-    intersection = contact_pair1.intersection(contact_pair2)
-    diff = diff1.union(diff2)
-    return len(diff) / (1 + len(intersection))
+#     contact_map = dist_map < contact_threshold
+#     contact_pair = torch.nonzero(contact_map)
+#     contact_pair = contact_pair[contact_pair[:, 0] < contact_pair[:, 1]].tolist()
+#     # to set
+#     contact_pair = set(map(tuple, contact_pair))
+#     return contact_pair, valid_reisude
 
 
 
-def process_sequence(sequence_hash, chain_ids, protein_id_data, cif_dir, criteria):
+# def cal_contact_diff(contact_pair1, contact_pair2, mask1, mask2):
+#     """
+#     Calculate the difference between two contact pairs.
+#     """
+#     new_contact_pair1 = []
+#     new_contact_pair2 = []
+#     for pair in contact_pair1:
+#         if pair[0] in mask2 and pair[1] in mask2:
+#             new_contact_pair1.append(pair)
+#     for pair in contact_pair2:
+#         if pair[0] in mask1 and pair[1] in mask1:
+#             new_contact_pair2.append(pair)
+#     contact_pair1 = set(map(tuple, new_contact_pair1))
+#     contact_pair2 = set(map(tuple, new_contact_pair2))
+
+#     diff1 = contact_pair1 - contact_pair2
+#     diff2 = contact_pair2 - contact_pair1
+#     intersection = contact_pair1.intersection(contact_pair2)
+#     diff = diff1.union(diff2)
+#     return len(diff) / (1 + len(intersection))
+
+
+def max_contact_diff(x, thr=8., sep=16):
+    B,L,_ = x.shape
+    m = x[...,0].bool()
+    D = torch.cdist(x[...,1:], x[...,1:]) 
+    r = torch.arange(L, device=x.device)
+    inv = ~(m[:,:,None]&m[:,None,:]) | ((r[:,None]-r).abs().lt(sep))[None]
+    A = (D.masked_fill(inv, float('inf')) < thr).triu(1)
+    b1,b2 = torch.triu_indices(B, B, 1)
+    C1,C2 = A[b1], A[b2]; M1,M2 = m[b1], m[b2]
+    N1 = C1 & (M2[:,None]&M2[:,:,None]); N2 = C2 & (M1[:,None]&M1[:,:,None])
+    diff = (N1 ^ N2).sum(dim=(1,2)).float(); inter = (N1 & N2).sum(dim=(1,2)).float()
+    return (diff / (1 + inter)).max()
+
+
+def process_sequence(sequence_hash, chain_ids, cif_dir, criteria):
     """
     Process a single multi-state sequence.
     """
     contact_pairs = {}
     residue_tensor_dict = {}
+    residue_tensors = []
     for chain_id in chain_ids:
         pdb_ID = chain_id.split("_")[0]
+        chain_ID = chain_id.split("_")[1]
 
         # Initialize the BioMol object
         biomol = BioMol(
@@ -209,45 +229,24 @@ def process_sequence(sequence_hash, chain_ids, protein_id_data, cif_dir, criteri
         )
 
         # Look up protein id data
-        ID_list = protein_id_data[pdb_ID]
-        for ID in ID_list:
-            bioasssembly_id = ID["bioasssembly_id"]
-            model_id = ID["model_id"]
-            alt_id = ID["alt_id"]
-            chain_ID = chain_id.split("_")[1]
+        for bioassembly_id in biomol.bioassembly.assembly_dict.keys():
+            for model_id in biomol.bioassembly.assembly_dict[bioassembly_id].keys():
+                for alt_id in biomol.bioassembly.assembly_dict[bioassembly_id][model_id].keys():
 
-            residue_tensor = extract_chain_ids(
-                biomol, chain_ID, bioasssembly_id, model_id, alt_id
-            )
-            if residue_tensor is None:
-                continue
-
-            # Compute the contact pair
-            contact_pair, mask = get_contact_pair(residue_tensor)
-            merged_ID = f"{pdb_ID}_{chain_ID}_{bioasssembly_id}_{model_id}_{alt_id}"
-            contact_pairs[merged_ID] = (contact_pair, mask)
-            residue_tensor_dict[merged_ID] = residue_tensor
+                    residue_tensor = extract_chain_ids(
+                        biomol, chain_ID, bioassembly_id, model_id, alt_id
+                    )
+                    if residue_tensor is None:
+                        continue
+                    residue_tensors.append(residue_tensor)
 
         del biomol
         gc.collect()
 
-    # Calculate pairwise differences
-    diffs = {}
-    ID_list = list(contact_pairs.keys())
-    if len(ID_list) < 2:
-        return (None, None, None, None, None)
-    print(f"sequence_hash: {sequence_hash}, num of contact pairs: {len(contact_pairs)}")
-    for i in range(len(contact_pairs)):
-        for j in range(i + 1, len(contact_pairs)):
-            ID1, ID2 = ID_list[i], ID_list[j]
-            contact_pair1, mask1 = contact_pairs[ID1]
-            contact_pair2, mask2 = contact_pairs[ID2]
-            diff = cal_contact_diff(contact_pair1, contact_pair2, mask1, mask2)
-            diffs[(ID1, ID2)] = diff
+    residue_tensor = torch.stack(residue_tensors, dim=0)  # (N, L, 4)
 
-    # Find the maximum difference
-    diff_max_ID = max(diffs, key=diffs.get)
-    diff_max = diffs[diff_max_ID]
+    # Compute the contact pair
+    diff_max = max_contact_diff(residue_tensor, thr=8., sep=16)
 
     # Determine the category based on the criteria
     if diff_max < criteria["single_state"][1]:
@@ -261,7 +260,7 @@ def process_sequence(sequence_hash, chain_ids, protein_id_data, cif_dir, criteri
     else:
         category = None
 
-    return (sequence_hash, chain_ids, diff_max_ID, diff_max, category)
+    return (sequence_hash, chain_ids, diff_max, category)
 
 
 def filter_multi_state_sequences(multi_state_sequences):

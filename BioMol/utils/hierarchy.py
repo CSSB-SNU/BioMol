@@ -346,6 +346,23 @@ class ChemComp(FeatureMapContainer):
             output = output[hydrogen_mask]
         return output  # (N, 5) | atom, x, y, z, mask
 
+    def get_charges(self, remove_hydrogen=True):
+        if self.get_code() == "UNL":
+            return None
+        charges = self.feature_map_1D["charges"].value
+        mask = self.feature_map_1D["charges"].mask
+        atoms = self.get_atoms(one_letter=True)
+        atoms = [atom_mapping[atom] for atom in atoms]
+        atoms = torch.tensor(atoms)
+        # output : atom, charge, mask
+        output = torch.cat([atoms.unsqueeze(1), charges.unsqueeze(1), mask.unsqueeze(1)], dim=1)
+        if remove_hydrogen:
+            hydrogen_mask = [
+                atom != "H" and atom != "D" for atom in self.get_atoms(one_letter=True)
+            ]
+            output = output[hydrogen_mask]
+        return output # (N, 3) | atom, charge, mask
+
     def __repr__(self):
         output = "\033[1;43mChemComp\033[0m(\n"
         output += f"  name: {self.get_name()}\n"
