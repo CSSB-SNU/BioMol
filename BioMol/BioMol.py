@@ -2,12 +2,19 @@ import os
 from typing import Any
 import random
 import torch
+import copy
 
 from BioMol.utils.parser import parse_cif, parse_simple_pdb
 from BioMol.utils.MSA import MSA, ComplexMSA
-from BioMol.utils.crop import crop_contiguous, crop_spatial, crop_spatial_interface, get_chain_crop_indices
-from BioMol.utils.read_lmdb import read_cif_lmdb
+from BioMol.utils.crop import (
+    crop_contiguous,
+    crop_spatial,
+    crop_spatial_interface,
+    get_chain_crop_indices,
+)
+from BioMol.utils.read_lmdb import read_cif_lmdb, read_MSA_lmdb
 from BioMol import ALL_TYPE_CONFIG_PATH, PROTEIN_ONLY_CONFIG_PATH
+
 """
 BioMol class
 
@@ -140,14 +147,13 @@ class BioMol:
             # pop cif_ID from attributes
             attributes.pop("cif_ID")
 
-
         # Load attributes
         for name, value in attributes.items():
             setattr(self, name, value)
 
         allowed_mol_types = ["protein", "nucleic_acid", "ligand"]
         if "mol_types" not in attributes:
-            self.mol_types = ["protein"] # default to protein
+            self.mol_types = ["protein"]  # default to protein
 
         assert [_type in allowed_mol_types for _type in self.mol_types], (
             f"Invalid mol_types. Allowed types are {allowed_mol_types}."
@@ -155,21 +161,17 @@ class BioMol:
 
         if self.mol_types == ["protein"]:
             self.type_config_path = PROTEIN_ONLY_CONFIG_PATH
-        elif self.mol_types == ["protein", "nucleic_acid","ligand"]:
+        elif self.mol_types == ["protein", "nucleic_acid", "ligand"]:
             self.type_config_path = ALL_TYPE_CONFIG_PATH
         else:
             raise NotImplementedError
 
         for name, value in self.__dict__.items():
             if name == "pdb_ID":
-                self.load_cif_from_ID(
-                    value
-                )
+                self.load_cif_from_ID(value)
                 break
             if name == "cif":
-                self.load_cif_from_path(
-                    value, self.remove_signal_peptide, self.use_lmdb
-                )
+                self.load_cif_from_path(value, self.remove_signal_peptide, self.use_lmdb)
                 break
             elif name == "pdb":
                 self.load_pdb(value)
@@ -248,33 +250,35 @@ class BioMol:
         self.structure = self.bioassembly[bioassembly_id][model_id][label_alt_id]
 
     def get_crop_indices(
-            self, 
-            chain_bias = None, # for spatial crop
-            interface_bias = None,  # for interface crop
-            crop_method_prob: list[float] = [0.2, 0.4, 0.4], # 0.2 for contiguous, 0.4 for spatial, 0.4 for spatial interface
-            crop_length: int = 384,
-                          ) -> None:
+        self,
+        chain_bias=None,  # for spatial crop
+        interface_bias=None,  # for interface crop
+        contiguous_crop_weight: float = 0.2,
+        spatial_crop_weight: float = 0.4,
+        interface_crop_weight: float = 0.4,
+        crop_length: int = 384,
+    ) -> None:
         assert self.structure_loaded, "Structure is not loaded."
+
+        crop_method_prob = [
+            contiguous_crop_weight,
+            spatial_crop_weight,
+            interface_crop_weight,
+        ]
 
         method = random.choices(
             ["contiguous", "spatial", "interface"], weights=crop_method_prob, k=1
         )[0]
 
         if method == "contiguous":
-            crop_indices, crop_chain = crop_contiguous(
-                self.structure, 
-                crop_length
-            )
+            crop_indices, crop_chain = crop_contiguous(self.structure, crop_length)
         elif method == "spatial":
             crop_indices, crop_chain = crop_spatial(
-                chain_bias,
-                self.structure, 
-                crop_length)
+                chain_bias, self.structure, crop_length
+            )
         elif method == "interface":
             crop_indices, crop_chain = crop_spatial_interface(
-                interface_bias,
-                self.structure, 
-                crop_length
+                interface_bias, self.structure, crop_length
             )
 
         crop_sequence_hash = {
@@ -289,38 +293,38 @@ class BioMol:
 
         return crop_indices, seq_hash_to_crop_indices
 
-        # msa_list = []
-        # for chain, seq_hash in crop_sequence_hash.items():
-        #     chain_crop_indices = crop_chain[chain]
-        #     # Ex) 21022 -> 021022
-        #     seq_hash = seq_hash.zfill(6)
-        #     msa = MSA(seq_hash, use_lmdb=True)
-        #     msa.crop(chain_crop_indices.numpy())
-        #     msa_list.append(msa)
-
-        # complex_msa = ComplexMSA(msa_list)
-        # self.structure.crop(crop_indices)
-        # self.MSA = complex_msa
-        # breakpoint()
-
     def crop(
-            self,
-            crop_indices: dict[str, torch.Tensor],
-            crop_MSA: bool = False,
-            ) -> None:
-        if crop_MSA :
+        self,
+        crop_indices: torch.Tensor,
+        crop_MSA: bool = False,
+        use_MSADB: bool = True,
+    ) -> None:
+        if crop_MSA:
             msa_list = []
             chain_crop = get_chain_crop_indices(
                 self.structure.residue_chain_break, crop_indices
             )
+            seq_hashes = [
+                self.structure.sequence_hash[chain_id] for chain_id in chain_crop.keys()
+            ]
+            seq_hashes = [seq_hash.zfill(6) for seq_hash in seq_hashes]
+            if use_MSADB:
+                hash_to_MSA = {
+                    seq_hash: read_MSA_lmdb(seq_hash) for seq_hash in set(seq_hashes)
+                }
+            else:
+                hash_to_MSA = {
+                    seq_hash: MSA(seq_hash, use_lmdb=True)
+                    for seq_hash in set(seq_hashes)
+                }
+
             for chain_id, chain_crop_indices in chain_crop.items():
                 seq_hash = self.structure.sequence_hash[chain_id]
                 # Ex) 21022 -> 021022
                 seq_hash = seq_hash.zfill(6)
-                msa = MSA(seq_hash, use_lmdb=True)
+                msa = copy.deepcopy(hash_to_MSA[seq_hash])
                 msa.crop(chain_crop_indices.numpy())
                 msa_list.append(msa)
-
             complex_msa = ComplexMSA(msa_list)
         self.structure.crop(crop_indices)
         self.MSA = complex_msa

@@ -2,7 +2,6 @@ import os
 import re
 import string
 import numpy as np
-import math
 import gzip
 from joblib import Parallel, delayed
 import lmdb
@@ -10,11 +9,19 @@ import io
 import pickle
 
 from BioMol.constant.chemical import AA2num, num2AA
+
 # from BioMol.utils.stoer_wagner_algorithm import stoer_wagner
-from BioMol import MSADB_PATH
+from BioMol import A3MDB_PATH, SEQ_TO_HASH_PATH
 
 table = str.maketrans(dict.fromkeys(string.ascii_lowercase))
 
+
+def load_seq_to_hash():
+    return pickle.load(open(SEQ_TO_HASH_PATH, "rb"))
+
+
+seq_to_hash = load_seq_to_hash()
+hash_to_seq = {str(h).zfill(6): seq for seq, h in seq_to_hash.items()}
 
 
 class MSASEQ:
@@ -85,7 +92,7 @@ class MSASEQ:
         has_deletion = deletion > 0
 
         sequence = sequence.translate(table)
-        self.sequence = np.array([AA2num[aa] for aa in sequence])
+        self.sequence = np.array([AA2num[aa] for aa in sequence], dtype=np.int32)
         self.has_deletion = has_deletion
         self.deletion = deletion
 
@@ -224,14 +231,13 @@ class MSASEQ:
 
 
 def read_msa_lmdb(key: str):
-    env = lmdb.open(MSADB_PATH, readonly=True, lock=False)
+    env = lmdb.open(A3MDB_PATH, readonly=True, lock=False)
 
     with env.begin() as txn:
         pickled_data = txn.get(key.encode())
     env.close()
 
     if pickled_data is None:
-        print(f"No data found for key: {key}")
         return None
 
     # Unpickle the data to get back the binary blob.
@@ -273,31 +279,44 @@ class MSA:
             else:
                 lines = open(self.a3m_path).readlines()
         else:
-            lines = read_msa_lmdb(self.sequence_hash).decode().split("\n")
-        # remove empty lines
-        lines = [line for line in lines if line.strip()]
-
-        # Group header and sequence pairs.
-        pairs = []
-        header = None
-        for line in lines:
-            line = line.strip()
-            if line.startswith(">"):
-                header = line
+            data = read_msa_lmdb(self.sequence_hash)
+            if data is None:
+                # No MSA Ex) too short
+                # in this case use just the sequence
+                No_MSA = True
             else:
-                if header is None:
-                    raise ValueError("Found sequence without a preceding header.")
-                pairs.append((header, line))
+                lines = data.decode().split("\n")
+                No_MSA = False
+        if No_MSA:
+            query_header = f">{self.sequence_hash}"
+            query_seq = hash_to_seq[self.sequence_hash]
+            query_msaseq = MSASEQ(query_seq, query_header, is_query=True, length=None)
+            pairs = []
+        else:
+            # remove empty lines
+            lines = [line for line in lines if line.strip()]
 
-        if not pairs:
-            raise ValueError("No sequences found in the a3m file.")
+            # Group header and sequence pairs.
+            pairs = []
+            header = None
+            for line in lines:
+                line = line.strip()
+                if line.startswith(">"):
+                    header = line
+                else:
+                    if header is None:
+                        raise ValueError("Found sequence without a preceding header.")
+                    pairs.append((header, line))
 
-        # Process the first sequence (query) sequentially.
-        query_header, query_seq = pairs[0]
-        query_header = (
-            f">{self.sequence_hash}"  # replace the header with the sequence hash
-        )
-        query_msaseq = MSASEQ(query_seq, query_header, is_query=True, length=None)
+            if not pairs:
+                raise ValueError("No sequences found in the a3m file.")
+
+            # Process the first sequence (query) sequentially.
+            query_header, query_seq = pairs[0]
+            query_header = (
+                f">{self.sequence_hash}"  # replace the header with the sequence hash
+            )
+            query_msaseq = MSASEQ(query_seq, query_header, is_query=True, length=None)
         # Use the length of the query sequence for all other sequences.
         length = len(query_seq)
 
@@ -328,12 +347,12 @@ class MSA:
             deletion_list.append(msaseq.get_deletion())
 
         # Precompute profile and deletion_mean
-        profile = np.array(profile_list)
-        profile = np.eye(24)[profile]
-        profile = np.mean(profile, axis=0)
+        profile = np.array(profile_list).astype(np.int32)
+        profile = np.eye(24, dtype=np.int32)[profile]  # for now, protein only
+        profile = np.mean(profile, axis=0).astype(np.float32)
         deletion_array = np.array(deletion_list)
         deletion_mean = 2 * np.arctan(deletion_array / 3) / np.pi
-        deletion_mean = deletion_mean.mean(axis=0)
+        deletion_mean = deletion_mean.mean(axis=0).astype(np.float32)
 
         # Set attributes.
         self.profile = profile
@@ -364,6 +383,7 @@ class MSA:
         # if  crop_idx = np.array([crop_idx])
         self.profile = self.profile[crop_idx]
         self.deletion_mean = self.deletion_mean[crop_idx]
+
         for seq in self.seqs:
             seq.crop(crop_idx)
         new_seqs = []
@@ -388,16 +408,28 @@ class MSA:
     def get_query_sequence(self):
         return self.seqs[0].get_raw_sequence()
 
+    def get_profile(self):
+        return self.profile
+
+    def get_deletion_mean(self):
+        return self.deletion_mean
+
 
 class ComplexMSA:
-    def __init__(self, MSAs: list[MSA], use_sw: bool = True):
+    def __init__(
+        self,
+        MSAs: list[MSA],
+        max_MSA_depth: int = 16384,
+        max_paired_depth: int = 8192,  # including query
+    ):
         """
         paired by
         1. same rep_ID
         2. species_ID
         """
         self.num_of_MSAs = len(MSAs)
-        self.use_sw = use_sw
+        self.max_MSA_depth = max_MSA_depth
+        self.max_paired_depth = max_paired_depth
         self._prepare_MSA(MSAs)
 
     def _test_uniqueness(self, input_dict: dict[int, list[int]]) -> bool:
@@ -447,48 +479,48 @@ class ComplexMSA:
 
         return msa_indices, common_species, num_of_seqs
 
-    def _get_chain_weight(
-        self, MSAs: dict[int, MSA], first_common_species: set
-    ) -> np.ndarray:
-        msa_depth_list = [len(MSA) for MSA in MSAs.values()]
-        species_to_idx_list = [MSA.species_to_idx for MSA in MSAs.values()]
-        chain_weight = np.zeros(
-            (self.num_of_MSAs, self.num_of_MSAs)
-        )  # (i, j) : weight of MSA_i and MSA_j
+    # def _get_chain_weight(
+    #     self, MSAs: dict[int, MSA], first_common_species: set
+    # ) -> np.ndarray:
+    #     msa_depth_list = [len(MSA) for MSA in MSAs.values()]
+    #     species_to_idx_list = [MSA.species_to_idx for MSA in MSAs.values()]
+    #     chain_weight = np.zeros(
+    #         (self.num_of_MSAs, self.num_of_MSAs)
+    #     )  # (i, j) : weight of MSA_i and MSA_j
 
-        # Stoer-Wagner algorithm
-        for ii in range(self.num_of_MSAs):
-            hash_ii = MSAs[ii].sequence_hash
-            for jj in range(ii + 1, self.num_of_MSAs):
-                hash_jj = MSAs[jj].sequence_hash
-                if hash_ii == hash_jj:
-                    chain_weight[ii, jj] = 1
-                    chain_weight[jj, ii] = 1
-                    continue
-                species_to_idx_i = species_to_idx_list[ii]
-                species_to_idx_j = species_to_idx_list[jj]
+    #     # Stoer-Wagner algorithm
+    #     for ii in range(self.num_of_MSAs):
+    #         hash_ii = MSAs[ii].sequence_hash
+    #         for jj in range(ii + 1, self.num_of_MSAs):
+    #             hash_jj = MSAs[jj].sequence_hash
+    #             if hash_ii == hash_jj:
+    #                 chain_weight[ii, jj] = 1
+    #                 chain_weight[jj, ii] = 1
+    #                 continue
+    #             species_to_idx_i = species_to_idx_list[ii]
+    #             species_to_idx_j = species_to_idx_list[jj]
 
-                species_i = set(species_to_idx_i.keys())
-                species_j = set(species_to_idx_j.keys())
-                common_species = species_i.intersection(species_j)
-                common_species.discard("N/A")
-                common_species = common_species - first_common_species
-                if len(common_species) == 0:
-                    continue
+    #             species_i = set(species_to_idx_i.keys())
+    #             species_j = set(species_to_idx_j.keys())
+    #             common_species = species_i.intersection(species_j)
+    #             common_species.discard("N/A")
+    #             common_species = common_species - first_common_species
+    #             if len(common_species) == 0:
+    #                 continue
 
-                weight_ij = 0
-                for species in common_species:
-                    seq_i = species_to_idx_i[species]
-                    seq_j = species_to_idx_j[species]
-                    weight_ij += (
-                        len(seq_i)
-                        * len(seq_j)
-                        / math.sqrt(msa_depth_list[ii] * msa_depth_list[jj])
-                    )
-                chain_weight[ii, jj] = weight_ij
-                chain_weight[jj, ii] = weight_ij
+    #             weight_ij = 0
+    #             for species in common_species:
+    #                 seq_i = species_to_idx_i[species]
+    #                 seq_j = species_to_idx_j[species]
+    #                 weight_ij += (
+    #                     len(seq_i)
+    #                     * len(seq_j)
+    #                     / math.sqrt(msa_depth_list[ii] * msa_depth_list[jj])
+    #                 )
+    #             chain_weight[ii, jj] = weight_ij
+    #             chain_weight[jj, ii] = weight_ij
 
-        return chain_weight
+    #     return chain_weight
 
     def _prepare_MSA(self, MSAs: list[MSA]) -> None:
         msa_depth_list = [len(MSA) for MSA in MSAs]
@@ -500,54 +532,22 @@ class ComplexMSA:
         query_indices = {ii: [0] for ii in MSAs.keys()}
 
         # 1. Simple pairing common species for all MSAs
-        first_msa_indices, first_common_species, first_num_of_seqs = self._pairing_MSAs(
-            MSAs
+        paired_msa_indices, paired_common_species, paired_num_of_seqs = (
+            self._pairing_MSAs(MSAs)
         )
-        first_msa_indices = {
+        paired_msa_indices = {
             key: query_indices[key] + indices
-            for key, indices in first_msa_indices.items()
+            for key, indices in paired_msa_indices.items()
         }
-        first_num_of_seqs += 1
+        paired_num_of_seqs += 1
 
-        # # 2. Stoer-Wagner algorithm MSA pairing (2 clusters)
-        # chain_weight = self._get_chain_weight(MSAs, first_common_species)
-        # set_A, set_B, cut_weight = stoer_wagner(chain_weight)
-        # list_A = list(set_A)
-        # list_B = list(set_B)
-        # msa_A = {ii: MSAs[ii] for ii in list_A}
-        # msa_B = {ii: MSAs[ii] for ii in list_B}
-
-        # sw_msa_indces_A, sw_common_speceis_A, sw_num_of_seqs_A = self._pairing_MSAs(
-        #     msa_A, first_common_species
-        # )
-        # sw_msa_indces_B, sw_common_speceis_B, sw_num_of_seqs_B = self._pairing_MSAs(
-        #     msa_B, first_common_species
-        # )
-
-        # assert sw_common_speceis_A.intersection(sw_common_speceis_B) == set()
-
-        # min_sw_pair_num = min(sw_num_of_seqs_A, sw_num_of_seqs_B)
-
-        # if min_sw_pair_num < sw_num_of_seqs_A:
-        #     sw_msa_indces_A = {
-        #         key: indices[:min_sw_pair_num]
-        #         for key, indices in sw_msa_indces_A.items()
-        #     }
-        # if min_sw_pair_num < sw_num_of_seqs_B:
-        #     sw_msa_indces_B = {
-        #         key: indices[:min_sw_pair_num]
-        #         for key, indices in sw_msa_indces_B.items()
-        #     }
-
-        paired_msa_indices = {key: [] for key in MSAs.keys()}
-
-        for key in MSAs.keys():
-            paired_msa_indices[key] = first_msa_indices[key]
-
-            # if key in list_A:
-            #     paired_msa_indices[key] = first_msa_indices[key] + sw_msa_indces_A[key]
-            # else:
-            #     paired_msa_indices[key] = first_msa_indices[key] + sw_msa_indces_B[key]
+        # cutoff msas if paired_num_of_seqs > max_paired_depth
+        if paired_num_of_seqs > self.max_paired_depth:
+            for key in MSAs.keys():
+                paired_msa_indices[key] = paired_msa_indices[key][
+                    : self.max_paired_depth
+                ]
+            paired_num_of_seqs = self.max_paired_depth
 
         self._test_uniqueness(paired_msa_indices)
 
@@ -563,8 +563,10 @@ class ComplexMSA:
             missing_indices = sorted(missing_indices)
 
             # if msa_depth < max_depth, add -1 to the end
-            if msa_depth < max_depth:
+            if msa_depth < self.max_MSA_depth:
                 missing_indices += [-1] * (max_depth - msa_depth)
+            else:
+                missing_indices = missing_indices[: max_depth - paired_num_of_seqs]
             final_msa_indices[key] = paired_indices + missing_indices
         self._test_uniqueness(final_msa_indices)
 
@@ -599,25 +601,34 @@ class ComplexMSA:
             final_has_deletion.append(has_deletion)
             final_deletion.append(deletion)
 
-        self.final_msa_indices = final_msa_indices
-        self.final_annotation = np.array(final_annotation)
-        self.final_sequence = np.array(final_sequence)
-        self.final_has_deletion = np.array(final_has_deletion)
-        self.final_deletion_value = 2 * np.arctan(np.array(final_deletion) / 3) / np.pi
-        self.num_of_paired = first_num_of_seqs
-        # self.num_of_sw = min_sw_pair_num
-        self.num_of_unpaired = max_depth - first_num_of_seqs # - min_sw_pair_num
-        self.total_depth = max_depth
+        # concat profile, deletion_mean
+        profile = np.concatenate([MSA.get_profile() for MSA in MSAs.values()], axis=0)
+        deletion_mean = np.concatenate(
+            [MSA.get_deletion_mean() for MSA in MSAs.values()], axis=0
+        )
 
-    def to_a3m(self, annotations: list[str], sequence: np.ndarray, save_path: str):
+        self.msa_indices = final_msa_indices
+        self.annotation = np.array(final_annotation)
+
+        self.msa = np.array(final_sequence)
+        self.has_deletion = np.array(final_has_deletion)
+        self.deletion_value = 2 * np.arctan(np.array(final_deletion) / 3) / np.pi
+        self.profile = profile
+        self.deletion_mean = deletion_mean
+
+        self.num_of_paired = paired_num_of_seqs
+        self.num_of_unpaired = self.msa.shape[0] - paired_num_of_seqs
+        self.total_depth = self.num_of_paired + self.num_of_unpaired
+
+    def to_a3m(self, annotations: list[str], msa: np.ndarray, save_path: str):
         if annotations is None:
-            annotations = self.final_annotation
-        if sequence is None:
-            sequence = self.final_sequence
+            annotations = self.annotation
+        if msa is None:
+            msa = self.msa
         out = ""
         for ii in range(len(annotations)):
             out += f">{annotations[ii]}\n"
-            seq = sequence[ii].tolist()
+            seq = msa[ii].tolist()
             seq = [num2AA[aa] for aa in seq]
             seq = "".join(seq)
             out += f"{seq}\n"
@@ -628,7 +639,7 @@ class ComplexMSA:
     def sample(
         self,
         max_msa_depth: int = 256,
-        ratio: tuple[float, float, float] = (0.5, 0.25, 0.25),
+        ratio: tuple[float, float] = (0.5, 0.5),
     ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         if self.total_depth < max_msa_depth:
             max_msa_depth = self.total_depth
@@ -636,61 +647,52 @@ class ComplexMSA:
         if sum(sampled) != max_msa_depth:
             sampled[0] += 1  # make sure the sum is equal to max_msa_depth
 
-        if not self.use_sw:
-            sampled[2] += sampled[1]
-            sampled[1] = 0
-
-        to_be_sampled = (self.num_of_paired, self.num_of_sw, self.num_of_unpaired)
+        to_be_sampled = (self.num_of_paired, self.num_of_unpaired)
         if to_be_sampled[0] < sampled[0]:
             sampled[1] += sampled[0] - to_be_sampled[0]
             sampled[0] = to_be_sampled[0]
-        if to_be_sampled[1] < sampled[1]:
-            sampled[2] += sampled[1] - to_be_sampled[1]
-            sampled[1] = to_be_sampled[1]
 
         query = np.array([0])
-        first_sampled = np.random.choice(
+        paired_sampled = np.random.choice(
             self.num_of_paired, sampled[0] - 1, replace=False
         )  # -1 for query
-        sw_sampled = (
-            np.random.choice(self.num_of_sw, sampled[1], replace=False)
-            + self.num_of_paired
-        )
         unpaired_sampled = (
-            np.random.choice(self.num_of_unpaired, sampled[2], replace=False)
+            np.random.choice(self.num_of_unpaired, sampled[1], replace=False)
             + self.num_of_paired
-            + self.num_of_sw
         )
 
-        sampled_indices = np.concatenate(
-            [query, first_sampled, sw_sampled, unpaired_sampled]
-        )
+        sampled_indices = np.concatenate([query, paired_sampled, unpaired_sampled])
         sampled_indices = np.sort(sampled_indices)
 
-        sampled_annotation = self.final_annotation[sampled_indices]
-        sampled_sequence = self.final_sequence[sampled_indices]
-        sampled_has_deletion = self.final_has_deletion[sampled_indices]
-        sampled_deletion = self.final_deletion[sampled_indices]
+        sampled_annotation = self.annotation[sampled_indices]
+        sampled_sequence = self.msa[sampled_indices]
+        sampled_has_deletion = self.has_deletion[sampled_indices]
+        sampled_deletion_value = self.deletion_value[sampled_indices]
 
         return (
             sampled_indices,
             sampled_annotation,
             sampled_sequence,
             sampled_has_deletion,
-            sampled_deletion,
+            sampled_deletion_value,
+            self.profile,
+            self.deletion_mean,
         )
 
     def __repr__(self):
         out = "ComplexMSA(\n"
         out += f"    num_of_MSAs: {self.num_of_MSAs}\n"
-        out += f"    use_sw: {self.use_sw}\n"
         out += f"    num_of_paired: {self.num_of_paired}\n"
-        out += f"    num_of_sw: {self.num_of_sw}\n"
         out += f"    num_of_unpaired: {self.num_of_unpaired}\n"
-        out += f"    shape: {self.total_depth} x {self.final_sequence.shape[1]}\n"
+        out += f"    shape: {self.total_depth} x {self.msa.shape[1]}\n"
         out += ")"
         return out
 
 
 def cp_singlap(signal_dir):
     pass
+
+
+if __name__ == "__main__":
+    msa = MSA(sequence_hash="837082")  # No MSA due to short length
+    breakpoint()
