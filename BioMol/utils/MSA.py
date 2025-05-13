@@ -36,7 +36,6 @@ class MSASEQ:
         is_query: bool = False,
         length: int | None = None,
     ):
-        self.raw_sequence = sequence
         self._parse_sequence(sequence, length)
         self.db_name = None
         self.db_ID = None
@@ -55,9 +54,6 @@ class MSASEQ:
         """
         Parse a UniRef sequence following AF3.
             - sequence : Amino acid sequence. np.ndarray(int64)
-            - has_deletion :
-                Binary feature indicating if there is a deletion to the left of each
-                position in the MSA. (List[bool])
             - deletion_value :
                 Raw deletion counts(the number of deletions to the left of each position)
                 are transformed to [0,1] using 2 π arctan d 3. (List[float])
@@ -66,14 +62,13 @@ class MSASEQ:
         if length is None:
             # query sequence
             length = len(sequence)
-            self.sequence = np.array([AA2num[aa] for aa in sequence])
-            self.has_deletion = np.zeros(length)
-            self.deletion = np.zeros(length)
+            self.sequence = np.array([AA2num[aa] for aa in sequence], dtype=np.uint8)
+            self.deletion = np.zeros(length, dtype=np.uint8)
             return
 
         # 0 - match or gap; 1 - deletion
         lower_case = np.array([0 if c.isupper() or c == "-" else 1 for c in sequence])
-        deletion = np.zeros(length)
+        deletion = np.zeros(length, np.uint8)
 
         if np.sum(lower_case) > 0:
             # positions of deletions
@@ -87,13 +82,10 @@ class MSASEQ:
             pos, num = np.unique(lower_case, return_counts=True)
 
             # append to the matrix of insetions
-            deletion[pos] = num
-
-        has_deletion = deletion > 0
+            deletion[pos] = np.clip(num, 0, 255).astype(np.uint8) # to reduce memory usage
 
         sequence = sequence.translate(table)
-        self.sequence = np.array([AA2num[aa] for aa in sequence], dtype=np.int32)
-        self.has_deletion = has_deletion
+        self.sequence = np.array([AA2num[aa] for aa in sequence], dtype=np.uint8)
         self.deletion = deletion
 
     def _parse_header(self, header: str) -> dict:
@@ -176,14 +168,8 @@ class MSASEQ:
     def __len__(self):
         return len(self.sequence)
 
-    def get_raw_sequence(self):
-        return self.raw_sequence
-
     def get_sequence(self):
         return self.sequence
-
-    def get_has_deletion(self):
-        return self.has_deletion
 
     def get_deletion(self):
         return self.deletion
@@ -206,7 +192,7 @@ class MSASEQ:
     def __repr__(self):
         if not self.is_query:
             out = "MSASEQ(\n"
-            out += f"    sequence: {self.raw_sequence}\n"
+            out += f"    sequence: {self.get_sequence()}\n"
             out += f"    db_name: {self.db_name}\n"
             out += f"    db_ID: {self.db_ID}\n"
             out += f"    species: {self.species}\n"
@@ -214,7 +200,7 @@ class MSASEQ:
             out += ")"
         else:
             out = "MSASEQ(\n"
-            out += f"    sequence: {self.raw_sequence}\n"
+            out += f"    sequence: {self.get_sequence()}\n"
             out += f"    is_query: {self.is_query}\n"
             out += ")"
         return out
@@ -222,11 +208,9 @@ class MSASEQ:
     def crop(self, crop_idx: np.ndarray):
         if len(crop_idx) == 1:
             self.sequence = np.array(self.sequence[crop_idx])
-            self.has_deletion = np.array(self.has_deletion[crop_idx])
             self.deletion = np.array(self.deletion[crop_idx])
         else:
             self.sequence = self.sequence[crop_idx]
-            self.has_deletion = self.has_deletion[crop_idx]
             self.deletion = self.deletion[crop_idx]
 
 
@@ -354,12 +338,22 @@ class MSA:
         deletion_mean = 2 * np.arctan(deletion_array / 3) / np.pi
         deletion_mean = deletion_mean.mean(axis=0).astype(np.float32)
 
+        sequences = []
+        deletion = []
+        for seq in seqs:
+            sequences.append(seq.get_sequence())
+            deletion.append(seq.get_deletion())
+
+        sequences = np.array(sequences)
+        deletion = np.array(deletion)
+
         # Set attributes.
+        self.num_seqs = len(seqs)
         self.profile = profile
         self.deletion_mean = deletion_mean
-        self.seqs = seqs
+        self.sequences = sequences
+        self.deletion = deletion
         self.species_to_idx = species_to_idx
-        self.num_seqs = len(seqs)
         self.length = length
         self.shape = (self.num_seqs, self.length)
 
@@ -377,36 +371,37 @@ class MSA:
         return out
 
     def __getitem__(self, idx):
-        return self.seqs[idx]
+        return self.sequences[idx]
 
     def crop(self, crop_idx: np.ndarray):
         # if  crop_idx = np.array([crop_idx])
         self.profile = self.profile[crop_idx]
         self.deletion_mean = self.deletion_mean[crop_idx]
 
-        for seq in self.seqs:
-            seq.crop(crop_idx)
-        new_seqs = []
-        new_species_to_idx = {}
+        new_sequencess = self.sequences[:, crop_idx]
+        new_deletions = self.deletion[:, crop_idx]
 
-        for ii in range(self.num_seqs):
-            seq = self.seqs[ii]
-            raw_seq = seq.get_raw_sequence()
-            if raw_seq == "-" * len(raw_seq):
-                continue
-            species = seq.get_species()
-            if species not in new_species_to_idx:
-                new_species_to_idx[species] = []
-            new_species_to_idx[species].append(ii)
-            new_seqs.append(seq)
-        self.length = len(new_seqs[0])
-        self.seqs = new_seqs
+        gap_idx = np.where((new_sequencess == AA2num['-']).all(axis=1))[0]
+        new_species_to_idx = {}
+        for species, indices in self.species_to_idx.items():
+            min_idx = min(indices)
+            num_of_removed = np.sum(gap_idx < min_idx)
+            new_species_to_idx[species] = [
+                idx - num_of_removed for idx in indices if idx not in gap_idx
+            ]
+        new_sequencess = np.delete(new_sequencess, gap_idx, axis=0)
+        new_deletions = np.delete(new_deletions, gap_idx, axis=0)
+        num_seqs = len(new_sequencess)
+
+        self.num_seqs = num_seqs
+        self.length = len(new_sequencess[0])
+        self.sequences = new_sequencess
+        self.deletion = new_deletions
         self.species_to_idx = new_species_to_idx
-        self.num_seqs = len(new_seqs)
         self.shape = (self.num_seqs, self.length)
 
     def get_query_sequence(self):
-        return self.seqs[0].get_raw_sequence()
+        return self.sequences[0]
 
     def get_profile(self):
         return self.profile
@@ -415,7 +410,7 @@ class MSA:
         return self.deletion_mean
 
 
-class ComplexMSA:
+class ComplexMSA: # TODO
     def __init__(
         self,
         MSAs: list[MSA],

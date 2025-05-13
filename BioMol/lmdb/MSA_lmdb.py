@@ -34,6 +34,7 @@ def process_file(seq_hash: str):
 def lmdb_MSA(env_path=db_env, n_jobs=-1, batch_size=1000):
     seq_to_hash = load_seq_to_hash()
     hash_list = [str(h).zfill(6) for h in seq_to_hash.values()]
+    # for test
     total = len(hash_list)
     print(f"Total MSAs to write: {total}")
 

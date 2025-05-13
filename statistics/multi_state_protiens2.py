@@ -36,7 +36,10 @@ def max_contact_diff(x, thr=12.0, sep=16, tol=2.0, chunk=32):
     mask = x[..., 0].bool()
 
     # use half precision for coordinates to save memory
-    coords = x[..., 1:].to(torch.bfloat16)  # (B, L, 3)
+    # coords = x[..., 1:].to(torch.bfloat16)  # (B, L, 3)
+    coords = x[..., 1:]
+    coords = coords - coords.mean(dim=1, keepdim=True)  # (B, L, 3)
+    coords = coords.to(torch.float16)  # convert to half precision
     # compute pairwise distances in half precision
     D = torch.norm(coords[:, :, None, :] - coords[:, None, :, :], dim=-1)  # (B, L, L)
 
@@ -53,6 +56,7 @@ def max_contact_diff(x, thr=12.0, sep=16, tol=2.0, chunk=32):
     b1, b2 = torch.triu_indices(B, B, 1)
     P = b1.numel()
     # preallocate score tensor on GPU
+    diff_num = torch.empty(P, device=x.device, dtype=torch.int32)
     scores = torch.empty(P, device=x.device, dtype=torch.float32)
 
     # process pairs in chunks
@@ -92,12 +96,27 @@ def max_contact_diff(x, thr=12.0, sep=16, tol=2.0, chunk=32):
         inter_count = inter.sum(dim=(1, 2))
 
         # compute chunk scores and write into the preallocated tensor
+        diff_num[idx : idx + chunk] = diff_count
         scores[idx : idx + chunk] = diff_count.float() / (1 + inter_count.float())
 
     # find the batch-pair with maximum score
     max_idx = scores.argmax().item()
-    return scores.tolist(), (b1[max_idx].item(), b2[max_idx].item())
+    return diff_num.tolist(), scores.tolist(), (b1[max_idx].item(), b2[max_idx].item())
 
+def visualize_2D_tensor(tensor, save_path=None):
+    """
+    Visualize a 2D tensor as a heatmap.
+    """
+    import matplotlib.pyplot as plt
+
+    plt.figure(figsize=(10, 8))
+    plt.imshow(tensor.cpu().numpy(), cmap="hot", interpolation="nearest")
+    plt.colorbar()
+    if save_path:
+        plt.savefig(save_path)
+    else:
+        plt.show()
+    plt.close()
 
 def process_sequence(sequence_hash, criteria):
     """
@@ -107,12 +126,13 @@ def process_sequence(sequence_hash, criteria):
     IDs, residue_tensor = read_seq_lmdb(str(sequence_hash))
 
     if residue_tensor.shape[0] == 1:
-        return (sequence_hash, IDs, 0.0, "single_state")
+        return (sequence_hash, IDs, 0, 0.0, None, "single_state")
 
     residue_tensor = residue_tensor[:, :, 4:8]
 
     # Compute the contact pair
-    scores, (b1, b2) = max_contact_diff(residue_tensor, thr=8.0, tol=2.0, sep=16)
+    diff_nums, scores, (b1, b2) = max_contact_diff(residue_tensor, thr=8.0, tol=2.0, sep=16)
+    diff_num_max = max(diff_nums)
     diff_max = max(scores)
     diff_max_IDs = (IDs[b1], IDs[b2])
 
@@ -128,7 +148,7 @@ def process_sequence(sequence_hash, criteria):
     else:
         category = None
 
-    return (sequence_hash, IDs, diff_max, diff_max_IDs, category)
+    return (sequence_hash, IDs, diff_num_max, diff_max, diff_max_IDs, category)
 
 
 def categorize_multi_state_sequences():
@@ -142,14 +162,28 @@ def categorize_multi_state_sequences():
         "dynamic": (5.0, float("inf")),
     }
 
+    # for now, to save time filter out too long sequences
     seq_to_hash = load_hash_to_seq()
-    hash_list = list(seq_to_hash.values())
+    seq_to_hash = {k : v for k, v in seq_to_hash.items() if len(k) < 2048}
+    hash_list = [_hash for _, _hash in seq_to_hash.items()]
 
-    # Process each sequence in parallel. Using n_jobs=-1 uses all available cores.
-    print(f"Processing {len(hash_list)} sequences...")
-    results = Parallel(n_jobs=-1, verbose=10)(
-        delayed(process_sequence)(seq_hash, criteria) for seq_hash in hash_list
-    )
+    not_filtered_path = f"{DB_PATH}/statistics/multi_state/not_filtered/multi_state_sequences.pkl"
+    if os.path.exists(not_filtered_path):
+        with open(not_filtered_path, "rb") as pf:
+            results = pickle.load(pf)
+    else :
+        # Process each sequence in parallel. Using n_jobs=-1 uses all available cores.
+        print(f"Processing {len(hash_list)} sequences...")
+        results = Parallel(n_jobs=-1, verbose=10)(
+            delayed(process_sequence)(seq_hash, criteria) for seq_hash in hash_list
+        )
+
+    # to prevent redundant work save the results
+    with open(
+        f"{DB_PATH}/statistics/multi_state/not_filtered/multi_state_sequences.pkl",
+        "wb",
+    ) as pf:
+        pickle.dump(results, pf, protocol=pickle.HIGHEST_PROTOCOL)
 
     categories = {
         "single_state": {},
@@ -159,13 +193,13 @@ def categorize_multi_state_sequences():
     }
 
     # collect results
-    for seq_hash, chain_ids, diff_max, diff_max_IDs, category in results:
+    for seq_hash, chain_ids, diff_num_max, diff_max, diff_max_IDs, category in results:
         if seq_hash is None or category not in categories:
             continue
-        categories[category][seq_hash] = (chain_ids, diff_max, diff_max_IDs)
+        categories[category][seq_hash] = (chain_ids, diff_num_max, diff_max, diff_max_IDs)
 
     # ensure save directory exists
-    save_dir = f"{DB_PATH}/statistics/multi_state/"
+    save_dir = f"{DB_PATH}/statistics/multi_state/not_filtered/"
     os.makedirs(save_dir, exist_ok=True)
 
     # dump each category to its own .pkl

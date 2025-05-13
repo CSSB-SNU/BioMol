@@ -1,8 +1,9 @@
 #!/bin/sh 
 #SBATCH -J seq_hash_DB
-#SBATCH --mem=480g
-#SBATCH -p cpu
-#SBATCH -c 80
+#SBATCH --mem=500g
+#SBATCH -p gpu
+#SBATCH -w gpu04
+#SBATCH -c 60
 #SBATCH -o ./log/multistate_analysis.out
 #SBATCH -e ./log/multistate_analysis.err
 
