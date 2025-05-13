@@ -13,3 +13,4 @@ BioMol/configs/datapath.json
 *.egg-info
 *.cif
 pixi.lock
+*.a3m
