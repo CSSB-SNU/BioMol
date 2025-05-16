@@ -22,7 +22,7 @@ from BioMol.utils.error import (
     AltIDError,
     StructConnAmbiguityError,
     NonpolymerError,
-    EntityMismatchError
+    EntityMismatchError,
 )
 from BioMol.utils.contact_graph import ContactGraph
 from BioMol import (
@@ -30,7 +30,7 @@ from BioMol import (
     SIGNALP_PATH,
     GRAPH_HASH_PATH,
     GRAPH_CLUSTER_PATH,
-    CONTACT_GRAPH_PATH
+    CONTACT_GRAPH_PATH,
 )
 from BioMol.constant.chemical import (
     atom_mapping,
@@ -109,8 +109,7 @@ class Scheme:
         len_chem_comp = len(self.chem_comp_list)
         len_hetero = len(self.hetero_list) if self.hetero_list is not None else -1
         assert all(
-            l == len_auth or l == -1
-            for l in (len_cif, len_chem_comp, len_hetero)
+            l == len_auth or l == -1 for l in (len_cif, len_chem_comp, len_hetero)
         ), "Length mismatch"
 
     def get_auth_to_cif_map(self):
@@ -134,8 +133,9 @@ class Scheme:
         if isinstance(auth_idx, str):
             return auth_to_cif_map[auth_idx]
         elif isinstance(auth_idx, list):
-            assert all(a in self.auth_idx_list for a in auth_idx), \
+            assert all(a in self.auth_idx_list for a in auth_idx), (
                 "auth_idx not found in auth_idx_list"
+            )
             return [auth_to_cif_map[a] for a in auth_idx]
 
     def cif_to_auth(self, cif_idx: int | list[int] | slice) -> str | list[str]:
@@ -148,8 +148,9 @@ class Scheme:
         if isinstance(cif_idx, int):
             return cif_to_auth_map[cif_idx]
         elif isinstance(cif_idx, list):
-            assert all(c in self.cif_idx_list for c in cif_idx), \
+            assert all(c in self.cif_idx_list for c in cif_idx), (
                 "cif_idx not found in cif_idx_list"
+            )
             return [cif_to_auth_map[c] for c in cif_idx]
         elif isinstance(cif_idx, slice):
             cif_range = range(cif_idx.start or 0, cif_idx.stop, cif_idx.step or 1)
@@ -355,13 +356,15 @@ class ChemComp(FeatureMapContainer):
         atoms = [atom_mapping[atom] for atom in atoms]
         atoms = torch.tensor(atoms)
         # output : atom, charge, mask
-        output = torch.cat([atoms.unsqueeze(1), charges.unsqueeze(1), mask.unsqueeze(1)], dim=1)
+        output = torch.cat(
+            [atoms.unsqueeze(1), charges.unsqueeze(1), mask.unsqueeze(1)], dim=1
+        )
         if remove_hydrogen:
             hydrogen_mask = [
                 atom != "H" and atom != "D" for atom in self.get_atoms(one_letter=True)
             ]
             output = output[hydrogen_mask]
-        return output # (N, 3) | atom, charge, mask
+        return output  # (N, 3) | atom, charge, mask
 
     def __repr__(self):
         output = "\033[1;43mChemComp\033[0m(\n"
@@ -655,9 +658,7 @@ class Branched(FeatureMapContainer):
             bond_type = branch_item["bond"]
             bond_type = bond_order_map[bond_type]
             atom_idx1, atom_idx2 = min(atom_idx1, atom_idx2), max(atom_idx1, atom_idx2)
-            atom_level_bond.append(
-                (atom_idx1, atom_idx2, bond_type, 0, 0, 2)
-            )
+            atom_level_bond.append((atom_idx1, atom_idx2, bond_type, 0, 0, 2))
             # aromatic, stereo, _struct_conn_type
             # I assume that aromatic and stereo are always 0 for branched
 
@@ -879,7 +880,6 @@ class AsymmetricChainStructure:
 
             if label_alt_id not in model_to_alt_id_list[model_id]:
                 model_to_alt_id_list[model_id].append(label_alt_id)
-
 
         for model_id in model_to_alt_id_list.keys():
             alt_id_list = model_to_alt_id_list[model_id]
@@ -1912,9 +1912,7 @@ class BioAssembly:
                             for residue in [residues[key] for key in common_key]
                         ]
 
-                    tensor_atom = torch.zeros(
-                        n_atom, 3 + 2 + 3 + 2, device=self.device
-                    )
+                    tensor_atom = torch.zeros(n_atom, 3 + 2 + 3 + 2, device=self.device)
                     # 3 for sequence, chem_comp_idx_atom, cif_idx,
                     # 2 for atom and mask, 3 for xyz, 2 for occupancy and b_factor
                     tensor_residue = torch.zeros(
@@ -2264,8 +2262,7 @@ class BioAssembly:
                                 stereo,
                                 conn_type_id,
                             )
-                            for idx1, idx2, bond_type, aromatic, stereo, conn_type_id \
-                                in atom_bond
+                            for idx1, idx2, bond_type, aromatic, stereo, conn_type_id in atom_bond
                         ]
 
                         assembly_residue_bond.extend(residue_bond)
@@ -2477,8 +2474,7 @@ class BioAssembly:
                                 bond_type,
                                 conn_type_id,
                             )
-                            for _, _, idx1, idx2, idx3, idx4, bond_type, conn_type_id \
-                                in bond_list
+                            for _, _, idx1, idx2, idx3, idx4, bond_type, conn_type_id in bond_list
                         ]
 
                         struct_conn_residue_bond_list = [
@@ -2890,8 +2886,14 @@ class BioMolStructure:
         self.entity_list = new_entity_list
 
     def filter_by_type(self, types: list[str]):  # type to be remained
-        type_list = ["protein", "nucleic_acid", "nonpolymer", \
-                     "branched", "ligand", "water"]
+        type_list = [
+            "protein",
+            "nucleic_acid",
+            "nonpolymer",
+            "branched",
+            "ligand",
+            "water",
+        ]
         residue_mask_list = []
         entity_mask_list = []
         chain_mask_list = []
@@ -2952,6 +2954,7 @@ class BioMolStructure:
         signalp_results = {}
         crop_indices = []
         for chain, sequence_hash in self.sequence_hash.items():
+            sequence_hash = str(sequence_hash).zfill(6)
             signalp_path = SIGNALP_PATH + f"/{sequence_hash}.gff3"
             chain_start, chain_end = self.residue_chain_break[chain]
             if not os.path.exists(signalp_path):
@@ -3090,12 +3093,12 @@ class BioMolStructure:
         self.residue_chain_break = new_residue_chain_break
         self.atom_chain_break = new_atom_chain_break
 
-    def to(self, device):
-        self.residue_tensor = self.residue_tensor.to(device)
-        self.atom_tensor = self.atom_tensor.to(device)
-        self.residue_bond = self.residue_bond.to(device)
-        self.atom_bond = self.atom_bond.to(device)
-        self.same_entity = self.same_entity.to(device)
+    def to(self, dtype: torch.dtype = torch.float32, device: torch.device = "cuda"):
+        self.residue_tensor = self.residue_tensor.to(dtype=dtype, device=device)
+        self.atom_tensor = self.atom_tensor.to(dtype=dtype, device=device)
+        self.residue_bond = self.residue_bond.to(dtype=dtype, device=device)
+        self.atom_bond = self.atom_bond.to(dtype=dtype, device=device)
+        self.same_entity = self.same_entity.to(dtype=dtype, device=device)
         return self
 
     def __repr__(self):
@@ -3423,8 +3426,11 @@ class BioMolStructure:
                     label_entity_id_list[idx],
                     label_seq_list[idx],
                     ins_code_list[idx],
-                    x[idx], y[idx], z[idx],
-                    occup[idx], bfactor[idx],
+                    x[idx],
+                    y[idx],
+                    z[idx],
+                    occup[idx],
+                    bfactor[idx],
                     formal_charge_list[idx],
                     auth_idx_list[idx],
                     label_comp_id_list[idx],

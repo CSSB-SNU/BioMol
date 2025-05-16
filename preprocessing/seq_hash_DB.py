@@ -12,11 +12,14 @@ save_path = f"{DB_PATH}/metadata/hash_to_pdbIDs.pkl"
 hash_to_full_IDs_path = f"{DB_PATH}/metadata/hash_to_full_IDs.pkl"
 db_env = f"{DB_PATH}/seq_to_str/residue.lmdb"
 
+
 def load_hash_to_seq():
     return pickle.load(open(SEQ_TO_HASH_PATH, "rb"))
 
+
 def load_hash_to_pdbIDs():
     return pickle.load(open(save_path, "rb"))
+
 
 def _gen_hash_to_pdbIDs():
     """
@@ -39,7 +42,10 @@ def _gen_hash_to_pdbIDs():
 
     return hash_to_pdbIDs
 
-def find_pdbIDs_by_hashes(hash_list:list[str], hash_to_pdbIDs:dict[str, list[str]]) -> list[str]:
+
+def find_pdbIDs_by_hashes(
+    hash_list: list[str], hash_to_pdbIDs: dict[str, list[str]]
+) -> list[str]:
     """
     Given a list of hashes, return a dictionary mapping each hash to its corresponding PDB IDs.
     """
@@ -49,7 +55,7 @@ def find_pdbIDs_by_hashes(hash_list:list[str], hash_to_pdbIDs:dict[str, list[str
             pdb_IDs[seq_hash] = hash_to_pdbIDs[seq_hash]
         else:
             raise ValueError(f"Hash {seq_hash} not found in the database.")
-        
+
     # find common pdbIDs
     common_pdbIDs = set(pdb_IDs[hash_list[0]])
     for seq_hash in hash_list[1:]:
@@ -59,7 +65,10 @@ def find_pdbIDs_by_hashes(hash_list:list[str], hash_to_pdbIDs:dict[str, list[str
         raise ValueError("No common PDB IDs found for the given hashes.")
     return sorted(list(common_pdbIDs))
 
-def extract_chain_ids(biomol: BioMol, seq_hash: str,level: str = "residue") -> list[torch.Tensor]:
+
+def extract_chain_ids(
+    biomol: BioMol, seq_hash: str, level: str = "residue"
+) -> list[torch.Tensor]:
     """
     Extract chain IDs from the biomol object.
     """
@@ -67,13 +76,19 @@ def extract_chain_ids(biomol: BioMol, seq_hash: str,level: str = "residue") -> l
     structures = []
     for bioassembly_id in biomol.bioassembly.assembly_dict.keys():
         for model_id in biomol.bioassembly.assembly_dict[bioassembly_id].keys():
-            for alt_id in biomol.bioassembly.assembly_dict[bioassembly_id][model_id].keys():
+            for alt_id in biomol.bioassembly.assembly_dict[bioassembly_id][
+                model_id
+            ].keys():
                 biomol.choose(bioassembly_id, model_id, alt_id)
                 if seq_hash not in biomol.structure.sequence_hash.values():
                     continue
                 id = f"{biomol.ID}_{bioassembly_id}_{model_id}_{alt_id}"
                 ids.append(id)
-                chains = [chain for chain, _seq_hash in biomol.structure.sequence_hash.items() if _seq_hash == seq_hash]
+                chains = [
+                    chain
+                    for chain, _seq_hash in biomol.structure.sequence_hash.items()
+                    if _seq_hash == seq_hash
+                ]
                 if level == "residue":
                     residue_chain_brerak = biomol.structure.residue_chain_break
                     for chain in chains:
@@ -94,9 +109,9 @@ def extract_chain_ids(biomol: BioMol, seq_hash: str,level: str = "residue") -> l
 def seq_hash_to_structure(
     seq_hash: str,
     hash_to_pdbIDs: dict[str, list[str]],
-    remove_signal_peptide = True,
-    mol_type : str = "protein",
-    level : str = "residue" # or "atom"
+    remove_signal_peptide=True,
+    mol_type: str = "protein",
+    level: str = "residue",  # or "atom"
 ) -> list[str]:
     """
     Given a sequence hash, return a list of PDB IDs.
@@ -104,7 +119,7 @@ def seq_hash_to_structure(
     pdb_IDs = hash_to_pdbIDs.get(seq_hash, [])
     if len(pdb_IDs) == 0:
         raise ValueError(f"Hash {seq_hash} not found in the database.")
-    
+
     ids = []
     structures = []
     for pdb_ID in pdb_IDs:
@@ -116,14 +131,19 @@ def seq_hash_to_structure(
         )
         _ids, _structures = extract_chain_ids(biomol, seq_hash, level)
         if len(_structures) == 0:
-            raise ValueError(f"No structures found for PDB ID {pdb_ID} and hash {seq_hash}.")
+            raise ValueError(
+                f"No structures found for PDB ID {pdb_ID} and hash {seq_hash}."
+            )
         ids.extend(_ids)
         structures.extend(_structures)
-    
+
     return ids, structures
 
+
 # save each monomer structures
-def save_structures(pdb_ID: str, save_dir: str,level: str = "residue") -> list[torch.Tensor]:
+def save_structures(
+    pdb_ID: str, save_dir: str, level: str = "residue"
+) -> list[torch.Tensor]:
     """
     Extract chain IDs from the biomol object.
     """
@@ -133,14 +153,15 @@ def save_structures(pdb_ID: str, save_dir: str,level: str = "residue") -> list[t
     )
     for bioassembly_id in biomol.bioassembly.assembly_dict.keys():
         for model_id in biomol.bioassembly.assembly_dict[bioassembly_id].keys():
-            for alt_id in biomol.bioassembly.assembly_dict[bioassembly_id][model_id].keys():
+            for alt_id in biomol.bioassembly.assembly_dict[bioassembly_id][
+                model_id
+            ].keys():
                 biomol.choose(bioassembly_id, model_id, alt_id)
 
                 chains = biomol.structure.sequence_hash.keys()
                 # remove bioassembly_id from chain ids
                 chains_wo_oper_id = [chain.split("_")[0] for chain in chains]
                 chains_wo_oper_id = sorted(list(set(chains_wo_oper_id)))
-
 
                 for chain_id, seq_hash in biomol.structure.sequence_hash.items():
                     if chain_id.split("_")[0] not in chains_wo_oper_id:
@@ -152,11 +173,15 @@ def save_structures(pdb_ID: str, save_dir: str,level: str = "residue") -> list[t
                     if level == "residue":
                         residue_chain_brerak = biomol.structure.residue_chain_break
                         residue_start, residue_end = residue_chain_brerak[chain_id]
-                        to_save_tensor = biomol.structure.residue_tensor[residue_start:residue_end, :]
+                        to_save_tensor = biomol.structure.residue_tensor[
+                            residue_start : (residue_end + 1), :
+                        ]
                     elif level == "atom":
                         atom_chain_break = biomol.structure.atom_chain_break
                         atom_start, atom_end = atom_chain_break[chain_id]
-                        to_save_tensor = biomol.structure.atom_tensor[atom_start:atom_end, :]
+                        to_save_tensor = biomol.structure.atom_tensor[
+                            atom_start : (atom_end + 1), :
+                        ]
                     save_path = f"{inner_dir}/{str_id}.pt"
                     torch.save(to_save_tensor, save_path)
                     print(f"Saved {save_path}")
@@ -164,19 +189,19 @@ def save_structures(pdb_ID: str, save_dir: str,level: str = "residue") -> list[t
 
 # TODO expand it to full IDs. This version is only for testing
 def make_seq_hash_to_structure_db(
-    save_dir = f"{DB_PATH}/seq_to_str/",
-    thread_num = 1,
-    level: str = "residue", # or "atom"
-    inner_dir_already = False,
+    save_dir=f"{DB_PATH}/seq_to_str/",
+    thread_num=1,
+    level: str = "residue",  # or "atom"
+    inner_dir_already=False,
 ) -> dict[str, tuple[list[str], list[torch.Tensor]]]:
     """
     Given a sequence hash, return a list of PDB IDs.
     """
     save_dir = f"{save_dir}/{level}/"
-    metadata_path = f"{DB_PATH}/metadata/metadata_psk.csv" # protein only
+    metadata_path = f"{DB_PATH}/metadata/metadata_psk.csv"  # protein only
 
     lines = open(metadata_path, "r").readlines()
-    lines = lines[1:] # remove header
+    lines = lines[1:]  # remove header
     pdb_IDs = [line.split(",")[0].split("_")[0] for line in lines]
     pdb_IDs = sorted(list(set(pdb_IDs)))
 
@@ -193,12 +218,12 @@ def make_seq_hash_to_structure_db(
 
     print(f"Number of PDB IDs: {len(pdb_IDs)}")
 
-    results = Parallel(n_jobs=thread_num)(
+    results = Parallel(n_jobs=thread_num, verbose=10)(
         delayed(save_structures)(pdb_ID, save_dir, level) for pdb_ID in pdb_IDs
-    )    
+    )
 
 
-def process_file(_hash : str):
+def process_file(_hash: str):
     save_dir = f"{DB_PATH}/seq_to_str/residue/{_hash[0:3]}/{_hash[3:6]}"
     IDs = os.listdir(save_dir)
     tensors = [os.path.join(save_dir, ID) for ID in IDs]
@@ -211,24 +236,26 @@ def process_file(_hash : str):
             F.pad(tensor, (0, 0, 0, max_len - tensor.shape[0]), "constant", float("nan"))
             for tensor in tensors
         ]
-        print(f"Warning: tensors have different shapes. Padding to {max_len} for hash {_hash}.")
+        print(
+            f"Warning: tensors have different shapes. Padding to {max_len} for hash {_hash}."
+        )
 
-    tensors = torch.stack(tensors, dim=0) # (B, L, 10)
+    tensors = torch.stack(tensors, dim=0)  # (B, L, 10)
     return IDs, tensors
+
 
 def lmdb_seq_to_str(env_path=db_env, n_jobs=-1):
     seq_to_hash = load_hash_to_seq()
     hash_list = list(seq_to_hash.values())
     hash_list = [str(_hash).zfill(6) for _hash in hash_list]
-    
+
     # Filter out files that are already processed
     print(f"Files to process: {len(hash_list)}")
 
     # Parallel processing of files using joblib.
     env = lmdb.open(env_path, map_size=1 * 1024**4)  # 1TB
     # n_jobs=-1 uses all available cores. Adjust as needed.
-    hash_list = hash_list[:10] # for testing
-    results = Parallel(n_jobs=n_jobs)(
+    results = Parallel(n_jobs=n_jobs, verbose=10)(
         delayed(process_file)(_hash) for _hash in hash_list
     )
 
@@ -239,13 +266,12 @@ def lmdb_seq_to_str(env_path=db_env, n_jobs=-1):
     with env.begin(write=True) as txn:
         for _hash, (cif_IDs, tensors) in zip(hash_list, results):
             # str hash to int hash
-            _hash = str(int(_hash)) # remove leading zeros
+            _hash = str(int(_hash)).zfill(6)  # remove leading zeros
             to_save = {
                 "cif_IDs": cif_IDs,
                 "tensors": tensors,
             }
             to_save = pickle.dumps(to_save, protocol=pickle.HIGHEST_PROTOCOL)
-            breakpoint()
             test = pickle.loads(to_save)
             txn.put(_hash.encode(), to_save)
             hash_to_full_IDs[_hash] = cif_IDs
@@ -254,6 +280,7 @@ def lmdb_seq_to_str(env_path=db_env, n_jobs=-1):
     # save hash to full_IDs
     with open(hash_to_full_IDs_path, "wb") as f:
         pickle.dump(hash_to_full_IDs, f)
+
 
 def read_seq_lmdb(key: str):
     """
@@ -271,5 +298,5 @@ def read_seq_lmdb(key: str):
 
 if __name__ == "__main__":
     # Load the sequence hash from the file
-    # make_seq_hash_to_structure_db(thread_num=-1, inner_dir_already=False)
-    lmdb_seq_to_str()
+    make_seq_hash_to_structure_db(thread_num=-1, inner_dir_already=False, level="atom")
+    # lmdb_seq_to_str()

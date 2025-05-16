@@ -4,16 +4,17 @@ import torch
 import pickle
 import gzip
 from joblib import Parallel, delayed
+
 # from BioMol import CIFDB_PATH
 from BioMol.utils.parser import parse_cif
 from BioMol import DB_PATH
 
 
-db_env = f"{DB_PATH}/cif_protein_only.lmdb"
+db_env = f"{DB_PATH}/cif_protein_only2.lmdb"
 protein_graph_dir = f"{DB_PATH}/protein_graph/"
 cif_dir = f"{DB_PATH}/cif/"
 cif_config_path = "./BioMol/configs/types/protein_only.json"
-CIFDB_PATH = f"{DB_PATH}/cif_protein_only.lmdb"
+CIFDB_PATH = f"{DB_PATH}/cif_protein_only2.lmdb"
 remove_signal_peptide = True
 
 
@@ -73,7 +74,7 @@ def lmdb_cif(env_path=db_env, n_jobs=-1, batch=200):
     # Parallel processing of files using joblib.
     env = lmdb.open(env_path, map_size=1 * 1024**4)  # 1TB
     # n_jobs=-1 uses all available cores. Adjust as needed.
-    results = Parallel(n_jobs=n_jobs)(
+    results = Parallel(n_jobs=n_jobs, verbose=10)(
         delayed(process_file)(cif_path) for cif_path in files_to_process
     )
     # Open LMDB environment for writing

@@ -103,6 +103,7 @@ def max_contact_diff(x, thr=12.0, sep=16, tol=2.0, chunk=32):
     max_idx = scores.argmax().item()
     return diff_num.tolist(), scores.tolist(), (b1[max_idx].item(), b2[max_idx].item())
 
+
 def visualize_2D_tensor(tensor, save_path=None):
     """
     Visualize a 2D tensor as a heatmap.
@@ -118,6 +119,7 @@ def visualize_2D_tensor(tensor, save_path=None):
         plt.show()
     plt.close()
 
+
 def process_sequence(sequence_hash, criteria):
     """
     Process a single multi-state sequence.
@@ -131,7 +133,9 @@ def process_sequence(sequence_hash, criteria):
     residue_tensor = residue_tensor[:, :, 4:8]
 
     # Compute the contact pair
-    diff_nums, scores, (b1, b2) = max_contact_diff(residue_tensor, thr=8.0, tol=2.0, sep=16)
+    diff_nums, scores, (b1, b2) = max_contact_diff(
+        residue_tensor, thr=8.0, tol=2.0, sep=16
+    )
     diff_num_max = max(diff_nums)
     diff_max = max(scores)
     diff_max_IDs = (IDs[b1], IDs[b2])
@@ -164,14 +168,16 @@ def categorize_multi_state_sequences():
 
     # for now, to save time filter out too long sequences
     seq_to_hash = load_hash_to_seq()
-    seq_to_hash = {k : v for k, v in seq_to_hash.items() if len(k) < 2048}
+    seq_to_hash = {k: v for k, v in seq_to_hash.items() if len(k) < 2048}
     hash_list = [_hash for _, _hash in seq_to_hash.items()]
 
-    not_filtered_path = f"{DB_PATH}/statistics/multi_state/not_filtered/multi_state_sequences.pkl"
+    not_filtered_path = (
+        f"{DB_PATH}/statistics/multi_state/not_filtered/multi_state_sequences.pkl"
+    )
     if os.path.exists(not_filtered_path):
         with open(not_filtered_path, "rb") as pf:
             results = pickle.load(pf)
-    else :
+    else:
         # Process each sequence in parallel. Using n_jobs=-1 uses all available cores.
         print(f"Processing {len(hash_list)} sequences...")
         results = Parallel(n_jobs=-1, verbose=10)(
@@ -196,7 +202,12 @@ def categorize_multi_state_sequences():
     for seq_hash, chain_ids, diff_num_max, diff_max, diff_max_IDs, category in results:
         if seq_hash is None or category not in categories:
             continue
-        categories[category][seq_hash] = (chain_ids, diff_num_max, diff_max, diff_max_IDs)
+        categories[category][seq_hash] = (
+            chain_ids,
+            diff_num_max,
+            diff_max,
+            diff_max_IDs,
+        )
 
     # ensure save directory exists
     save_dir = f"{DB_PATH}/statistics/multi_state/not_filtered/"
@@ -224,7 +235,24 @@ def categorize_multi_state_sequences():
 
 def filter_multi_state_sequences(
     seq_len: tuple[int, int] = (128, 1024),
+    unk_cutoff: float = 0.3,
 ):
+    seq_to_hash = load_hash_to_seq()
+
+    def get_unk_ratio(seq):
+        """
+        Calculate the ratio of unknown residues in a sequence.
+        """
+        return seq.count("X") / len(seq)
+
+    filtered_hash_list = []
+    for seq, _hash in seq_to_hash.items():
+        if len(seq) < seq_len[0] or len(seq) > seq_len[1]:
+            continue
+        if get_unk_ratio(seq) > unk_cutoff:
+            continue
+        filtered_hash_list.append(_hash)
+
     categories = {
         "single_state": {},
         "flexible": {},
@@ -237,9 +265,6 @@ def filter_multi_state_sequences(
         )
         with open(path, "rb") as pf:
             categories[name] = pickle.load(pf)
-
-    seq_to_hash = load_hash_to_seq()
-    hash_to_seqlen = {v: len(k) for k, v in seq_to_hash.items()}
 
     to_path = f"{DB_PATH}/statistics/multi_state/filtered_{seq_len[0]}_{seq_len[1]}/"
     if not os.path.exists(to_path):
@@ -256,16 +281,11 @@ def filter_multi_state_sequences(
         "dynamic": {},
     }
     for name, data in categories.items():
-        for seq_hash, (chain_ids, diff_max) in data.items():
-            if seq_hash not in hash_to_seqlen:
-                raise ValueError(
-                    f"Sequence hash {seq_hash} not found in hash_to_seqlen."
-                )
-            _seq_len = hash_to_seqlen[seq_hash]
-            if _seq_len < seq_len[0] or _seq_len > seq_len[1]:
-                # remove the sequence from the category
-                continue
-            filtered_categories[name][seq_hash] = (chain_ids, diff_max)
+        filtered_categories[name] = {
+            seq_hash: value
+            for seq_hash, value in data.items()
+            if seq_hash in filtered_hash_list
+        }
 
         path = os.path.join(to_path, f"{name}_sequences.pkl")
         with open(path, "wb") as pf:
@@ -279,5 +299,5 @@ def filter_multi_state_sequences(
 
 
 if __name__ == "__main__":
-    filtered_sequences = categorize_multi_state_sequences()
-    # filter_multi_state_sequences(seq_len=(128, 1024))
+    # filtered_sequences = categorize_multi_state_sequences()
+    filter_multi_state_sequences(seq_len=(128, 1024))

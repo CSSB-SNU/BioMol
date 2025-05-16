@@ -82,7 +82,7 @@ class MSASEQ:
             pos, num = np.unique(lower_case, return_counts=True)
 
             # append to the matrix of insetions
-            deletion[pos] = np.clip(num, 0, 255).astype(np.uint8) # to reduce memory usage
+            deletion[pos] = np.clip(num, 0, 255).astype(np.uint8)  # to save memory
 
         sequence = sequence.translate(table)
         self.sequence = np.array([AA2num[aa] for aa in sequence], dtype=np.uint8)
@@ -381,7 +381,7 @@ class MSA:
         new_sequencess = self.sequences[:, crop_idx]
         new_deletions = self.deletion[:, crop_idx]
 
-        gap_idx = np.where((new_sequencess == AA2num['-']).all(axis=1))[0]
+        gap_idx = np.where((new_sequencess == AA2num["-"]).all(axis=1))[0]
         new_species_to_idx = {}
         for species, indices in self.species_to_idx.items():
             min_idx = min(indices)
@@ -410,7 +410,7 @@ class MSA:
         return self.deletion_mean
 
 
-class ComplexMSA: # TODO
+class ComplexMSA:  # TODO
     def __init__(
         self,
         MSAs: list[MSA],
@@ -567,33 +567,28 @@ class ComplexMSA: # TODO
 
         final_annotation = []
         final_sequence = []
-        final_has_deletion = []
         final_deletion = []
 
         for ii in range(max_depth):
             annotations = []
             seqs = []
-            has_deletion = []
             deletion = []
             for key in MSAs.keys():
                 idx = final_msa_indices[key][ii]
                 if idx == -1:
                     annotations.append("N/A")
                     seqs.append(np.full((MSAs[key].length), AA2num["-"]))
-                    has_deletion.append(np.zeros(MSAs[key].length))
                     deletion.append(np.zeros(MSAs[key].length))
                 else:
                     annotations.append(MSAs[key][idx].get_annotation())
                     seqs.append(MSAs[key][idx].get_sequence())
-                    has_deletion.append(MSAs[key][idx].get_has_deletion())
                     deletion.append(MSAs[key][idx].get_deletion())
             annotations = " | ".join(annotations)
             seqs = np.concatenate(seqs)
-            has_deletion = np.concatenate(has_deletion)
             deletion = np.concatenate(deletion)
             final_annotation.append(annotations)
             final_sequence.append(seqs)
-            final_has_deletion.append(has_deletion)
+            final_has_deletion = np.array(deletion > 0, dtype=np.uint8)
             final_deletion.append(deletion)
 
         # concat profile, deletion_mean
