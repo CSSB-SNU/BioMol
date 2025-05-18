@@ -255,7 +255,7 @@ class MSA:
         self.a3m_path = a3m_path
         self._parse_a3m(use_lmdb)
 
-    def _parse_a3m(self, use_lmdb: bool) -> list[MSASEQ]:
+    def _parse_a3m(self, use_lmdb: bool) -> np.ndarray:
         # Read file lines
         if not use_lmdb:
             if self.a3m_path.endswith(".gz"):
@@ -322,6 +322,7 @@ class MSA:
         species_to_idx = {}
         profile_list = []
         deletion_list = []
+        annotations = []
         for idx, msaseq in enumerate(seqs):
             species = msaseq.get_species()
             if species not in species_to_idx:
@@ -329,6 +330,7 @@ class MSA:
             species_to_idx[species].append(idx)
             profile_list.append(msaseq.get_sequence())
             deletion_list.append(msaseq.get_deletion())
+            annotations.append(msaseq.get_annotation())
 
         # Precompute profile and deletion_mean
         profile = np.array(profile_list).astype(np.int32)
@@ -353,6 +355,7 @@ class MSA:
         self.deletion_mean = deletion_mean
         self.sequences = sequences
         self.deletion = deletion
+        self.annotations = np.array(annotations)
         self.species_to_idx = species_to_idx
         self.length = length
         self.shape = (self.num_seqs, self.length)
@@ -384,11 +387,13 @@ class MSA:
         gap_idx = np.where((new_sequencess == AA2num["-"]).all(axis=1))[0]
         new_species_to_idx = {}
         for species, indices in self.species_to_idx.items():
-            min_idx = min(indices)
-            num_of_removed = np.sum(gap_idx < min_idx)
-            new_species_to_idx[species] = [
-                idx - num_of_removed for idx in indices if idx not in gap_idx
-            ]
+            indices = np.array(indices)
+            # remove gap indices
+            intersection = np.intersect1d(indices, gap_idx)
+            indices = np.setdiff1d(indices, intersection)
+            counts = np.searchsorted(gap_idx, indices, side="left")
+            new_species_to_idx[species] = (indices - counts).astype(np.int32)
+
         new_sequencess = np.delete(new_sequencess, gap_idx, axis=0)
         new_deletions = np.delete(new_deletions, gap_idx, axis=0)
         num_seqs = len(new_sequencess)
@@ -460,6 +465,10 @@ class ComplexMSA:  # TODO
             for key, species_to_idx in species_to_idx_dict.items():
                 msa_indices[key].extend(species_to_idx[species][:min_num_seqs])
 
+        msa_indices = {key: np.array(indices) for key, indices in msa_indices.items()}
+
+        self._test_uniqueness(msa_indices)
+
         # sort by sum of indices (row)
         sum_of_incides = np.array(list(msa_indices.values()))
         sum_of_incides = np.sum(sum_of_incides, axis=0)
@@ -467,7 +476,8 @@ class ComplexMSA:  # TODO
         num_of_seqs = len(sorted_indices)
 
         msa_indices = {
-            key: [indices[ii] for ii in sorted_indices]
+            # key: [indices[ii] for ii in sorted_indices]
+            key: indices[sorted_indices]
             for key, indices in msa_indices.items()
         }
         self._test_uniqueness(msa_indices)
@@ -562,7 +572,10 @@ class ComplexMSA:  # TODO
                 missing_indices += [-1] * (max_depth - msa_depth)
             else:
                 missing_indices = missing_indices[: max_depth - paired_num_of_seqs]
-            final_msa_indices[key] = paired_indices + missing_indices
+            missing_indices = np.array(missing_indices)
+            final_msa_indices[key] = np.concatenate(
+                [paired_msa_indices[key], missing_indices]
+            )
         self._test_uniqueness(final_msa_indices)
 
         final_annotation = []

@@ -3,7 +3,7 @@
 #SBATCH --mem=500g
 #SBATCH -p gpu
 #SBATCH -w gpu04
-#SBATCH -c 60
+#SBATCH -c 80
 #SBATCH -o ./log/MSA_lmdb.out
 #SBATCH -e ./log/MSA_lmdb.err
 

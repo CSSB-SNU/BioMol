@@ -6,11 +6,13 @@ from BioMol.BioMol import BioMol
 from joblib import Parallel, delayed
 import os
 import lmdb
+import gzip
 
 merged_fasta_path = f"{DB_PATH}/entity/merged_protein.fasta"
 save_path = f"{DB_PATH}/metadata/hash_to_pdbIDs.pkl"
 hash_to_full_IDs_path = f"{DB_PATH}/metadata/hash_to_full_IDs.pkl"
-db_env = f"{DB_PATH}/seq_to_str/residue.lmdb"
+# db_env = f"{DB_PATH}/seq_to_str/residue.lmdb"
+db_env = f"{DB_PATH}/seq_to_str/atom.lmdb"
 
 
 def load_hash_to_seq():
@@ -223,8 +225,8 @@ def make_seq_hash_to_structure_db(
     )
 
 
-def process_file(_hash: str):
-    save_dir = f"{DB_PATH}/seq_to_str/residue/{_hash[0:3]}/{_hash[3:6]}"
+def process_file(_hash: str, level: str = "residue"):
+    save_dir = f"{DB_PATH}/seq_to_str/{level}/{_hash[0:3]}/{_hash[3:6]}"
     IDs = os.listdir(save_dir)
     tensors = [os.path.join(save_dir, ID) for ID in IDs]
     tensors = [torch.load(tensor) for tensor in tensors]
@@ -244,7 +246,7 @@ def process_file(_hash: str):
     return IDs, tensors
 
 
-def lmdb_seq_to_str(env_path=db_env, n_jobs=-1):
+def lmdb_seq_to_str(env_path=db_env, n_jobs=-1, level="residue"):
     seq_to_hash = load_hash_to_seq()
     hash_list = list(seq_to_hash.values())
     hash_list = [str(_hash).zfill(6) for _hash in hash_list]
@@ -253,10 +255,10 @@ def lmdb_seq_to_str(env_path=db_env, n_jobs=-1):
     print(f"Files to process: {len(hash_list)}")
 
     # Parallel processing of files using joblib.
-    env = lmdb.open(env_path, map_size=1 * 1024**4)  # 1TB
+    env = lmdb.open(env_path, map_size=2 * 1024**4)  # 1TB
     # n_jobs=-1 uses all available cores. Adjust as needed.
     results = Parallel(n_jobs=n_jobs, verbose=10)(
-        delayed(process_file)(_hash) for _hash in hash_list
+        delayed(process_file)(_hash, level) for _hash in hash_list
     )
 
     # hash to full_IDs
@@ -272,7 +274,8 @@ def lmdb_seq_to_str(env_path=db_env, n_jobs=-1):
                 "tensors": tensors,
             }
             to_save = pickle.dumps(to_save, protocol=pickle.HIGHEST_PROTOCOL)
-            test = pickle.loads(to_save)
+            # gzip compress the data
+            to_save = gzip.compress(to_save)
             txn.put(_hash.encode(), to_save)
             hash_to_full_IDs[_hash] = cif_IDs
     env.close()
@@ -298,5 +301,5 @@ def read_seq_lmdb(key: str):
 
 if __name__ == "__main__":
     # Load the sequence hash from the file
-    make_seq_hash_to_structure_db(thread_num=-1, inner_dir_already=False, level="atom")
-    # lmdb_seq_to_str()
+    # make_seq_hash_to_structure_db(thread_num=-1, inner_dir_already=False, level="atom")
+    lmdb_seq_to_str()
