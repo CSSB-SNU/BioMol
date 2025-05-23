@@ -3,8 +3,11 @@ from BioMol.BioMol import BioMol
 if __name__ == "__main__":
     # BioMol automatically generate all biological assemblies.
     biomol = BioMol(
-        pdb_ID="9dw6", # lower case
+        # pdb_ID="6nu2", # lower case
+        cif = "/data/psk6950/BioMolDB_2024Oct21/cif/nu/6nu2.cif.gz",
+        remove_signal_peptide = True,
         mol_types=["protein"], # only protein
+        use_lmdb=False
     )
     # biomol = BioMol(
     #     cif="5hlt.cif", # This file should be from the PDB database.
@@ -12,9 +15,10 @@ if __name__ == "__main__":
     #     remove_signal_peptide=True,
     #     use_lmdb=False, # If you want to load NA or ligand you must set use_lmdb=False,
     # )
+    biomol.choose("1", "1", ".")
+    breakpoint()
 
     # choose assembly id, model_id, alt_id
-    biomol.choose("1", "1", ".")
 
     crop_indices, seq_hash_to_crop_indices = biomol.get_crop_indices()
     biomol.crop(seq_hash_to_crop_indices)

@@ -7,6 +7,7 @@ from joblib import Parallel, delayed
 import os
 import lmdb
 import gzip
+import math
 
 merged_fasta_path = f"{DB_PATH}/entity/merged_protein.fasta"
 save_path = f"{DB_PATH}/metadata/hash_to_pdbIDs.pkl"
@@ -164,10 +165,15 @@ def save_structures(
                 # remove bioassembly_id from chain ids
                 chains_wo_oper_id = [chain.split("_")[0] for chain in chains]
                 chains_wo_oper_id = sorted(list(set(chains_wo_oper_id)))
-
+                if level == 'residue':
+                    residue_chain_break = biomol.structure.residue_chain_break
+                elif level == "atom":
+                    atom_chain_break = biomol.structure.atom_chain_break
                 already_done = []
 
                 for chain_id, seq_hash in biomol.structure.sequence_hash.items():
+                    if 'OB' in chain_id :
+                        breakpoint()
                     if chain_id.split("_")[0] not in chains_wo_oper_id:
                         continue
                     seq_hash = str(seq_hash).zfill(6)
@@ -177,20 +183,18 @@ def save_structures(
                     if str_id in already_done:
                         continue
                     if level == "residue":
-                        residue_chain_brerak = biomol.structure.residue_chain_break
-                        residue_start, residue_end = residue_chain_brerak[chain_id]
+                        residue_start, residue_end = residue_chain_break[chain_id]
                         to_save_tensor = biomol.structure.residue_tensor[
                             residue_start : (residue_end + 1), :
                         ]
                     elif level == "atom":
-                        atom_chain_break = biomol.structure.atom_chain_break
                         atom_start, atom_end = atom_chain_break[chain_id]
                         to_save_tensor = biomol.structure.atom_tensor[
                             atom_start : (atom_end + 1), :
                         ]
                     already_done.append(str_id)
                     save_path = f"{inner_dir}/{str_id}.pt"
-                    torch.save(to_save_tensor, save_path)
+                    # torch.save(to_save_tensor, save_path)
                     print(f"Saved {save_path}")
 
 
@@ -200,17 +204,12 @@ def make_seq_hash_to_structure_db(
     thread_num=1,
     level: str = "residue",  # or "atom"
     inner_dir_already=False,
+    pdb_IDs_subset=None,
 ) -> dict[str, tuple[list[str], list[torch.Tensor]]]:
     """
     Given a sequence hash, return a list of PDB IDs.
     """
     save_dir = f"{save_dir}/{level}/"
-    metadata_path = f"{DB_PATH}/metadata/metadata_psk.csv"  # protein only
-
-    lines = open(metadata_path, "r").readlines()
-    lines = lines[1:]  # remove header
-    pdb_IDs = [line.split(",")[0].split("_")[0] for line in lines]
-    pdb_IDs = sorted(list(set(pdb_IDs)))
 
     seq_to_hash = load_hash_to_seq()
     hash_list = list(seq_to_hash.values())
@@ -223,71 +222,79 @@ def make_seq_hash_to_structure_db(
             if not os.path.exists(inner_dir):
                 os.makedirs(inner_dir)
 
-    print(f"Number of PDB IDs: {len(pdb_IDs)}")
+    print(f"Number of PDB IDs: {len(pdb_IDs_subset)}")
 
     results = Parallel(n_jobs=thread_num, verbose=10)(
-        delayed(save_structures)(pdb_ID, save_dir, level) for pdb_ID in pdb_IDs
+        delayed(save_structures)(pdb_ID, save_dir, level) for pdb_ID in pdb_IDs_subset
     )
 
+
+
+def load_hash_to_seq():
+    return pickle.load(open(SEQ_TO_HASH_PATH, "rb"))
 
 def process_file(_hash: str, level: str = "residue"):
     save_dir = f"{DB_PATH}/seq_to_str/{level}/{_hash[0:3]}/{_hash[3:6]}"
     IDs = os.listdir(save_dir)
-    tensors = [os.path.join(save_dir, ID) for ID in IDs]
-    tensors = [torch.load(tensor) for tensor in tensors]
-    # if tensors.shape different, pad them to the same size
-    tensor_shapes = [tensor.shape for tensor in tensors]
-    if len(set(tensor_shapes)) > 1:
-        max_len = max([shape[0] for shape in tensor_shapes])
+    # for test 
+    tensors = [torch.load(os.path.join(save_dir, ID)) for ID in IDs]
+    tensors = torch.stack(tensors, dim=0)
+
+    print(f"Loaded {len(tensors)} shape : {tensors[0].shape} tensors from {save_dir}")
+
+    shapes = [t.shape for t in tensors]
+    if len(set(shapes)) > 1:
+        max_len = max(s[0] for s in shapes)
         tensors = [
-            F.pad(tensor, (0, 0, 0, max_len - tensor.shape[0]), "constant", float("nan"))
-            for tensor in tensors
+            F.pad(t, (0, 0, 0, max_len - t.shape[0]), "constant", float("nan"))
+            for t in tensors
         ]
-        print(
-            f"Warning: tensors have different shapes. Padding to {max_len} for hash {_hash}."
-        )
+    return IDs, torch.stack(tensors, dim=0)
 
-    tensors = torch.stack(tensors, dim=0)  # (B, L, 10)
-    return IDs, tensors
-
-
-def lmdb_seq_to_str(env_path=db_env, n_jobs=-1, level="residue"):
+def lmdb_seq_to_str_multi(env_path: str, level: str = "residue", n_jobs: int = 1):
+    # 1) 해시 리스트 로드 및 zero-pad
     seq_to_hash = load_hash_to_seq()
-    hash_list = list(seq_to_hash.values())
-    hash_list = [str(_hash).zfill(6) for _hash in hash_list]
+    hash_list = [str(h).zfill(6) for h in seq_to_hash.values()]
+    total = len(hash_list)
+    print(f"Total hashes: {total}")
 
-    # Filter out files that are already processed
-    print(f"Files to process: {len(hash_list)}")
+    # 2) SLURM_ARRAY_TASK_ID 로 shard 결정
+    task_id = int(os.environ.get("SLURM_ARRAY_TASK_ID", 0))
+    num_tasks = int(os.environ.get("SLURM_ARRAY_TASK_COUNT", 1))
+    # 각 노드가 처리할 청크 범위
+    chunk_size = math.ceil(total / num_tasks)
+    start = task_id * chunk_size
+    end = min(start + chunk_size, total)
+    subset = hash_list[start:end]
+    print(f"[Task {task_id}/{num_tasks}] Processing hashes {start}–{end-1}")
 
-    # Parallel processing of files using joblib.
-    env = lmdb.open(env_path, map_size=2 * 1024**4)  # 1TB
-    # n_jobs=-1 uses all available cores. Adjust as needed.
+    # 3) 노드별 LMDB 환경 생성 (shard suffix)
+    shard_env_path = f"{env_path}.shard_{task_id}"
+    os.makedirs(shard_env_path, exist_ok=True)
+    env = lmdb.open(shard_env_path, map_size=2 * 1024**4)
+
+    # 4) 병렬 처리
     results = Parallel(n_jobs=n_jobs, verbose=10)(
-        delayed(process_file)(_hash, level) for _hash in hash_list
+        delayed(process_file)(_hash, level) for _hash in subset
     )
 
-    # hash to full_IDs
-    hash_to_full_IDs = {}
-
-    # Open LMDB environment for writing
+    # 5) 쓰기 트랜잭션
+    hash_to_full = {}
     with env.begin(write=True) as txn:
-        for _hash, (cif_IDs, tensors) in zip(hash_list, results):
-            # str hash to int hash
-            _hash = str(int(_hash)).zfill(6)  # remove leading zeros
-            to_save = {
-                "cif_IDs": cif_IDs,
-                "tensors": tensors,
-            }
-            to_save = pickle.dumps(to_save, protocol=pickle.HIGHEST_PROTOCOL)
-            # gzip compress the data
-            to_save = gzip.compress(to_save)
+        for _hash, (cif_IDs, tensors) in zip(subset, results):
+            to_save = pickle.dumps({"cif_IDs": cif_IDs, "tensors": tensors},
+                                   protocol=pickle.HIGHEST_PROTOCOL)
             txn.put(_hash.encode(), to_save)
-            hash_to_full_IDs[_hash] = cif_IDs
+            hash_to_full[_hash] = cif_IDs
     env.close()
 
-    # save hash to full_IDs
-    with open(hash_to_full_IDs_path, "wb") as f:
-        pickle.dump(hash_to_full_IDs, f)
+    # 6) 노드별 해시 → PDBID 매핑 저장 (나중에 병합)
+    out_map = f"{DB_PATH}/metadata/hash2full_shard_{task_id}.pkl"
+    with open(out_map, "wb") as f:
+        pickle.dump(hash_to_full, f)
+
+    print(f"[Task {task_id}] shard done: wrote {len(subset)} entries to {shard_env_path}")
+    return
 
 
 def read_seq_lmdb(key: str):
@@ -303,23 +310,32 @@ def read_seq_lmdb(key: str):
     env.close()
     return data
 
-def split_pdb_IDs(num=10):
-    metadata_path = f"{DB_PATH}/metadata/metadata_psk.csv"  # protein only
 
-    lines = open(metadata_path, "r").readlines()
-    lines = lines[1:]  # remove header
-    pdb_IDs = [line.split(",")[0].split("_")[0] for line in lines]
-    pdb_IDs = list(set(pdb_IDs))
+# if __name__ == "__main__":
+#     metadata_path = f"{DB_PATH}/metadata/metadata_psk.csv"  # protein only
 
-    # split pdb_IDs into chunks
-    pdb_IDs_chunks = [
-        pdb_IDs[i : i + num] for i in range(0, len(pdb_IDs), num)
-    ]
+#     lines = open(metadata_path, "r").readlines()
+#     lines = lines[1:]  # remove header
+#     pdb_IDs = [line.split(",")[0].split("_")[0] for line in lines]
+#     pdb_IDs = list(set(pdb_IDs))
+#     pdb_IDs = sorted(pdb_IDs)
 
+#     chunk_idx = int(os.environ.get("SLURM_ARRAY_TASK_ID", 0))
+#     num_chunks = int(os.environ.get("SLURM_ARRAY_TASK_COUNT", 1))
 
+#     chunk_size = math.ceil(len(pdb_IDs) / num_chunks)
+#     start = chunk_idx * chunk_size
+#     end   = start + chunk_size
+#     subset = pdb_IDs[start:end]
+#     make_seq_hash_to_structure_db(thread_num=-1,
+#                                   inner_dir_already=False,
+#                                   level="atom",
+#                                   pdb_IDs_subset=subset)
 
 
 if __name__ == "__main__":
-    # Load the sequence hash from the file
-    make_seq_hash_to_structure_db(thread_num=-1, inner_dir_already=False, level="atom")
-    # lmdb_seq_to_str()
+    import sys 
+    # 명령행 인자로 level, n_jobs 등을 넘겨받도록 해도 좋습니다.
+    # lmdb_seq_to_str_multi(env_path=db_env, level="atom", n_jobs=40)
+    # lmdb_seq_to_str_multi(env_path=db_env, level="atom", n_jobs=int(os.getenv("SLURM_CPUS_ON_NODE", "1")))
+    save_structures("6nu2", save_dir="./test", level="atom")
