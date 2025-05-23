@@ -270,6 +270,10 @@ class BioMol:
             ["contiguous", "spatial", "interface"], weights=crop_method_prob, k=1
         )[0]
 
+        if len(self.structure.residue_chain_break) == 1 and method == "interface":
+            # If there is only one chain, use spatial crop instead of interface crop
+            method = "spatial"
+
         if method == "contiguous":
             crop_indices, crop_chain = crop_contiguous(self.structure, crop_length)
         elif method == "spatial":
@@ -308,6 +312,7 @@ class BioMol:
                 self.structure.sequence_hash[chain_id] for chain_id in chain_crop.keys()
             ]
             seq_hashes = [seq_hash.zfill(6) for seq_hash in seq_hashes]
+
             if use_MSADB:
                 hash_to_MSA = {
                     seq_hash: read_MSA_lmdb(seq_hash) for seq_hash in set(seq_hashes)

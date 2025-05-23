@@ -7,6 +7,7 @@ from joblib import Parallel, delayed
 import lmdb
 import io
 import pickle
+from collections import Counter
 
 from BioMol.constant.chemical import AA2num, num2AA
 
@@ -255,7 +256,7 @@ class MSA:
         self.a3m_path = a3m_path
         self._parse_a3m(use_lmdb)
 
-    def _parse_a3m(self, use_lmdb: bool) -> np.ndarray:
+    def _parse_a3m(self, use_lmdb: bool) -> list[MSASEQ]:
         # Read file lines
         if not use_lmdb:
             if self.a3m_path.endswith(".gz"):
@@ -381,28 +382,16 @@ class MSA:
         self.profile = self.profile[crop_idx]
         self.deletion_mean = self.deletion_mean[crop_idx]
 
-        new_sequencess = self.sequences[:, crop_idx]
+        new_sequences = self.sequences[:, crop_idx]
         new_deletions = self.deletion[:, crop_idx]
 
-        gap_idx = np.where((new_sequencess == AA2num["-"]).all(axis=1))[0]
-        new_species_to_idx = {}
-        for species, indices in self.species_to_idx.items():
-            indices = np.array(indices)
-            # remove gap indices
-            intersection = np.intersect1d(indices, gap_idx)
-            indices = np.setdiff1d(indices, intersection)
-            counts = np.searchsorted(gap_idx, indices, side="left")
-            new_species_to_idx[species] = (indices - counts).astype(np.int32)
-
-        new_sequencess = np.delete(new_sequencess, gap_idx, axis=0)
-        new_deletions = np.delete(new_deletions, gap_idx, axis=0)
-        num_seqs = len(new_sequencess)
+        # gap_idx = np.where((new_sequences == AA2num["-"]).all(axis=1))[0]
+        num_seqs = len(new_sequences)
 
         self.num_seqs = num_seqs
-        self.length = len(new_sequencess[0])
-        self.sequences = new_sequencess
+        self.length = len(new_sequences[0])
+        self.sequences = new_sequences
         self.deletion = new_deletions
-        self.species_to_idx = new_species_to_idx
         self.shape = (self.num_seqs, self.length)
 
     def get_query_sequence(self):
@@ -445,25 +434,62 @@ class ComplexMSA:  # TODO
                 raise ValueError("The values in the dictionary are not unique for each")
 
     def _pairing_MSAs(
-        self, MSAs: dict[int, MSA], to_removed_species: set | None = None
+        self,
+        MSAs: dict[int, MSA],
+        max_paired_depth: int = 8191,
     ) -> tuple[dict[int, list[int]], set, int]:
         species_to_idx_dict = {ii: MSA.species_to_idx for ii, MSA in MSAs.items()}
+        # gap_idx = np.where((new_sequences == AA2num["-"]).all(axis=1))[0]
+        gap_idx_dict = {
+            ii: np.where((MSA.sequences == AA2num["-"]).all(axis=1))[0]
+            for ii, MSA in MSAs.items()
+        }
+        all_species = set.union(*(set(d.keys()) for d in species_to_idx_dict.values()))
+        all_species.discard("N/A")
 
-        common_species = set.intersection(
-            *(set(d.keys()) for d in species_to_idx_dict.values())
+        species_to_count = Counter(
+            species
+            for s_to_idx in species_to_idx_dict.values()
+            for species in s_to_idx.keys()
         )
-        common_species.discard("N/A")
-        if to_removed_species is not None:
-            common_species = common_species - to_removed_species
+        species_to_count = dict(species_to_count)
+        species_to_count.pop("N/A", None)
+
+        sorted_species = sorted(
+            species_to_count.items(), key=lambda x: x[1], reverse=True
+        )
+        sorted_species = [species for species, count in sorted_species]
 
         msa_indices = {key: [] for key in MSAs.keys()}
-        for species in common_species:
-            min_num_seqs = min(
-                len(species_to_idx[species])
-                for species_to_idx in species_to_idx_dict.values()
-            )
-            for key, species_to_idx in species_to_idx_dict.items():
-                msa_indices[key].extend(species_to_idx[species][:min_num_seqs])
+        empty = np.array([], dtype=int)
+        num_of_paired = 0
+        paired_species = set()
+        for species in sorted_species:
+            valid_idx_dict = {
+                ii: np.setdiff1d(
+                    species_map.get(species, empty),
+                    gap_idx_dict[ii],
+                    assume_unique=True,
+                )
+                for ii, species_map in species_to_idx_dict.items()
+            }
+            num_seqs = {ii: len(idx) for ii, idx in valid_idx_dict.items()}
+            # remove 0
+            temp_list = [num_seqs[ii] for ii in num_seqs.keys() if num_seqs[ii] > 0]
+
+            if len(temp_list) == 0:
+                continue
+            min_num_seqs = min(temp_list)
+            for key, valid_idx in valid_idx_dict.items():
+                if num_seqs[key] > 0:
+                    msa_indices[key].extend(valid_idx[:min_num_seqs])
+                    num_of_paired += min_num_seqs
+                else:
+                    msa_indices[key].extend([-1] * min_num_seqs)
+            num_of_paired += min_num_seqs
+            paired_species.add(species)
+            if num_of_paired > max_paired_depth:
+                break
 
         msa_indices = {key: np.array(indices) for key, indices in msa_indices.items()}
 
@@ -482,7 +508,7 @@ class ComplexMSA:  # TODO
         }
         self._test_uniqueness(msa_indices)
 
-        return msa_indices, common_species, num_of_seqs
+        return msa_indices, paired_species, num_of_seqs
 
     # def _get_chain_weight(
     #     self, MSAs: dict[int, MSA], first_common_species: set
@@ -528,32 +554,22 @@ class ComplexMSA:  # TODO
     #     return chain_weight
 
     def _prepare_MSA(self, MSAs: list[MSA]) -> None:
-        msa_depth_list = [len(MSA) for MSA in MSAs]
-        max_depth = max(msa_depth_list)
-
         MSAs = dict(enumerate(MSAs))
+        msa_depth_list = [len(MSA) for MSA in MSAs.values()]
+        max_msa_depth = max(msa_depth_list)
+        max_msa_depth = min(max_msa_depth, self.max_MSA_depth)
 
         # 0. Query sequence
         query_indices = {ii: [0] for ii in MSAs.keys()}
 
         # 1. Simple pairing common species for all MSAs
-        paired_msa_indices, paired_common_species, paired_num_of_seqs = (
-            self._pairing_MSAs(MSAs)
-        )
+
+        paired_msa_indices, paired_species, paired_num_of_seqs = self._pairing_MSAs(MSAs)
         paired_msa_indices = {
-            key: query_indices[key] + indices
+            key: np.concatenate([query_indices[key], indices])
             for key, indices in paired_msa_indices.items()
         }
         paired_num_of_seqs += 1
-
-        # cutoff msas if paired_num_of_seqs > max_paired_depth
-        if paired_num_of_seqs > self.max_paired_depth:
-            for key in MSAs.keys():
-                paired_msa_indices[key] = paired_msa_indices[key][
-                    : self.max_paired_depth
-                ]
-            paired_num_of_seqs = self.max_paired_depth
-
         self._test_uniqueness(paired_msa_indices)
 
         # 3. Add extra MSAs
@@ -567,42 +583,61 @@ class ComplexMSA:  # TODO
             missing_indices = set(full_indices) - set(paired_indices)
             missing_indices = sorted(missing_indices)
 
-            # if msa_depth < max_depth, add -1 to the end
-            if msa_depth < self.max_MSA_depth:
-                missing_indices += [-1] * (max_depth - msa_depth)
+            # if msa_depth < max_msa_depth, add -1 to the end
+            if msa_depth < max_msa_depth:
+                missing_indices += [-1] * (max_msa_depth - msa_depth)
             else:
-                missing_indices = missing_indices[: max_depth - paired_num_of_seqs]
+                missing_indices = missing_indices[: max_msa_depth - paired_num_of_seqs]
             missing_indices = np.array(missing_indices)
             final_msa_indices[key] = np.concatenate(
                 [paired_msa_indices[key], missing_indices]
-            )
+            ).astype(np.int32)
         self._test_uniqueness(final_msa_indices)
 
         final_annotation = []
         final_sequence = []
         final_deletion = []
+        final_has_deletion = []
 
-        for ii in range(max_depth):
+        for ii in range(max_msa_depth):
             annotations = []
             seqs = []
             deletion = []
             for key in MSAs.keys():
-                idx = final_msa_indices[key][ii]
+                idx = final_msa_indices[key][ii]  # TODO
+                msa = MSAs[key]
                 if idx == -1:
                     annotations.append("N/A")
-                    seqs.append(np.full((MSAs[key].length), AA2num["-"]))
-                    deletion.append(np.zeros(MSAs[key].length))
+                    seqs.append(np.full((msa.length), AA2num["-"]))
+                    deletion.append(np.zeros(msa.length))
                 else:
-                    annotations.append(MSAs[key][idx].get_annotation())
-                    seqs.append(MSAs[key][idx].get_sequence())
-                    deletion.append(MSAs[key][idx].get_deletion())
+                    annotations.append(msa.annotations[idx].item())
+                    seqs.append(msa.sequences[idx])
+                    deletion.append(msa.deletion[idx])
             annotations = " | ".join(annotations)
             seqs = np.concatenate(seqs)
             deletion = np.concatenate(deletion)
             final_annotation.append(annotations)
             final_sequence.append(seqs)
-            final_has_deletion = np.array(deletion > 0, dtype=np.uint8)
+            has_deletion = np.array(deletion > 0, dtype=np.uint8)
             final_deletion.append(deletion)
+            final_has_deletion.append(has_deletion)
+
+        # remove all gap sequences
+        final_sequence = np.array(final_sequence)
+        final_has_deletion = np.array(final_has_deletion)
+        final_deletion = np.array(final_deletion)
+        final_annotation = np.array(final_annotation)
+
+        gap_idx = np.where((final_sequence == AA2num["-"]).all(axis=1))[0]
+        final_sequence = np.delete(final_sequence, gap_idx, axis=0)
+        final_deletion = np.delete(final_deletion, gap_idx, axis=0)
+        final_has_deletion = np.delete(final_has_deletion, gap_idx, axis=0)
+        final_annotation = np.delete(final_annotation, gap_idx, axis=0)
+        final_msa_indices = {
+            key: np.delete(indices, gap_idx, axis=0)
+            for key, indices in final_msa_indices.items()
+        }
 
         # concat profile, deletion_mean
         profile = np.concatenate([MSA.get_profile() for MSA in MSAs.values()], axis=0)
@@ -613,14 +648,14 @@ class ComplexMSA:  # TODO
         self.msa_indices = final_msa_indices
         self.annotation = np.array(final_annotation)
 
-        self.msa = np.array(final_sequence)
-        self.has_deletion = np.array(final_has_deletion)
-        self.deletion_value = 2 * np.arctan(np.array(final_deletion) / 3) / np.pi
+        self.msa = final_sequence
+        self.has_deletion = final_has_deletion
+        self.deletion_value = 2 * np.arctan(final_deletion / 3) / np.pi
         self.profile = profile
         self.deletion_mean = deletion_mean
 
         self.num_of_paired = paired_num_of_seqs
-        self.num_of_unpaired = self.msa.shape[0] - paired_num_of_seqs
+        self.num_of_unpaired = self.msa.shape[0] - paired_num_of_seqs - len(gap_idx)
         self.total_depth = self.num_of_paired + self.num_of_unpaired
 
     def to_a3m(self, annotations: list[str], msa: np.ndarray, save_path: str):

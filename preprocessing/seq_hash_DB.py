@@ -165,6 +165,8 @@ def save_structures(
                 chains_wo_oper_id = [chain.split("_")[0] for chain in chains]
                 chains_wo_oper_id = sorted(list(set(chains_wo_oper_id)))
 
+                already_done = []
+
                 for chain_id, seq_hash in biomol.structure.sequence_hash.items():
                     if chain_id.split("_")[0] not in chains_wo_oper_id:
                         continue
@@ -172,6 +174,8 @@ def save_structures(
                     inner_dir = f"{save_dir}/{seq_hash[0:3]}/{seq_hash[3:6]}"
                     chain_id_wo_oper_id = chain_id.split("_")[0]
                     str_id = f"{biomol.ID}_{bioassembly_id}_{model_id}_{alt_id}_{chain_id_wo_oper_id}"
+                    if str_id in already_done:
+                        continue
                     if level == "residue":
                         residue_chain_brerak = biomol.structure.residue_chain_break
                         residue_start, residue_end = residue_chain_brerak[chain_id]
@@ -184,6 +188,7 @@ def save_structures(
                         to_save_tensor = biomol.structure.atom_tensor[
                             atom_start : (atom_end + 1), :
                         ]
+                    already_done.append(str_id)
                     save_path = f"{inner_dir}/{str_id}.pt"
                     torch.save(to_save_tensor, save_path)
                     print(f"Saved {save_path}")
