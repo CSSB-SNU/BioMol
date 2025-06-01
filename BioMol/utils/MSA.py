@@ -656,7 +656,7 @@ class ComplexMSA:  # TODO
 
         self.num_of_paired = paired_num_of_seqs
         self.num_of_unpaired = self.msa.shape[0] - paired_num_of_seqs - len(gap_idx)
-        self.total_depth = self.num_of_paired + self.num_of_unpaired
+        self.total_depth = self.msa.shape[0]
 
     def to_a3m(self, annotations: list[str], msa: np.ndarray, save_path: str):
         if annotations is None:
@@ -677,29 +677,17 @@ class ComplexMSA:  # TODO
     def sample(
         self,
         max_msa_depth: int = 256,
-        ratio: tuple[float, float] = (0.5, 0.5),
     ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         if self.total_depth < max_msa_depth:
             max_msa_depth = self.total_depth
-        sampled = [int(ratio[ii] * max_msa_depth) for ii in range(3)]
-        if sum(sampled) != max_msa_depth:
-            sampled[0] += 1  # make sure the sum is equal to max_msa_depth
-
-        to_be_sampled = (self.num_of_paired, self.num_of_unpaired)
-        if to_be_sampled[0] < sampled[0]:
-            sampled[1] += sampled[0] - to_be_sampled[0]
-            sampled[0] = to_be_sampled[0]
 
         query = np.array([0])
-        paired_sampled = np.random.choice(
-            self.num_of_paired, sampled[0] - 1, replace=False
-        )  # -1 for query
-        unpaired_sampled = (
-            np.random.choice(self.num_of_unpaired, sampled[1], replace=False)
-            + self.num_of_paired
+        sampled_indices = np.random.choice(
+            np.arange(1, self.total_depth),
+            size=max_msa_depth - 1,
+            replace=False,
         )
-
-        sampled_indices = np.concatenate([query, paired_sampled, unpaired_sampled])
+        sampled_indices = np.concatenate([query, sampled_indices])
         sampled_indices = np.sort(sampled_indices)
 
         sampled_annotation = self.annotation[sampled_indices]
@@ -708,13 +696,10 @@ class ComplexMSA:  # TODO
         sampled_deletion_value = self.deletion_value[sampled_indices]
 
         return (
-            sampled_indices,
             sampled_annotation,
             sampled_sequence,
             sampled_has_deletion,
             sampled_deletion_value,
-            self.profile,
-            self.deletion_mean,
         )
 
     def __repr__(self):

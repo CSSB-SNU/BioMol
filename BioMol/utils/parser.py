@@ -90,7 +90,6 @@ def parse_chem_comp(chem_comp_id, chem_comp_item):
         else:
             output_1D[key] = Feature1D(key, data, mask, feature_level, None)
 
-
     if "_chem_comp_bond.atom_id_1" in chem_comp_item:
         _chem_comp_bond_atom_id1 = chem_comp_item["_chem_comp_bond.atom_id_1"]
         _chem_comp_bond_atom_id2 = chem_comp_item["_chem_comp_bond.atom_id_2"]
@@ -148,7 +147,6 @@ def compare_ideal_chem_comp(chem_comp):
     if chem_comp_id == "UNL":
         return ideal_chem_comp
 
-
     chem_comp_help = {}
 
     # compare 0d feature
@@ -158,10 +156,8 @@ def compare_ideal_chem_comp(chem_comp):
         if key in chem_comp["0D"].keys():
             in_item, ideal = chem_comp["0D"][key], ideal_chem_comp[key]
             if in_item != ideal:
-                chem_comp_help[key] = (
-                    f"{key} is different : load {in_item}, \
+                chem_comp_help[key] = f"{key} is different : load {in_item}, \
                         but {ideal} at external source."
-                )
         else:
             chem_comp["0D"][key] = ideal_chem_comp[key]
             flag_0d.append(f"0D {key} is from external source")
@@ -175,11 +171,10 @@ def compare_ideal_chem_comp(chem_comp):
         if input_full_atoms != ideal_full_atoms:
             chem_comp_help["1D"] = (
                 f"full_atoms between loaded item and external source is \
-                    different. You should check it." # Ex) 3q4p M7G H82
+                    different. You should check it."  # Ex) 3q4p M7G H82
             )
             # in this case, we only use ideal chem_comp for 1D features.
             chem_comp["1D"] = {}
-
 
     key_1d = chem_comp_configs["1D"].keys()
     for key in key_1d:
@@ -1371,23 +1366,29 @@ def parse_simple_pdb(pdb_path, cif_configs=None):
 if __name__ == "__main__":
     cif_config_path = "./BioMol/configs/types/protein_only.json"
     cif_dir = "/public_data/BioMolDB_2024Oct21/cif/"
-    
+
     cif_list = [
-    # "1ap8", "1ej1", "1ej4", "1ejh", "1jtf", "1rf8", "1v39", "1xmm",
-    # "2idv", "2jh8", "2vp3",
-    # "3m93", "3q4p",
-    # "4b6u", "4emf", "4or4", "4tqc",
-    # "5bv3", "5dto", "5f98", "5h1m", "5kqs", "5lop", "5me6", "5msg", "5n2v",
-    # "6c6k", "6evj", "6irz", "6is0", "6qcv", "6qcw", "6qcx", "6rr7", "6trq",
-    # "6vu1", "6vvj", "6wq3", "6zqg",
-    # "7jpe", "7jyy", "7jz0", "7l6r", "7l6t", "7sez", "7sf0",
-    # "8qoi", "8r6w", "8r6y", "8srr", "8suy", "8sx4", "8vuo",
-    # "9don"
-    "3q4p"
+        # "1ap8", "1ej1", "1ej4", "1ejh", "1jtf", "1rf8", "1v39", "1xmm",
+        # "2idv", "2jh8", "2vp3",
+        # "3m93", "3q4p",
+        # "4b6u", "4emf", "4or4", "4tqc",
+        # "5bv3", "5dto", "5f98", "5h1m", "5kqs", "5lop", "5me6", "5msg", "5n2v",
+        # "6c6k", "6evj", "6irz", "6is0", "6qcv", "6qcw", "6qcx", "6rr7", "6trq",
+        # "6vu1", "6vvj", "6wq3", "6zqg",
+        # "7jpe", "7jyy", "7jz0", "7l6r", "7l6t", "7sez", "7sf0",
+        # "8qoi", "8r6w", "8r6y", "8srr", "8suy", "8sx4", "8vuo",
+        # "9don"
+        "3q4p"
     ]
     # walk
     for cif_ID in cif_list:
-        cif_path = "/public_data/BioMolDB_2024Oct21/cif/" + cif_ID[1:3] + "/" + cif_ID + ".cif.gz"
+        cif_path = (
+            "/public_data/BioMolDB_2024Oct21/cif/"
+            + cif_ID[1:3]
+            + "/"
+            + cif_ID
+            + ".cif.gz"
+        )
         print(f"Parsing {cif_path}")
         try:
             bioassembly = parse_cif(cif_path, cif_config_path)

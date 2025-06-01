@@ -1034,6 +1034,7 @@ class AsymmetricChain:
         scheme_type = self.scheme.scheme_type
         cif_idx_list = self.scheme.cif_idx_list
         auth_idx_list = self.scheme.auth_idx_list
+        # hetero_list = self.scheme.hetero_list
         hetero_list = None
 
         for model_id in self.structure.keys():
@@ -2672,8 +2673,8 @@ class BioMolStructure:
                 f"Empty structure for {ID} {bioassembly_id} {model_id} {alt_id}"
             )
         self._load_sequence_hash()  # WARNING!!! This function only works for protein
-        self._load_contact_graph()
-        self._load_graph_cluster()
+        # self._load_contact_graph()
+        # self._load_graph_cluster()
         if remove_signal_peptide:
             # it requires signalp which is precomputed. (SIGNALP_PATH)
             self.remove_signal_peptide()

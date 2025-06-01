@@ -14,6 +14,7 @@ from BioMol.utils.crop import (
 )
 from BioMol.utils.read_lmdb import read_cif_lmdb, read_MSA_lmdb
 from BioMol import ALL_TYPE_CONFIG_PATH, PROTEIN_ONLY_CONFIG_PATH
+from BioMol.utils.error import NoInterfaceError
 
 """
 BioMol class
@@ -281,9 +282,17 @@ class BioMol:
                 chain_bias, self.structure, crop_length
             )
         elif method == "interface":
-            crop_indices, crop_chain = crop_spatial_interface(
-                interface_bias, self.structure, crop_length
-            )
+            try:
+                crop_indices, crop_chain = crop_spatial_interface(
+                    interface_bias, self.structure, crop_length
+                )
+            except NoInterfaceError:
+                # print(
+                #     "No interface found. Using spatial crop instead of interface crop."
+                # )
+                crop_indices, crop_chain = crop_spatial(
+                    chain_bias, self.structure, crop_length
+                )
 
         crop_sequence_hash = {
             chain: self.structure.sequence_hash[chain] for chain in crop_chain
