@@ -28,8 +28,6 @@ from BioMol.utils.contact_graph import ContactGraph
 from BioMol import (
     SEQ_TO_HASH_PATH,
     SIGNALP_PATH,
-    GRAPH_HASH_PATH,
-    GRAPH_CLUSTER_PATH,
     CONTACT_GRAPH_PATH,
 )
 from BioMol.constant.chemical import (
@@ -46,30 +44,6 @@ from BioMol.constant.chemical import (
     num2NA,
     num_to_atom,
 )
-
-with open(SEQ_TO_HASH_PATH, "rb") as f:
-    seq_to_hash = pickle.load(f)
-
-with open(GRAPH_HASH_PATH) as f:
-    lines = f.readlines()
-    lines = [line.strip() for line in lines]
-    ID_to_graph = {}
-    for line in lines:
-        line = line.split(",")
-        ID = line[0]
-        graph_hash = line[1]
-        ID_to_graph[ID] = graph_hash
-
-with open(GRAPH_CLUSTER_PATH) as f:
-    lines = f.readlines()
-    lines = [line.strip() for line in lines]
-    graph_hash_to_cluster = {}
-    for line in lines:
-        line = line.split(",")
-        graph_hash = line[0]
-        cluster = line[1]
-        graph_hash_to_cluster[graph_hash] = cluster
-
 
 @enum.unique
 class MoleculeType(enum.Enum):
@@ -89,6 +63,20 @@ class PolymerType(enum.Enum):
     DNA = "polydeoxyribonucleotide"  # TODO
     NA_HYBRID = "polydeoxyribonucleotide/polyribonucleotide hybrid"
     ETC = "etc"
+
+
+molecule_type_map = {
+    PolymerType.PROTEIN: '[PROTEIN]:',
+    PolymerType.DNA: '[DNA]:',
+    PolymerType.RNA: '[RNA]:',
+    PolymerType.NA_HYBRID: '[NA_HYBRID]:',
+    MoleculeType.NONPOLYMER: '[NONPOLYMER]:',
+    MoleculeType.BRANCHED: '[BRANCHED]:',
+}
+
+with open(SEQ_TO_HASH_PATH, "rb") as f:
+    seq_to_hash = pickle.load(f)
+
 
 
 @dataclasses.dataclass(frozen=True)
@@ -2672,8 +2660,7 @@ class BioMolStructure:
                 f"Empty structure for {ID} {bioassembly_id} {model_id} {alt_id}"
             )
         self._load_sequence_hash()  # WARNING!!! This function only works for protein
-        # self._load_contact_graph()
-        # self._load_graph_cluster()
+        self._load_contact_graph()
         if remove_signal_peptide:
             # it requires signalp which is precomputed. (SIGNALP_PATH)
             self.remove_signal_peptide()
@@ -2691,12 +2678,15 @@ class BioMolStructure:
             match entity.get_type():
                 case MoleculeType.POLYMER:
                     polymer_type = entity.get_polymer_type()
-                    if polymer_type == PolymerType.PROTEIN:
-                        sequence = entity.get_one_letter_code(canonical=True)
-                        sequence_hash[chain] = str(seq_to_hash[sequence])
+                    tag = molecule_type_map[polymer_type]
+                    sequence = entity.get_one_letter_code(canonical=True)
+                    sequence = tag + sequence
+                    sequence_hash[chain] = str(seq_to_hash[sequence])
                 case MoleculeType.NONPOLYMER:
+                    tag = molecule_type_map[MoleculeType.NONPOLYMER]
                     pass
                 case MoleculeType.BRANCHED:
+                    tag = molecule_type_map[MoleculeType.BRANCHED]
                     pass
                 case MoleculeType.WATER:
                     pass
@@ -2706,15 +2696,7 @@ class BioMolStructure:
         graph_path = f"{CONTACT_GRAPH_PATH}/{self.ID[1:3]}/{self.ID}.graph"
         contact_graph = ContactGraph(graph_path)
         contact_graph.choose((self.bioassembly_id, self.model_id, self.alt_id))
-        self.contact_graph = contact_graph
-
-    def _load_graph_cluster(self):
-        graph_hash = ID_to_graph[
-            f"{self.ID}_{self.bioassembly_id}_{self.model_id}_{self.alt_id}"
-        ]
-        graph_cluster = graph_hash_to_cluster[graph_hash]
-        self.graph_hash = graph_hash
-        self.graph_cluster = graph_cluster
+        self.contact_graph = contact_graph 
 
     def __len__(self, level: str = "residue") -> int:
         if level is None:
@@ -3102,107 +3084,6 @@ class BioMolStructure:
         self.same_entity = self.same_entity.to(dtype=dtype, device=device)
         return self
 
-    def __repr__(self):
-        output = "\033[1;43mBioMolStructure \033[0m[\n"
-        output += f"\t\033[1;43mID \033[0m: {self.ID}\n"
-        output += f"\t\033[1;43mBioassembly ID \033[0m: {self.bioassembly_id}\n"
-        output += f"\t\033[1;43mModel ID \033[0m: {self.model_id}\n"
-        output += f"\t\033[1;43mAlt ID \033[0m: {self.alt_id}\n"
-
-        scheme_text = self.scheme.__repr__().split("\n")
-        for text in scheme_text:
-            output += f"\t{text}\n"
-
-        sequence_hash = "None" if self.sequence_hash is None else self.sequence_hash
-        output += f"\t\033[1;43mSequence Hash \033[0m: {sequence_hash}\n"
-
-        graph_cluster = (
-            "None"
-            if self.graph_cluster is None
-            else f"{self.graph_hash}({self.graph_cluster})"
-        )
-        output += f"\t\033[1;43mGraph Hash(Cluster) \033[0m: {graph_cluster}\n"
-
-        output += (
-            f"\t\033[1;43mChains \033[0m: {list(self.residue_chain_break.keys())}\n"
-        )
-        entity_list = self.entity_list
-        entity_num = len(entity_list)
-        max_print = 3
-        same_entity_max_print = 8
-
-        if entity_num > max_print:
-            entity_list = entity_list[: max_print - 1] + [entity_list[-1]]
-        if entity_num > same_entity_max_print:
-            entity_idx = torch.arange(same_entity_max_print, device=self.device)
-            entity_idx[-1] = entity_num - 1
-            entity_idx[-2] = entity_num - 2
-            same_entity = self.same_entity[entity_idx][:, entity_idx]
-        else:
-            same_entity = self.same_entity
-        entity_repr_list = [entity.__repr__() for entity in entity_list]
-        longest_len = 0
-        for entity_repr in entity_repr_list:
-            text = entity_repr.split("\n")
-            for t in text:
-                if len(t) > longest_len:
-                    longest_len = len(t)
-        ANSI_ESCAPE = re.compile(r"\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")
-
-        def strip_ansi(text):
-            """Remove ANSI escape codes from text."""
-            return ANSI_ESCAPE.sub("", text)
-
-        for _ in range(5):
-            entity_text_list = [
-                entity_repr.split("\n")[_] for entity_repr in entity_repr_list
-            ]
-
-            if entity_num > max_print:
-                # Apply padding only on stripped lengths, then reapply ANSI text
-                entity_text_list = [
-                    text.ljust(longest_len + len(text) - len(strip_ansi(text)))
-                    for text in entity_text_list[: max_print - 1]
-                ]
-
-                if _ != 2:
-                    entity_text_list.append("".center(30))  # Empty placeholder centered
-                else:
-                    entity_text_list.append(
-                        f"...({entity_num - max_print} more entities)...".center(30)
-                    )
-
-                entity_text_list.append(
-                    entity_repr_list[-1].split("\n")[_].ljust(longest_len)
-                )
-            else:
-                entity_text_list = [
-                    text.ljust(longest_len + len(text) - len(strip_ansi(text)))
-                    for text in entity_text_list
-                ]
-
-            output += "\t" + " | ".join(entity_text_list) + "\n"
-        filled = "■"  # Filled square for True
-        empty = "□"  # Empty square for False
-
-        output += "\t\033[1;43mSame Entity Matrix \033[0m\n"
-        for row_idx, row in enumerate(same_entity):
-            output += "\t\t"
-            if entity_num <= same_entity_max_print:
-                for element in row:
-                    output += filled if element else empty
-            else:
-                if row_idx == same_entity_max_print - 2:
-                    output += ".\n\t\t.\n\t\t"
-                for element in row[: same_entity_max_print - 2]:
-                    output += filled if element else empty
-                output += "..."
-                output += filled if row[-2] else empty
-                output += filled if row[-1] else empty
-            output += "\n"
-        output += "]"
-        return output
-
     def to_mmcif(self, cif_path):
         """
         1. _atom_site
@@ -3577,3 +3458,97 @@ class BioMolStructure:
                 with open(f"{save_dir}/{ID}_{chain}.fasta", "w") as f:
                     f.write(f"{fasta_header}\n")
                     f.write(f"{sequence}\n")
+
+    def __repr__(self):
+        output = "\033[1;43mBioMolStructure \033[0m[\n"
+        output += f"\t\033[1;43mID \033[0m: {self.ID}\n"
+        output += f"\t\033[1;43mBioassembly ID \033[0m: {self.bioassembly_id}\n"
+        output += f"\t\033[1;43mModel ID \033[0m: {self.model_id}\n"
+        output += f"\t\033[1;43mAlt ID \033[0m: {self.alt_id}\n"
+
+        scheme_text = self.scheme.__repr__().split("\n")
+        for text in scheme_text:
+            output += f"\t{text}\n"
+
+        sequence_hash = "None" if self.sequence_hash is None else self.sequence_hash
+        output += f"\t\033[1;43mSequence Hash \033[0m: {sequence_hash}\n"
+
+        output += (
+            f"\t\033[1;43mChains \033[0m: {list(self.residue_chain_break.keys())}\n"
+        )
+        entity_list = self.entity_list
+        entity_num = len(entity_list)
+        max_print = 3
+        same_entity_max_print = 8
+
+        if entity_num > max_print:
+            entity_list = entity_list[: max_print - 1] + [entity_list[-1]]
+        if entity_num > same_entity_max_print:
+            entity_idx = torch.arange(same_entity_max_print, device=self.device)
+            entity_idx[-1] = entity_num - 1
+            entity_idx[-2] = entity_num - 2
+            same_entity = self.same_entity[entity_idx][:, entity_idx]
+        else:
+            same_entity = self.same_entity
+        entity_repr_list = [entity.__repr__() for entity in entity_list]
+        longest_len = 0
+        for entity_repr in entity_repr_list:
+            text = entity_repr.split("\n")
+            for t in text:
+                if len(t) > longest_len:
+                    longest_len = len(t)
+        ANSI_ESCAPE = re.compile(r"\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")
+
+        def strip_ansi(text):
+            """Remove ANSI escape codes from text."""
+            return ANSI_ESCAPE.sub("", text)
+
+        for _ in range(5):
+            entity_text_list = [
+                entity_repr.split("\n")[_] for entity_repr in entity_repr_list
+            ]
+
+            if entity_num > max_print:
+                # Apply padding only on stripped lengths, then reapply ANSI text
+                entity_text_list = [
+                    text.ljust(longest_len + len(text) - len(strip_ansi(text)))
+                    for text in entity_text_list[: max_print - 1]
+                ]
+
+                if _ != 2:
+                    entity_text_list.append("".center(30))  # Empty placeholder centered
+                else:
+                    entity_text_list.append(
+                        f"...({entity_num - max_print} more entities)...".center(30)
+                    )
+
+                entity_text_list.append(
+                    entity_repr_list[-1].split("\n")[_].ljust(longest_len)
+                )
+            else:
+                entity_text_list = [
+                    text.ljust(longest_len + len(text) - len(strip_ansi(text)))
+                    for text in entity_text_list
+                ]
+
+            output += "\t" + " | ".join(entity_text_list) + "\n"
+        filled = "■"  # Filled square for True
+        empty = "□"  # Empty square for False
+
+        output += "\t\033[1;43mSame Entity Matrix \033[0m\n"
+        for row_idx, row in enumerate(same_entity):
+            output += "\t\t"
+            if entity_num <= same_entity_max_print:
+                for element in row:
+                    output += filled if element else empty
+            else:
+                if row_idx == same_entity_max_print - 2:
+                    output += ".\n\t\t.\n\t\t"
+                for element in row[: same_entity_max_print - 2]:
+                    output += filled if element else empty
+                output += "..."
+                output += filled if row[-2] else empty
+                output += filled if row[-1] else empty
+            output += "\n"
+        output += "]"
+        return output

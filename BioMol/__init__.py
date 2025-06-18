@@ -40,13 +40,14 @@ def get_paths():
     return {
         "DB_PATH": base,
         "CCD_PATH": ccd,
-        "CONTACT_GRAPH_PATH": os.path.join(base, "protein_graph"),
+        "CONTACT_GRAPH_PATH": os.path.join(base, "contact_graphs"),
         "SEQ_TO_HASH_PATH": os.path.join(base, "entity", "sequence_hashes.pkl"),
-        "GRAPH_HASH_PATH": os.path.join(base, "protein_graph", "level0_cluster.csv"),  # noqa: E501
-        "GRAPH_CLUSTER_PATH": os.path.join(
-            base, "cluster/graph_hash_to_graph_cluster.txt"
-        ),  # noqa: E501
-        "A3MDB_PATH": os.path.join(base, "a3m.lmdb"),
+
+        # "GRAPH_HASH_PATH": os.path.join(base, "protein_graph", "level0_cluster.csv"),  # noqa: E501
+        # "GRAPH_CLUSTER_PATH": os.path.join(
+        #     base, "cluster/graph_hash_to_graph_cluster.txt"
+        # ),  # noqa: E501
+        "A3MDB_PATH": os.path.join(base, "a3m.lmdb"), 
         "MSADB_PATH": os.path.join(base, "MSA.lmdb"),
         "CIFDB_PATH": os.path.join(base, "cif_protein_only.lmdb"),
         "IDEAL_LIGAND_PATH": os.path.join(base, "metadata/ideal_ligand_list.pkl"),
