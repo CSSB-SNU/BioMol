@@ -4,19 +4,22 @@ from BioMol.utils.parser import parse_cif
 
 if __name__ == "__main__":
     # BioMol automatically generate all biological assemblies.
-    # biomol = BioMol(
-    #     # pdb_ID="6nu2", # lower case
-    #     cif=f"{DB_PATH}/cif/vy/2vy1.cif.gz",
-    #     remove_signal_peptide=True,
-    #     # mol_types=["protein"], # only protein
-    #     use_lmdb=False,
-    # )
+    biomol = BioMol(
+        # pdb_ID="6nu2", # lower case
+        cif=f"{DB_PATH}/cif/an/1an2.cif.gz",
+        remove_signal_peptide=True,
+        mol_types=["protein","nucleic_acid", "ligand"], # only protein
+        use_lmdb=False,
+    )
     # biomol = BioMol(
     #     cif="5hlt.cif", # This file should be from the PDB database.
     #     mol_types=["protein","nucleic_acid", "ligand"],
     #     remove_signal_peptide=True,
     #     use_lmdb=False, # If you want to load NA or ligand you must set use_lmdb=False,
     # )
+    biomol.choose("1", "1", ".")
+
+    breakpoint()
 
     bioassembly = parse_cif(
         cif_path=f"{DB_PATH}/cif/vy/2vy1.cif.gz",

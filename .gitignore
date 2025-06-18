@@ -16,3 +16,4 @@ pixi.lock
 *.a3m
 *.a3m.gz
 github_token
+test.py

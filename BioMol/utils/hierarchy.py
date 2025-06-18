@@ -1034,7 +1034,6 @@ class AsymmetricChain:
         scheme_type = self.scheme.scheme_type
         cif_idx_list = self.scheme.cif_idx_list
         auth_idx_list = self.scheme.auth_idx_list
-        # hetero_list = self.scheme.hetero_list
         hetero_list = None
 
         for model_id in self.structure.keys():
