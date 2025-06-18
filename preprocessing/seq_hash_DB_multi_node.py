@@ -1,12 +1,10 @@
 import torch
-import torch.nn.functional as F
 import pickle
 from BioMol import SEQ_TO_HASH_PATH, DB_PATH
 from BioMol.BioMol import BioMol
 from joblib import Parallel, delayed
 import os
 import lmdb
-import gzip
 import math
 
 merged_fasta_path = f"{DB_PATH}/entity/merged_protein.fasta"
@@ -165,15 +163,13 @@ def save_structures(
                 # remove bioassembly_id from chain ids
                 chains_wo_oper_id = [chain.split("_")[0] for chain in chains]
                 chains_wo_oper_id = sorted(list(set(chains_wo_oper_id)))
-                if level == 'residue':
+                if level == "residue":
                     residue_chain_break = biomol.structure.residue_chain_break
                 elif level == "atom":
                     atom_chain_break = biomol.structure.atom_chain_break
                 already_done = []
 
                 for chain_id, seq_hash in biomol.structure.sequence_hash.items():
-                    if 'OB' in chain_id :
-                        breakpoint()
                     if chain_id.split("_")[0] not in chains_wo_oper_id:
                         continue
                     seq_hash = str(seq_hash).zfill(6)
@@ -194,7 +190,7 @@ def save_structures(
                         ]
                     already_done.append(str_id)
                     save_path = f"{inner_dir}/{str_id}.pt"
-                    # torch.save(to_save_tensor, save_path)
+                    torch.save(to_save_tensor, save_path)
                     print(f"Saved {save_path}")
 
 
@@ -229,27 +225,71 @@ def make_seq_hash_to_structure_db(
     )
 
 
-
 def load_hash_to_seq():
     return pickle.load(open(SEQ_TO_HASH_PATH, "rb"))
+
+
+def estimate_tensor_size(tensors: list[torch.Tensor]) -> int:
+    """
+    Estimate the size of a list of tensors in bytes.
+    """
+    total_size = 0
+    for tensor in tensors:
+        total_size += tensor.element_size() * tensor.nelement()
+    return total_size / 1024**2  # Convert to MB
+
 
 def process_file(_hash: str, level: str = "residue"):
     save_dir = f"{DB_PATH}/seq_to_str/{level}/{_hash[0:3]}/{_hash[3:6]}"
     IDs = os.listdir(save_dir)
-    # for test 
-    tensors = [torch.load(os.path.join(save_dir, ID)) for ID in IDs]
-    tensors = torch.stack(tensors, dim=0)
 
-    print(f"Loaded {len(tensors)} shape : {tensors[0].shape} tensors from {save_dir}")
+    outputs = {
+        "idx_related": [],
+        "mask": [],
+        "xyz": [],
+        "occupancy": [],
+    }
 
-    shapes = [t.shape for t in tensors]
+    print(f"len(IDs): {len(IDs)}", end=" ")
+
+    for ID in IDs:
+        tensor = torch.load(os.path.join(save_dir, ID))
+        idx_related = tensor[:, 0:3]  # (L, 3)
+        mask = tensor[:, 4:5]  # (L, 1)
+        xyz = tensor[:, 5:8]  # (L, 3)
+        xyz_mean = torch.mean(xyz, dim=0, keepdim=True)  # (1, 3)
+        xyz = xyz - xyz_mean  # (L, 3)
+        occupancy = tensor[:, 8:9]  # (L, 1)
+        idx_related = idx_related.long()
+        mask = mask.bool()
+        xyz = xyz.half()
+        occupancy = occupancy.half()
+        outputs["idx_related"].append(idx_related)
+        outputs["mask"].append(mask)
+        outputs["xyz"].append(xyz)
+        outputs["occupancy"].append(occupancy)
+
+    shapes = [t.shape for t in outputs["xyz"]]
+    print(f"shapes: {shapes[0]}")
     if len(set(shapes)) > 1:
         max_len = max(s[0] for s in shapes)
-        tensors = [
-            F.pad(t, (0, 0, 0, max_len - t.shape[0]), "constant", float("nan"))
-            for t in tensors
-        ]
-    return IDs, torch.stack(tensors, dim=0)
+        for key in outputs:
+            tensors = outputs[key]
+            for i, tensor in enumerate(tensors):
+                pad_len = max_len - tensor.shape[0]
+                if pad_len > 0:
+                    pad_tensor = torch.zeros(
+                        pad_len, *tensor.shape[1:], dtype=tensor.dtype
+                    )
+                    tensors[i] = torch.cat([tensor, pad_tensor], dim=0)
+            outputs[key] = torch.stack(tensors, dim=0)
+        print(f"Warning: Tensors have different lengths. Padded to {max_len}.")
+    else:
+        for key in outputs:
+            outputs[key] = torch.stack(outputs[key], dim=0)
+
+    return IDs, outputs
+
 
 def lmdb_seq_to_str_multi(env_path: str, level: str = "residue", n_jobs: int = 1):
     # 1) 해시 리스트 로드 및 zero-pad
@@ -266,7 +306,7 @@ def lmdb_seq_to_str_multi(env_path: str, level: str = "residue", n_jobs: int = 1
     start = task_id * chunk_size
     end = min(start + chunk_size, total)
     subset = hash_list[start:end]
-    print(f"[Task {task_id}/{num_tasks}] Processing hashes {start}–{end-1}")
+    print(f"[Task {task_id}/{num_tasks}] Processing hashes {start}–{end - 1}")
 
     # 3) 노드별 LMDB 환경 생성 (shard suffix)
     shard_env_path = f"{env_path}.shard_{task_id}"
@@ -274,18 +314,28 @@ def lmdb_seq_to_str_multi(env_path: str, level: str = "residue", n_jobs: int = 1
     env = lmdb.open(shard_env_path, map_size=2 * 1024**4)
 
     # 4) 병렬 처리
-    results = Parallel(n_jobs=n_jobs, verbose=10)(
-        delayed(process_file)(_hash, level) for _hash in subset
-    )
-
-    # 5) 쓰기 트랜잭션
+    iteration = 5
+    chunk = math.ceil(len(subset) / iteration)
     hash_to_full = {}
-    with env.begin(write=True) as txn:
-        for _hash, (cif_IDs, tensors) in zip(subset, results):
-            to_save = pickle.dumps({"cif_IDs": cif_IDs, "tensors": tensors},
-                                   protocol=pickle.HIGHEST_PROTOCOL)
-            txn.put(_hash.encode(), to_save)
-            hash_to_full[_hash] = cif_IDs
+
+    for _ in range(0, iteration):
+        start = _ * chunk
+        end = min(start + chunk, len(subset))
+        _subset = subset[start:end]
+        print(f"[Task {task_id}] Processing hashes {start}–{end - 1}")
+        results = Parallel(n_jobs=n_jobs, verbose=10)(
+            delayed(process_file)(_hash, level) for _hash in _subset
+        )
+
+        # 5) 쓰기 트랜잭션
+        with env.begin(write=True) as txn:
+            for _hash, (cif_IDs, tensors) in zip(_subset, results):
+                to_save = pickle.dumps(
+                    {"cif_IDs": cif_IDs, "tensors": tensors},
+                    protocol=pickle.HIGHEST_PROTOCOL,
+                )
+                txn.put(_hash.encode(), to_save)
+                hash_to_full[_hash] = cif_IDs
     env.close()
 
     # 6) 노드별 해시 → PDBID 매핑 저장 (나중에 병합)
@@ -293,7 +343,9 @@ def lmdb_seq_to_str_multi(env_path: str, level: str = "residue", n_jobs: int = 1
     with open(out_map, "wb") as f:
         pickle.dump(hash_to_full, f)
 
-    print(f"[Task {task_id}] shard done: wrote {len(subset)} entries to {shard_env_path}")
+    print(
+        f"[Task {task_id}] shard done: wrote {len(subset)} entries to {shard_env_path}"
+    )
     return
 
 
@@ -325,17 +377,16 @@ def read_seq_lmdb(key: str):
 
 #     chunk_size = math.ceil(len(pdb_IDs) / num_chunks)
 #     start = chunk_idx * chunk_size
-#     end   = start + chunk_size
+#     end = start + chunk_size
 #     subset = pdb_IDs[start:end]
-#     make_seq_hash_to_structure_db(thread_num=-1,
-#                                   inner_dir_already=False,
-#                                   level="atom",
-#                                   pdb_IDs_subset=subset)
+#     make_seq_hash_to_structure_db(
+#         thread_num=-1, inner_dir_already=False, level="atom", pdb_IDs_subset=subset
+#     )
 
 
 if __name__ == "__main__":
-    import sys 
-    # 명령행 인자로 level, n_jobs 등을 넘겨받도록 해도 좋습니다.
-    # lmdb_seq_to_str_multi(env_path=db_env, level="atom", n_jobs=40)
-    # lmdb_seq_to_str_multi(env_path=db_env, level="atom", n_jobs=int(os.getenv("SLURM_CPUS_ON_NODE", "1")))
-    save_structures("6nu2", save_dir="./test", level="atom")
+    lmdb_seq_to_str_multi(env_path=db_env, level="atom", n_jobs=40)
+    # lmdb_seq_to_str_multi(
+    #     env_path=db_env, level="atom", n_jobs=int(os.getenv("SLURM_CPUS_ON_NODE", "1"))
+    # )
+    # save_structures("6nu2", save_dir="./", level="atom")

@@ -2672,8 +2672,8 @@ class BioMolStructure:
                 f"Empty structure for {ID} {bioassembly_id} {model_id} {alt_id}"
             )
         self._load_sequence_hash()  # WARNING!!! This function only works for protein
-        self._load_contact_graph()
-        self._load_graph_cluster()
+        # self._load_contact_graph()
+        # self._load_graph_cluster()
         if remove_signal_peptide:
             # it requires signalp which is precomputed. (SIGNALP_PATH)
             self.remove_signal_peptide()

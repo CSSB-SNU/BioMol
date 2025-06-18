@@ -10,7 +10,7 @@ chainID_to_cluster_path = "/public_data/BioMolDB_2024Oct21/protein_seq_clust/mms
 with open(chainID_to_cluster_path, "rb") as f:
     chainID_to_cluster = pickle.load(f)
 
-seq_to_hash_path = "/public_data/BioMolDB_2024Oct21/entity/sequence_hashes.pkl"
+seq_to_hash_path = "/public_data/BioMolDB_2024Oct21/entity/sequence_hashes_all_molecules.pkl"
 with open(seq_to_hash_path, "rb") as f:
     seq_to_hash = pickle.load(f)
 
@@ -59,7 +59,7 @@ def save_deposition_resolution(cif_dir, save_path="passed_cif.csv"):
     )
 
 
-def make_metadata(merged_fasta_path, chainID_to_deposition_csv, save_path):
+def make_metadata(merged_fasta_path, chainID_to_deposition_csv, save_path, protein_only=True):
     header = "CHAINID,DEPOSITION,RESOLUTION,HASH,CLUSTER,SEQUENCE\n"
     lines = [header]
 
@@ -73,13 +73,28 @@ def make_metadata(merged_fasta_path, chainID_to_deposition_csv, save_path):
             ID, deposition_date, resolution = line.split(",")
             ID_to_deposition[ID] = (deposition_date, resolution)
 
+    molecule_type_map = {
+        'PolymerType.PROTEIN': '[PROTEIN]:',
+        'PolymerType.DNA': '[DNA]:',
+        'PolymerType.RNA': '[RNA]:',
+        'PolymerType.NA_HYBRID': '[NA_HYBRID]:',
+        'NONPOLYMER': '[NONPOLYMER]:',
+        'BRANCHED': '[BRANCHED]:',
+    }
+    molecule_type_tag = ''
+
     with open(merged_fasta_path, "r") as f:
         for line in f:
             line = line.strip()
             if line.startswith(">"):
                 ID = line.split("|")[0][1:].strip()
+                molecule_type_tag = molecule_type_map[line.split("| ")[-1]]
             else:
                 seq = line
+                if '  | ' in seq:
+                    seq.replace('  | ', '|')
+                if not protein_only : # TODO
+                    seq = f"{molecule_type_tag}{seq}"
                 hash = seq_to_hash[seq]
                 cluster = chainID_to_cluster[ID]
                 deposition_date, resolution = ID_to_deposition[ID.split("_")[0]]

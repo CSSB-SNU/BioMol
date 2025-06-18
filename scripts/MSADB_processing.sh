@@ -1,9 +1,9 @@
-#!/bin/sh 
-#SBATCH -J MSA_lmdb
-#SBATCH --mem=500g
-#SBATCH -p gpu
-#SBATCH -w gpu04
-#SBATCH -c 80
+#!/bin/sh
+#SBATCH -J MSADB
+#SBATCH --ntasks-per-node=1         
+#SBATCH -c 100                   
+#SBATCH --mem=480g
+#SBATCH -p cpu-farm
 #SBATCH -o ./log/MSA_lmdb.out
 #SBATCH -e ./log/MSA_lmdb.err
 

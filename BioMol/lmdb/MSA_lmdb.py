@@ -51,7 +51,7 @@ def lmdb_MSA(env_path=db_env, n_jobs=-1, batch_size=1000):
         print(f"Processing batch {start}–{end - 1}...")
 
         # parallel map over this batch only
-        results = Parallel(n_jobs=n_jobs)(
+        results = Parallel(n_jobs=n_jobs, verbose=10)(
             delayed(process_file)(seq_hash) for seq_hash in batch
         )
 

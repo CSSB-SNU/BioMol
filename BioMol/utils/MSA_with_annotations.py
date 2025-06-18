@@ -323,6 +323,7 @@ class MSA:
         species_to_idx = {}
         profile_list = []
         deletion_list = []
+        annotations = []
         for idx, msaseq in enumerate(seqs):
             species = msaseq.get_species()
             if species not in species_to_idx:
@@ -330,6 +331,7 @@ class MSA:
             species_to_idx[species].append(idx)
             profile_list.append(msaseq.get_sequence())
             deletion_list.append(msaseq.get_deletion())
+            annotations.append(msaseq.get_annotation())
 
         # Precompute profile and deletion_mean
         profile = np.array(profile_list).astype(np.int32)
@@ -354,6 +356,7 @@ class MSA:
         self.deletion_mean = deletion_mean
         self.sequences = sequences
         self.deletion = deletion
+        self.annotations = np.array(annotations)
         self.species_to_idx = species_to_idx
         self.length = length
         self.shape = (self.num_seqs, self.length)
@@ -591,24 +594,30 @@ class ComplexMSA:  # TODO
             ).astype(np.int32)
         self._test_uniqueness(final_msa_indices)
 
+        final_annotation = []
         final_sequence = []
         final_deletion = []
         final_has_deletion = []
 
         for ii in range(max_msa_depth):
+            annotations = []
             seqs = []
             deletion = []
             for key in MSAs.keys():
                 idx = final_msa_indices[key][ii]  # TODO
                 msa = MSAs[key]
                 if idx == -1:
+                    annotations.append("N/A")
                     seqs.append(np.full((msa.length), AA2num["-"]))
                     deletion.append(np.zeros(msa.length))
                 else:
+                    annotations.append(msa.annotations[idx].item())
                     seqs.append(msa.sequences[idx])
                     deletion.append(msa.deletion[idx])
+            annotations = " | ".join(annotations)
             seqs = np.concatenate(seqs)
             deletion = np.concatenate(deletion)
+            final_annotation.append(annotations)
             final_sequence.append(seqs)
             has_deletion = np.array(deletion > 0, dtype=np.uint8)
             final_deletion.append(deletion)
@@ -618,11 +627,13 @@ class ComplexMSA:  # TODO
         final_sequence = np.array(final_sequence)
         final_has_deletion = np.array(final_has_deletion)
         final_deletion = np.array(final_deletion)
+        final_annotation = np.array(final_annotation)
 
         gap_idx = np.where((final_sequence == AA2num["-"]).all(axis=1))[0]
         final_sequence = np.delete(final_sequence, gap_idx, axis=0)
         final_deletion = np.delete(final_deletion, gap_idx, axis=0)
         final_has_deletion = np.delete(final_has_deletion, gap_idx, axis=0)
+        final_annotation = np.delete(final_annotation, gap_idx, axis=0)
         final_msa_indices = {
             key: np.delete(indices, gap_idx, axis=0)
             for key, indices in final_msa_indices.items()
@@ -635,6 +646,7 @@ class ComplexMSA:  # TODO
         )
 
         self.msa_indices = final_msa_indices
+        self.annotation = np.array(final_annotation)
 
         self.msa = final_sequence
         self.has_deletion = final_has_deletion
@@ -646,12 +658,14 @@ class ComplexMSA:  # TODO
         self.num_of_unpaired = self.msa.shape[0] - paired_num_of_seqs - len(gap_idx)
         self.total_depth = self.num_of_paired + self.num_of_unpaired
 
-    def to_a3m(self, msa: np.ndarray, save_path: str):
+    def to_a3m(self, annotations: list[str], msa: np.ndarray, save_path: str):
+        if annotations is None:
+            annotations = self.annotation
         if msa is None:
             msa = self.msa
         out = ""
-        for ii in range(msa.shape[0]):
-            out += ">\n"  # I removed annotation due to the large size of the file
+        for ii in range(len(annotations)):
+            out += f">{annotations[ii]}\n"
             seq = msa[ii].tolist()
             seq = [num2AA[aa] for aa in seq]
             seq = "".join(seq)
@@ -688,12 +702,14 @@ class ComplexMSA:  # TODO
         sampled_indices = np.concatenate([query, paired_sampled, unpaired_sampled])
         sampled_indices = np.sort(sampled_indices)
 
+        sampled_annotation = self.annotation[sampled_indices]
         sampled_sequence = self.msa[sampled_indices]
         sampled_has_deletion = self.has_deletion[sampled_indices]
         sampled_deletion_value = self.deletion_value[sampled_indices]
 
         return (
             sampled_indices,
+            sampled_annotation,
             sampled_sequence,
             sampled_has_deletion,
             sampled_deletion_value,
