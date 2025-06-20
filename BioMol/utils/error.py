@@ -32,3 +32,9 @@ class NoInterfaceError(Exception):
     def __init__(self, message):
         self.message = message
         super().__init__(self.message)
+
+
+class NoValidChainsError(Exception):
+    def __init__(self, message):
+        self.message = message
+        super().__init__(self.message)

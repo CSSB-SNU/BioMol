@@ -1,7 +1,7 @@
 import random
 import torch
 from BioMol.utils.hierarchy import BioMolStructure
-from BioMol.utils.error import NoInterfaceError
+from BioMol.utils.error import NoInterfaceError, NoValidChainsError
 
 
 def get_chain_crop_indices(
@@ -49,6 +49,68 @@ def crop_contiguous(
 
     chain_crop = get_chain_crop_indices(residue_chain_break, crop_indices)
 
+    return crop_indices, chain_crop
+
+
+def crop_contiguous_monomer(
+    chain_bias: str | None, biomolstructure: BioMolStructure, crop_length: int
+) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
+    """
+    Crop the structure and sequence into a contiguous region
+    """
+    residue_chain_break = biomolstructure.residue_chain_break
+    residue_tensor = biomolstructure.residue_tensor
+    n_added = 0
+
+    chain_id = None
+    if chain_bias is not None:
+        chain_id = chain_bias
+        chain_start, chain_end = residue_chain_break[chain_id]
+        valid_residue_indices = torch.where(
+            residue_tensor[chain_start : chain_end + 1, 4] == 1
+        )[0]
+        valid_num = valid_residue_indices.size(0)
+        if valid_num == 0:
+            chain_id = None
+
+    if chain_id is None:
+        chain_id_list = list(residue_chain_break.keys())
+        find_valid_chain = False
+        while not find_valid_chain:
+            chain_id = random.sample(chain_id_list, 1)[0]
+            chain_id_list.remove(chain_id)
+            chain_start, chain_end = residue_chain_break[chain_id]
+            valid_residue_indices = torch.where(
+                residue_tensor[chain_start : chain_end + 1, 4] == 1
+            )[0]
+            valid_num = valid_residue_indices.size(0)
+            if valid_num == 0:
+                continue
+            find_valid_chain = True
+        if not find_valid_chain:
+            print(
+                f"Warning: No valid chain found in the {biomolstructure.ID}. "
+                "Using a random chain."
+            )
+            raise NoValidChainsError(
+                f"No valid chains found in the {biomolstructure.ID}"
+            )
+
+    chain_start, chain_end = residue_chain_break[chain_id]
+    valid_residue_indices = torch.where(
+        residue_tensor[chain_start : chain_end + 1, 4] == 1
+    )[0]
+
+    if valid_residue_indices.size(0) < crop_length:
+        crop_indices = chain_start + valid_residue_indices
+    else:
+        # uniformly sample a contiguous region
+        n_k = valid_residue_indices.size(0)
+        n_start = random.randint(0, n_k - crop_length)
+        crop_indices = (
+            chain_start + valid_residue_indices[n_start : n_start + crop_length]
+        )
+    chain_crop = get_chain_crop_indices(residue_chain_break, crop_indices)
     return crop_indices, chain_crop
 
 

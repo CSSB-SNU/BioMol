@@ -7,14 +7,15 @@ import copy
 from BioMol.utils.parser import parse_cif, parse_simple_pdb
 from BioMol.utils.MSA import MSA, ComplexMSA
 from BioMol.utils.crop import (
-    crop_contiguous,
+    # crop_contiguous,
+    crop_contiguous_monomer,
     crop_spatial,
     crop_spatial_interface,
     get_chain_crop_indices,
 )
 from BioMol.utils.read_lmdb import read_cif_lmdb, read_MSA_lmdb
 from BioMol import ALL_TYPE_CONFIG_PATH, PROTEIN_ONLY_CONFIG_PATH
-from BioMol.utils.error import NoInterfaceError
+from BioMol.utils.error import NoValidChainsError, NoInterfaceError
 
 """
 BioMol class
@@ -276,7 +277,16 @@ class BioMol:
             method = "spatial"
 
         if method == "contiguous":
-            crop_indices, crop_chain = crop_contiguous(self.structure, crop_length)
+            # 20250620, Change contiguous crop to monomer version
+            try:
+                crop_indices, crop_chain = crop_contiguous_monomer(
+                    chain_bias, self.structure, crop_length
+                )
+            except NoValidChainsError:
+                # print("No valid chains found. Using spatial crop instead of contiguous crop.")
+                crop_indices, crop_chain = crop_spatial(
+                    chain_bias, self.structure, crop_length
+                )
         elif method == "spatial":
             crop_indices, crop_chain = crop_spatial(
                 chain_bias, self.structure, crop_length
@@ -340,5 +350,5 @@ class BioMol:
                 msa.crop(chain_crop_indices.numpy())
                 msa_list.append(msa)
             complex_msa = ComplexMSA(msa_list)
+            self.MSA = complex_msa
         self.structure.crop(crop_indices)
-        self.MSA = complex_msa
