@@ -15,11 +15,11 @@ from BioMol.utils.parser import parse_cif
 from BioMol import DB_PATH
 
 # Base LMDB environment path for storing parsed CIF assemblies
-DB_ENV = f"{DB_PATH}/cif_protein_only.lmdb"
+DB_ENV = f"{DB_PATH}/cif_all_molecules.lmdb"
 # Directory containing .cif.gz files
 CIF_DIR = f"{DB_PATH}/cif/"
 # Path to CIF parsing configuration
-CIF_CONFIG_PATH = "./BioMol/configs/types/protein_only.json"
+CIF_CONFIG_PATH = "./BioMol/configs/types/base.json"
 # Whether to remove signal peptide during parsing
 REMOVE_SIGNAL_PEPTIDE = True
 

@@ -3,6 +3,7 @@
 Merge multiple LMDB shard environments into a single consolidated LMDB.
 Each shard directory should have keys unique across shards.
 """
+
 import os
 import lmdb
 import argparse
@@ -22,12 +23,12 @@ def merge_shards(shard_dirs, output_env, map_size=None):
     if map_size is None:
         total_bytes = 0
         for shard in shard_dirs:
-            data_file = os.path.join(shard, 'data.mdb')
+            data_file = os.path.join(shard, "data.mdb")
             if os.path.exists(data_file):
                 total_bytes += os.path.getsize(data_file)
         # provide headroom
         map_size = total_bytes * 2 if total_bytes > 0 else 1 * 1024**4
-    
+
     os.makedirs(output_env, exist_ok=True)
     env_out = lmdb.open(output_env, map_size=map_size)
 
@@ -53,35 +54,35 @@ def find_shards(base_path):
     return sorted(
         os.path.join(base_path, d)
         for d in os.listdir(base_path)
-        if os.path.isdir(os.path.join(base_path, d)) and 'shard_' in d
+        if os.path.isdir(os.path.join(base_path, d)) and "shard_" in d
     )
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     parser = argparse.ArgumentParser(
-        description='Merge LMDB shard directories into one LMDB environment'
+        description="Merge LMDB shard directories into one LMDB environment"
     )
     parser.add_argument(
-        'base_env',
-        help='Base LMDB path (e.g., cif_protein_only.lmdb) that contains shard subdirectories'
+        "base_env",
+        help="Base LMDB path (e.g., cif_protein_only.lmdb) that contains shard subdirectories",
     )
     parser.add_argument(
-        'output_env',
-        help='Target LMDB directory for the merged database'
+        "output_env", help="Target LMDB directory for the merged database"
     )
     parser.add_argument(
-        '--map-size', type=int, default=None,
-        help='Optional map size in bytes for the merged LMDB'
+        "--map-size",
+        type=int,
+        default=None,
+        help="Optional map size in bytes for the merged LMDB",
     )
     args = parser.parse_args()
 
     shards = find_shards(args.base_env)
     if not shards:
-        print(f'No shard directories found. Exiting. {args.base_env}')
+        print(f"No shard directories found. Exiting. {args.base_env}")
         exit(1)
 
     merge_shards(shards, args.output_env, map_size=args.map_size)
 
     # map_size : 2
     # python cif_lmdb_merge.py /path/to/cif_protein_only.lmdb /path/to/merged.lmdb --map-size 2000000000000
-

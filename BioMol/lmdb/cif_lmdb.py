@@ -10,11 +10,11 @@ from BioMol.utils.parser import parse_cif
 from BioMol import DB_PATH
 
 
-db_env = f"{DB_PATH}/cif_protein_only2.lmdb"
-protein_graph_dir = f"{DB_PATH}/protein_graph/"
+db_env = f"{DB_PATH}/cif_all_molecules.lmdb"
+protein_graph_dir = f"{DB_PATH}/contact_graphs/"
 cif_dir = f"{DB_PATH}/cif/"
-cif_config_path = "./BioMol/configs/types/protein_only.json"
-CIFDB_PATH = f"{DB_PATH}/cif_protein_only2.lmdb"
+cif_config_path = "./BioMol/configs/types/base.json"
+CIFDB_PATH = f"{DB_PATH}/cif_all_molecules.lmdb"
 remove_signal_peptide = True
 
 

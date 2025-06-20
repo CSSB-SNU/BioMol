@@ -6,5 +6,4 @@
 #SBATCH -o ./log/graph_hash.out
 #SBATCH -e ./log/graph_hash.err
 
-# python -u ./preprocessing/graph_cluster.py
-python -u ./preprocessing/graph_hash_v3.py
+python -u ./preprocessing/graph_cluster.py
