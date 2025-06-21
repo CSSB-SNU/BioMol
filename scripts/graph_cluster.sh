@@ -3,7 +3,8 @@
 #SBATCH -p cpu-farm
 #SBATCH --nodes=1
 #SBATCH --cpus-per-task=104
-#SBATCH -o ./log/graph_hash.out
-#SBATCH -e ./log/graph_hash.err
+#SBATCH --mem=480g
+#SBATCH -o ./log/level0_graph_cluster.out
+#SBATCH -e ./log/level0_graph_cluster.err
 
 python -u ./preprocessing/graph_cluster.py

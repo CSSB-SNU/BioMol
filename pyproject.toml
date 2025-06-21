@@ -48,5 +48,8 @@ python = "~=3.10.16"
 black = ">=25.1.0,<26"
 ruff = ">=0.11.6,<0.12"
 
+[tool.pixi.dependencies]
+scipy = ">=1.15.2,<2"
+
 [project.scripts]
 biomol = "BioMol.cli:cli"
