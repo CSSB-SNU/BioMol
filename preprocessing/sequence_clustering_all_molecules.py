@@ -69,18 +69,21 @@ def seq_cluster(
     for chain_ID in all_mol_chain_ID_list:
         seq = chain_ID_to_seq[chain_ID]
         seq_hash = seq_to_hash[seq]
-        if seq_hash not in hash_to_cluster:
-            max_cluster += 1
-            cluster_id = max_cluster
-        else:
-            cluster_id = hash_to_cluster[seq_hash]
 
         if chain_ID in protein_cluster:
             # If the chain_ID is already in the protein cluster, use its cluster ID
             cluster_id = protein_cluster[chain_ID]
+        else:
+            if seq_hash not in hash_to_cluster:
+                max_cluster += 1
+                cluster_id = max_cluster
+            else:
+                cluster_id = hash_to_cluster[seq_hash]
 
+        # print(f"cluster_id: {cluster_id}")
         all_mol_chain_ID_to_cluster[chain_ID] = cluster_id
         all_mol_seq_to_cluster[seq] = cluster_id
+        hash_to_cluster[seq_hash] = cluster_id
 
     with open(all_mol_chain_ID_to_cluster_path, "wb") as f:
         pickle.dump(all_mol_chain_ID_to_cluster, f, protocol=pickle.HIGHEST_PROTOCOL)

@@ -48,7 +48,8 @@ def get_paths():
         # ),  # noqa: E501
         "A3MDB_PATH": os.path.join(base, "a3m.lmdb"),
         "MSADB_PATH": os.path.join(base, "MSA.lmdb"),
-        "CIFDB_PATH": os.path.join(base, "cif_protein_only.lmdb"),
+        # "CIFDB_PATH": os.path.join(base, "cif_protein_only.lmdb"),
+        "CIFDB_PATH": os.path.join(base, "cif_all_molecules.lmdb"),
         "IDEAL_LIGAND_PATH": os.path.join(base, "metadata/ideal_ligand_list.pkl"),
         "SIGNALP_PATH": os.path.join(base, "signalp"),
         "CCD_DB_PATH": os.path.join(ccd, "ligand_info.lmdb"),

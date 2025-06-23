@@ -2,9 +2,11 @@ import pickle
 import re
 from joblib import Parallel, delayed
 import matplotlib.pyplot as plt
+from BioMol import DB_PATH
 
 # Regex pattern to capture the three groups inside the tuple
 pattern = re.compile(r"\('([^']+)', '([^']+)', '([^']+)'\)")
+
 
 def get_unique_graphs(unique_graph_path):
     with open(unique_graph_path, "rb") as f:
@@ -30,9 +32,8 @@ def get_frequency(unique_graph_path, node_save_path, edge_save_path):
             src_label = graph.nodes[edge[0]]["label"]
             tgt_label = graph.nodes[edge[1]]["label"]
             edge_label = tuple(sorted((src_label, tgt_label)))
-            if edge_label in temp_edge_label_data:
-                continue
-            edge_score = 1/ (edge_num)
+            edge_score = 1 / (edge_num)
+            edge_label = str(edge_label)
             if edge_label not in edge_score_dict:
                 edge_score_dict[edge_label] = edge_score
             else:
@@ -41,15 +42,13 @@ def get_frequency(unique_graph_path, node_save_path, edge_save_path):
 
         for node in graph.nodes():
             node_label = graph.nodes[node]["label"]
-            if node_label in temp_node_label_data:
-                continue
             node_score = 1 / (node_num)
+            node_label = str(node_label)
             if node_label not in node_score_dict:
                 node_score_dict[node_label] = node_score
             else:
                 node_score_dict[node_label] += node_score
             temp_node_label_data.append(node_label)
-        breakpoint()
 
     # print max and min edge score and its ID
     max_node, max_node_score = max(node_score_dict.items(), key=lambda kv: kv[1])
@@ -68,6 +67,7 @@ def get_frequency(unique_graph_path, node_save_path, edge_save_path):
 
     with open(edge_save_path, "wb") as f:
         pickle.dump(edge_score_dict, f)
+
 
 # def plot_histogram(node_pickle_path, edge_pickle_path, node_path, edge_path):
 #     with open(edge_pickle_path, "rb") as f:
@@ -120,9 +120,11 @@ def get_frequency(unique_graph_path, node_save_path, edge_save_path):
 
 
 if __name__ == "__main__":
-    unique_graphs_path = "/public_data/BioMolDB_2024Oct21/protein_graph/unique_graphs.pkl"
-    node_save_path = "/public_data/BioMolDB_2024Oct21/protein_graph/node_score.pkl"
-    edge_save_path = "/public_data/BioMolDB_2024Oct21/protein_graph/edge_score.pkl"
+    unique_graphs_path = (
+        f"{DB_PATH}/cluster/graph_cluster/cluster_level_unique_graphs.pkl"
+    )
+    node_save_path = f"{DB_PATH}/statistics/node_score.pkl"
+    edge_save_path = f"{DB_PATH}/statistics/edge_score.pkl"
     get_frequency(unique_graphs_path, node_save_path, edge_save_path)
     # node_path = "./node_freq.png"
     # edge_path = "./edge_score_dict.png"

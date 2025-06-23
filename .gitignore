@@ -18,3 +18,4 @@ pixi.lock
 github_token
 test.py
 *.pt
+*.pkl
