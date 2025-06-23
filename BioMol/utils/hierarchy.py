@@ -2684,9 +2684,23 @@ class BioMolStructure:
                     sequence_hash[chain] = str(seq_to_hash[sequence])
                 case MoleculeType.NONPOLYMER:
                     tag = molecule_type_map[MoleculeType.NONPOLYMER]
+                    chem_comp = entity.get_chem_comp()
+                    sequence = f"({chem_comp})"
+                    sequence = tag + sequence
+                    sequence_hash[chain] = str(seq_to_hash[sequence])
                     pass
                 case MoleculeType.BRANCHED:
                     tag = molecule_type_map[MoleculeType.BRANCHED]
+                    chem_comp_list = entity.get_chem_comp_list()
+                    chem_comp_list = [str(chem_comp) for chem_comp in chem_comp_list]
+                    bond_list = entity.get_bonds(level="residue")
+                    bond_list = [
+                        f"({idx1}, {idx2}, {conn_type})"
+                        for idx1, idx2, conn_type in bond_list
+                    ]
+                    sequence = f"({')('.join(chem_comp_list)})|{','.join(bond_list)}"
+                    sequence = tag + sequence
+                    sequence_hash[chain] = str(seq_to_hash[sequence])
                     pass
                 case MoleculeType.WATER:
                     pass

@@ -60,7 +60,6 @@ def crop_contiguous_monomer(
     """
     residue_chain_break = biomolstructure.residue_chain_break
     residue_tensor = biomolstructure.residue_tensor
-    n_added = 0
 
     chain_id = None
     if chain_bias is not None:
