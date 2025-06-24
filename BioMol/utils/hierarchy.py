@@ -45,6 +45,7 @@ from BioMol.constant.chemical import (
     num_to_atom,
 )
 
+
 @enum.unique
 class MoleculeType(enum.Enum):
     POLYMER = "polymer"
@@ -66,17 +67,16 @@ class PolymerType(enum.Enum):
 
 
 molecule_type_map = {
-    PolymerType.PROTEIN: '[PROTEIN]:',
-    PolymerType.DNA: '[DNA]:',
-    PolymerType.RNA: '[RNA]:',
-    PolymerType.NA_HYBRID: '[NA_HYBRID]:',
-    MoleculeType.NONPOLYMER: '[NONPOLYMER]:',
-    MoleculeType.BRANCHED: '[BRANCHED]:',
+    PolymerType.PROTEIN: "[PROTEIN]:",
+    PolymerType.DNA: "[DNA]:",
+    PolymerType.RNA: "[RNA]:",
+    PolymerType.NA_HYBRID: "[NA_HYBRID]:",
+    MoleculeType.NONPOLYMER: "[NONPOLYMER]:",
+    MoleculeType.BRANCHED: "[BRANCHED]:",
 }
 
 with open(SEQ_TO_HASH_PATH, "rb") as f:
     seq_to_hash = pickle.load(f)
-
 
 
 @dataclasses.dataclass(frozen=True)
@@ -2710,7 +2710,7 @@ class BioMolStructure:
         graph_path = f"{CONTACT_GRAPH_PATH}/{self.ID[1:3]}/{self.ID}.graph"
         contact_graph = ContactGraph(graph_path)
         contact_graph.choose((self.bioassembly_id, self.model_id, self.alt_id))
-        self.contact_graph = contact_graph 
+        self.contact_graph = contact_graph
 
     def __len__(self, level: str = "residue") -> int:
         if level is None:
@@ -2868,6 +2868,8 @@ class BioMolStructure:
         )
 
     def _filter_entity(self, residue_mask, entity_mask):
+        # only for removing signal peptide
+        # so entity should be protein
         new_entity_list = []
         for chain, entity, _entity_mask in zip(
             self.residue_chain_break.keys(), self.entity_list, entity_mask
@@ -2876,9 +2878,13 @@ class BioMolStructure:
                 continue
             chain_start, chain_end = self.residue_chain_break[chain]
             mask = residue_mask[chain_start : chain_end + 1]
-            new_entity = copy.deepcopy(entity)
-            new_entity.crop(mask)
-            new_entity_list.append(new_entity)
+            if not mask.any():
+                assert isinstance(entity, Polymer)
+                new_entity = copy.deepcopy(entity)
+                new_entity.crop(mask)
+                new_entity_list.append(new_entity)
+            else:
+                new_entity_list.append(entity)
         self.entity_list = new_entity_list
 
     def filter_by_type(self, types: list[str]):  # type to be remained

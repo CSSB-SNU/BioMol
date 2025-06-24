@@ -8,8 +8,9 @@ import lmdb
 import io
 import pickle
 from collections import Counter
-
-from BioMol.constant.chemical import AA2num, num2AA
+from BioMol.constant.chemical import num2res
+from BioMol.constant.table import ResidueTable
+from BioMol.utils.hierarchy import molecule_type_map, PolymerType, MoleculeType
 
 # from BioMol.utils.stoer_wagner_algorithm import stoer_wagner
 from BioMol import A3MDB_PATH, SEQ_TO_HASH_PATH
@@ -23,6 +24,7 @@ def load_seq_to_hash():
 
 seq_to_hash = load_seq_to_hash()
 hash_to_seq = {str(h).zfill(6): seq for seq, h in seq_to_hash.items()}
+tag_to_type = {v.split(":")[0]: k for k, v in molecule_type_map.items()}
 
 
 class MSASEQ:
@@ -36,7 +38,9 @@ class MSASEQ:
         header: str,
         is_query: bool = False,
         length: int | None = None,
+        molecule_type: PolymerType | MoleculeType = PolymerType.PROTEIN,
     ):
+        self.table = ResidueTable(molecule_type)
         self._parse_sequence(sequence, length)
         self.db_name = None
         self.db_ID = None
@@ -50,6 +54,7 @@ class MSASEQ:
                 self.db_name = "bfd"
         self.annotation = header[1:].strip() + f"({len(self.sequence)})"
         self.is_query = is_query
+        self.molecule_type = molecule_type
 
     def _parse_sequence(self, sequence: str, length: int | None) -> None:
         """
@@ -63,7 +68,7 @@ class MSASEQ:
         if length is None:
             # query sequence
             length = len(sequence)
-            self.sequence = np.array([AA2num[aa] for aa in sequence], dtype=np.uint8)
+            self.sequence = np.array([self.table[aa] for aa in sequence], dtype=np.uint8)
             self.deletion = np.zeros(length, dtype=np.uint8)
             return
 
@@ -86,7 +91,7 @@ class MSASEQ:
             deletion[pos] = np.clip(num, 0, 255).astype(np.uint8)  # to save memory
 
         sequence = sequence.translate(table)
-        self.sequence = np.array([AA2num[aa] for aa in sequence], dtype=np.uint8)
+        self.sequence = np.array([self.table[aa] for aa in sequence], dtype=np.uint8)
         self.deletion = deletion
 
     def _parse_header(self, header: str) -> dict:
@@ -275,7 +280,15 @@ class MSA:
         if No_MSA:
             query_header = f">{self.sequence_hash}"
             query_seq = hash_to_seq[self.sequence_hash]
-            query_msaseq = MSASEQ(query_seq, query_header, is_query=True, length=None)
+            tag, query_seq = query_seq.split(":")
+            molecule_type = tag_to_type[tag]
+            query_msaseq = MSASEQ(
+                query_seq,
+                query_header,
+                is_query=True,
+                length=None,
+                molecule_type=molecule_type,
+            )
             pairs = []
         else:
             # remove empty lines
@@ -438,7 +451,7 @@ class ComplexMSA:  # TODO
         species_to_idx_dict = {ii: MSA.species_to_idx for ii, MSA in MSAs.items()}
         # gap_idx = np.where((new_sequences == AA2num["-"]).all(axis=1))[0]
         gap_idx_dict = {
-            ii: np.where((MSA.sequences == AA2num["-"]).all(axis=1))[0]
+            ii: np.where((MSA.sequences == 31).all(axis=1))[0]  # 31 for GAP_IDX
             for ii, MSA in MSAs.items()
         }
         all_species = set.union(*(set(d.keys()) for d in species_to_idx_dict.values()))
@@ -602,7 +615,7 @@ class ComplexMSA:  # TODO
                 idx = final_msa_indices[key][ii]  # TODO
                 msa = MSAs[key]
                 if idx == -1:
-                    seqs.append(np.full((msa.length), AA2num["-"]))
+                    seqs.append(np.full((msa.length), 31))  # 31 for GAP_IDX
                     deletion.append(np.zeros(msa.length))
                 else:
                     seqs.append(msa.sequences[idx])
@@ -619,7 +632,7 @@ class ComplexMSA:  # TODO
         final_has_deletion = np.array(final_has_deletion)
         final_deletion = np.array(final_deletion)
 
-        gap_idx = np.where((final_sequence == AA2num["-"]).all(axis=1))[0]
+        gap_idx = np.where((final_sequence == 31).all(axis=1))[0]  # 31 for GAP_IDX
         final_sequence = np.delete(final_sequence, gap_idx, axis=0)
         final_deletion = np.delete(final_deletion, gap_idx, axis=0)
         final_has_deletion = np.delete(final_has_deletion, gap_idx, axis=0)
@@ -653,7 +666,7 @@ class ComplexMSA:  # TODO
         for ii in range(msa.shape[0]):
             out += ">\n"  # I removed annotation due to the large size of the file
             seq = msa[ii].tolist()
-            seq = [num2AA[aa] for aa in seq]
+            seq = [num2res[aa] for aa in seq]
             seq = "".join(seq)
             out += f"{seq}\n"
 
@@ -667,7 +680,7 @@ class ComplexMSA:  # TODO
     ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         if self.total_depth < max_msa_depth:
             max_msa_depth = self.total_depth
-        sampled = [int(ratio[ii] * max_msa_depth) for ii in range(3)]
+        sampled = [int(ratio[ii] * max_msa_depth) for ii in range(2)]
         if sum(sampled) != max_msa_depth:
             sampled[0] += 1  # make sure the sum is equal to max_msa_depth
 
@@ -697,8 +710,6 @@ class ComplexMSA:  # TODO
             sampled_sequence,
             sampled_has_deletion,
             sampled_deletion_value,
-            self.profile,
-            self.deletion_mean,
         )
 
     def __repr__(self):

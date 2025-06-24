@@ -3,6 +3,7 @@
 Multi-node LMDB ingestion for CIF files using SLURM Array and per-task shards.
 Each task processes a distinct subset of CIF files and writes to its own LMDB shard.
 """
+
 import os
 import math
 import lmdb
@@ -17,7 +18,7 @@ from BioMol import DB_PATH
 # Base LMDB environment path for storing parsed CIF assemblies
 DB_ENV = f"{DB_PATH}/cif_all_molecules.lmdb"
 # Directory containing .cif.gz files
-CIF_DIR = f"{DB_PATH}/cif/"
+CIF_DIR = f"{DB_PATH}/cif/cif_raw/"
 # Path to CIF parsing configuration
 CIF_CONFIG_PATH = "./BioMol/configs/types/base.json"
 # Whether to remove signal peptide during parsing
@@ -78,8 +79,10 @@ def lmdb_cif_multi(env_path: str, cif_dir: str, n_jobs: int = 1) -> None:
 
     # Gather all CIF files and filter out processed ones
     all_files = get_all_cif_files(cif_dir)
-    to_process = [f for f in all_files
-                  if os.path.basename(f).split(".")[0] not in processed]
+    print(f"Found {len(all_files)} CIF files in {cif_dir}.")
+    to_process = [
+        f for f in all_files if os.path.basename(f).split(".")[0] not in processed
+    ]
     to_process = sorted(to_process)
     total = len(to_process)
 
@@ -90,7 +93,9 @@ def lmdb_cif_multi(env_path: str, cif_dir: str, n_jobs: int = 1) -> None:
     start = task_id * chunk_size
     end = min(start + chunk_size, total)
     subset = to_process[start:end]
-    print(f"[Task {task_id+1}/{num_tasks}] Processing {len(subset)} of {total} files: indices {start}-{end-1}")
+    print(
+        f"[Task {task_id + 1}/{num_tasks}] Processing {len(subset)} of {total} files: indices {start}-{end - 1}"
+    )
 
     # Create and open shard-specific LMDB environment
     shard_path = f"{env_path}.shard_{task_id}"

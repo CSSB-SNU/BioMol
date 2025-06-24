@@ -57,10 +57,7 @@ num2AA = [
     "W",
     "Y",
     "V",
-    "U",
     "X",
-    "-",
-    "0",  # unknown, gap, padding
 ]
 AA2num = {x: i for i, x in enumerate(num2AA)}
 
@@ -255,10 +252,42 @@ stereo_config_map = {
 
 residue2num = {x: i for i, x in enumerate(num2residue)}
 
-NUM_CLASSES = 20 + 2 + 10 + 1  # 20 AAs, UNK, MASK, 8 NAs, 1 pad
+NUM_CLASSES = 32
 UNK_IDX = 20
-GAP_IDX = 21
-MASK_IDX = 22
-PAD_IDX = 23
+GAP_IDX = 31
 
-MASKINDEX = 21  # protein mask
+
+num2res = [
+    "A",
+    "R",
+    "N",
+    "D",
+    "C",
+    "Q",
+    "E",
+    "G",
+    "H",
+    "I",
+    "L",
+    "K",
+    "M",
+    "F",
+    "P",
+    "S",
+    "T",
+    "W",
+    "Y",
+    "V",
+    "X",
+    "A",
+    "U",
+    "G",
+    "C",
+    "N",
+    "A",
+    "T",
+    "G",
+    "C",
+    "N",
+    "-",
+]

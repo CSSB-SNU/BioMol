@@ -2,7 +2,7 @@ import os
 import pickle
 import math
 from BioMol.BioMol import BioMol
-from BioMol import DB_PATH, GRAPH_HASH_PATH, CONTACT_GRAPH_PATH
+from BioMol import DB_PATH, CONTACT_GRAPH_PATH
 from joblib import Parallel, delayed
 from BioMol.utils.hierarchy import MoleculeType
 import torch
@@ -15,17 +15,18 @@ metadata_path = os.path.join(DB_PATH, "metadata", "metadata_psk.csv")
 hash_to_graph_path = os.path.join(CONTACT_GRAPH_PATH, "unique_graphs.pkl")
 CIF_dir = os.path.join(DB_PATH, "cif")
 CONTACT_TH = 6.0
-seq_to_hash_path = f"{DB_PATH}/entity/sequence_hashes_all_molecules.pkl"
+seq_to_hash_path = f"{DB_PATH}/entity/sequence_hashes.pkl"
 with open(seq_to_hash_path, "rb") as f:
     seq_hashes = pickle.load(f)
 molecule_type_map = {
-    'PolymerType.PROTEIN': '[PROTEIN]:',
-    'PolymerType.DNA': '[DNA]:',
-    'PolymerType.RNA': '[RNA]:',
-    'PolymerType.NA_HYBRID': '[NA_HYBRID]:',
-    'NONPOLYMER': '[NONPOLYMER]:',
-    'BRANCHED': '[BRANCHED]:',
+    "PolymerType.PROTEIN": "[PROTEIN]:",
+    "PolymerType.DNA": "[DNA]:",
+    "PolymerType.RNA": "[RNA]:",
+    "PolymerType.NA_HYBRID": "[NA_HYBRID]:",
+    "NONPOLYMER": "[NONPOLYMER]:",
+    "BRANCHED": "[BRANCHED]:",
 }
+
 
 def load_biomol(cif_ID: str):
     """
@@ -52,6 +53,7 @@ def load_biomol(cif_ID: str):
                 ID_list.append((assembly_ID, model_ID, alt_ID))
     return biomol, ID_list
 
+
 def get_sequence_hash(biomolstructure):
     chain_to_hash = {}
     for entity_idx, entity in enumerate(biomolstructure.entity_list):
@@ -64,7 +66,7 @@ def get_sequence_hash(biomolstructure):
             case MoleculeType.NONPOLYMER:
                 chem_comp = entity.get_chem_comp()
                 sequence = f"({chem_comp})"
-                molecule_type = 'NONPOLYMER'
+                molecule_type = "NONPOLYMER"
             case MoleculeType.BRANCHED:
                 chem_comp_list = entity.get_chem_comp_list()
                 chem_comp_list = [str(chem_comp) for chem_comp in chem_comp_list]
@@ -74,7 +76,7 @@ def get_sequence_hash(biomolstructure):
                     for idx1, idx2, conn_type in bond_list
                 ]
                 sequence = f"({')('.join(chem_comp_list)})|{','.join(bond_list)}"
-                molecule_type = 'BRANCHED'
+                molecule_type = "BRANCHED"
             case MoleculeType.WATER:
                 pass
         sequence = f"{molecule_type_map[molecule_type]}{sequence}"
@@ -86,13 +88,14 @@ def get_sequence_hash(biomolstructure):
             )
         chain_to_hash[chain] = sequence_hash
     return chain_to_hash
-        
+
 
 # Precompute neighbor offsets once (module-level)
 NEIGHBOR_OFFSETS = torch.tensor(
     [[dx, dy, dz] for dx in (-1, 0, 1) for dy in (-1, 0, 1) for dz in (-1, 0, 1)],
-    dtype=torch.int64
+    dtype=torch.int64,
 )
+
 
 @torch.no_grad()
 def get_contact_graph(biomol, chunk_size=int(3e5)):
@@ -101,7 +104,7 @@ def get_contact_graph(biomol, chunk_size=int(3e5)):
     atom_tensor = struct.atom_tensor
     atom_chain_break = struct.atom_chain_break
     atom_mask = atom_tensor[:, 4].bool()
-    atom_xyz  = atom_tensor[:, 5:8]
+    atom_xyz = atom_tensor[:, 5:8]
     N = atom_xyz.size(0)
     device = atom_xyz.device
 
@@ -119,7 +122,7 @@ def get_contact_graph(biomol, chunk_size=int(3e5)):
     chain_idx = torch.zeros(N, dtype=torch.long, device=device)
     for cid, chain_ID in enumerate(chain_list):
         start, end = atom_chain_break[chain_ID]
-        chain_idx[start:end+1] = cid
+        chain_idx[start : end + 1] = cid
 
     # Collect contacts in chunks
     all_i = []
@@ -158,10 +161,10 @@ def get_contact_graph(biomol, chunk_size=int(3e5)):
                 mask_tensor[r, :m] = True
 
         # Distance check
-        chunk_xyz = atom_xyz[start:end].unsqueeze(1)            # (L,1,3)
-        nbr_xyz   = atom_xyz[idx_tensor.clamp(min=0)]           # (L, maxM,3)
-        dist2     = (chunk_xyz - nbr_xyz).pow(2).sum(-1)         # (L, maxM)
-        contact   = mask_tensor & (dist2 <= CONTACT_TH**2)
+        chunk_xyz = atom_xyz[start:end].unsqueeze(1)  # (L,1,3)
+        nbr_xyz = atom_xyz[idx_tensor.clamp(min=0)]  # (L, maxM,3)
+        dist2 = (chunk_xyz - nbr_xyz).pow(2).sum(-1)  # (L, maxM)
+        contact = mask_tensor & (dist2 <= CONTACT_TH**2)
 
         # Extract i,j indices
         rows = torch.arange(L, device=device).unsqueeze(1).expand_as(contact)
@@ -174,24 +177,23 @@ def get_contact_graph(biomol, chunk_size=int(3e5)):
     i_all = torch.cat(all_i)
     j_all = torch.cat(all_j)
     pairs = torch.stack([i_all, j_all], dim=1)
-    uniq  = torch.unique(pairs, dim=0)
+    uniq = torch.unique(pairs, dim=0)
     # remove self-contacts
-    uniq = uniq[uniq[:,0] != uniq[:,1]]
+    uniq = uniq[uniq[:, 0] != uniq[:, 1]]
 
     # Chain-wise edges
-    c1 = chain_idx[uniq[:,0]]
-    c2 = chain_idx[uniq[:,1]]
-    edges = torch.stack([torch.min(c1,c2), torch.max(c1,c2)], dim=1)
+    c1 = chain_idx[uniq[:, 0]]
+    c2 = chain_idx[uniq[:, 1]]
+    edges = torch.stack([torch.min(c1, c2), torch.max(c1, c2)], dim=1)
     # remove self-edges
     edges = torch.unique(edges, dim=0)
     edges = edges[edges[:, 0] != edges[:, 1]].tolist()  # (num_edges, 2)
 
     # Nodes as sequence hashes
     chain_hash = get_sequence_hash(struct)
-    nodes = [chain_hash[c.split('_')[0]] for c in chain_list]
+    nodes = [chain_hash[c.split("_")[0]] for c in chain_list]
 
     return nodes, edges
-
 
 
 def get_cif_ID_list():
@@ -204,16 +206,17 @@ def get_cif_ID_list():
     cif_ids = []
     for dirpath, _, filenames in os.walk(CIF_dir):
         for fn in filenames:
-            if fn.endswith('.cif'):
+            if fn.endswith(".cif"):
                 cif_id = fn[:-4]
-            elif fn.endswith('.cif.gz'):
+            elif fn.endswith(".cif.gz"):
                 cif_id = fn[:-7]
             else:
                 continue
             cif_ids.append(cif_id)
     cif_ids = sorted(cif_ids)
     return cif_ids
-    
+
+
 def get_already_saved_cif_ID_list(save_dir):
     """
     Get a list of already saved CIF IDs from the hash to graph mapping file.
@@ -224,15 +227,16 @@ def get_already_saved_cif_ID_list(save_dir):
     cif_IDs = []
     for dirpath, _, filenames in os.walk(save_dir):
         for fn in filenames:
-            if fn.endswith('.graph'):
+            if fn.endswith(".graph"):
                 cif_id = fn[:-6]
-            elif fn.endswith('.graph.gz'):
+            elif fn.endswith(".graph.gz"):
                 cif_id = fn[:-9]
             else:
                 continue
             cif_IDs.append(cif_id)
     cif_IDs = sorted(cif_IDs)
     return cif_IDs
+
 
 def save_graphs(cif_ID, save_path):
     # torch set thread
@@ -244,7 +248,7 @@ def save_graphs(cif_ID, save_path):
         biomol.choose(assembly_ID, model_ID, alt_ID)
         node, edge = get_contact_graph(biomol)
         graphs[(assembly_ID, model_ID, alt_ID)] = (node, edge)
-        
+
     if graphs == {}:  # no protein
         return
 
@@ -261,7 +265,6 @@ def save_graphs(cif_ID, save_path):
                 f.write(f"v {i} {node[i]}\n")
             for e in edge:
                 f.write(f"e {e[0]} {e[1]}\n")
-
 
 
 def save_protein_graph(save_dir, n_jobs=100):
@@ -282,9 +285,13 @@ def save_protein_graph(save_dir, n_jobs=100):
             os.makedirs(inner_dir)
 
     already_saved_cif_ID_list = get_already_saved_cif_ID_list(save_dir)
-    cif_ID_list = [cif_ID for cif_ID in cif_ID_list if cif_ID not in already_saved_cif_ID_list]
+    cif_ID_list = [
+        cif_ID for cif_ID in cif_ID_list if cif_ID not in already_saved_cif_ID_list
+    ]
 
-    save_path_list = [os.path.join(save_dir, cif_ID[1:3], f"{cif_ID}.graph") for cif_ID in cif_ID_list]
+    save_path_list = [
+        os.path.join(save_dir, cif_ID[1:3], f"{cif_ID}.graph") for cif_ID in cif_ID_list
+    ]
 
     total = len(cif_ID_list)
     print(f"Total hashes: {total}")
@@ -300,12 +307,15 @@ def save_protein_graph(save_dir, n_jobs=100):
     save_path_subset = save_path_list[start:end]
     print(f"[Task {task_id}/{num_tasks}] Processing hashes {start}–{end - 1}")
 
-    
     results = Parallel(n_jobs=n_jobs, verbose=10)(
-        delayed(save_graphs)(cif_ID, save_path) for cif_ID, save_path in zip(cif_ID_subset, save_path_subset)
+        delayed(save_graphs)(cif_ID, save_path)
+        for cif_ID, save_path in zip(cif_ID_subset, save_path_subset)
     )
 
+
 pattern = re.compile(r"\('([^']+)', '([^']+)', '([^']+)'\)")
+
+
 def format_tuple(s):
     match = pattern.search(s)
     if match:
@@ -352,6 +362,7 @@ def get_edge(file_path: str) -> list[nx.Graph]:
     edges.sort(key=lambda x: (x[0], x[1]))  # Sort edges for consistency
 
     return edges
+
 
 def get_graphs(file_path: str) -> list[nx.Graph]:
     graph_ID = file_path.split("/")[-1].split(".")[0]
@@ -402,6 +413,7 @@ def get_all_edge(graph_dir, save_path):
     with open(save_path, "wb") as f:
         pickle.dump(edges, f)
 
+
 def get_all_graphs(graph_dir, save_path):
     graph_files = []
     for root, dirs, files in os.walk(graph_dir):
@@ -422,7 +434,7 @@ def get_all_graphs(graph_dir, save_path):
 
 if __name__ == "__main__":
     # Example usage
-    save_dir = os.path.join(DB_PATH, "cif_graphs")
+    save_dir = os.path.join(DB_PATH, "contact_graphs")
     # save_protein_graph(save_dir, n_jobs=-1)
-    get_all_edge(save_dir, os.path.join(DB_PATH, 'statistics', "all_edges.pkl"))
-    get_all_graphs(save_dir, os.path.join(DB_PATH, 'statistics', "all_graphs.pkl"))
+    # get_all_edge(save_dir, os.path.join(DB_PATH, 'statistics', "all_edges.pkl"))
+    get_all_graphs(save_dir, os.path.join(DB_PATH, "statistics", "all_graphs.pkl"))
