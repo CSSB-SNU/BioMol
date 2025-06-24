@@ -2,6 +2,7 @@ import lmdb
 import pickle
 import gzip
 from BioMol import CIFDB_PATH, MSADB_PATH
+from BioMol.utils.MSA import MSA
 
 
 def read_cif_lmdb(key: str):
@@ -32,8 +33,7 @@ def read_MSA_lmdb(key: str):
     env.close()
 
     if compressed_pickled_data is None:
-        print(f"No data found for key: {key}")
-        return None
+        return MSA(key)
 
     # First, decompress the data using gzip
     decompressed_data = gzip.decompress(compressed_pickled_data)
