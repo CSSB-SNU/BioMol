@@ -346,7 +346,7 @@ class MSA:
 
         # Precompute profile and deletion_mean
         profile = np.array(profile_list).astype(np.int32)
-        profile = np.eye(24, dtype=np.int32)[profile]  # for now, protein only
+        profile = np.eye(32, dtype=np.int32)[profile]  # for now, protein only
         profile = np.mean(profile, axis=0).astype(np.float32)
         deletion_array = np.array(deletion_list)
         deletion_mean = 2 * np.arctan(deletion_array / 3) / np.pi
