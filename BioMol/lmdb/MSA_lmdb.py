@@ -34,6 +34,7 @@ def process_file(seq_hash: str):
 def lmdb_MSA(env_path=db_env, n_jobs=-1, batch_size=1000):
     seq_to_hash = load_seq_to_hash()
     hash_list = [str(h).zfill(6) for h in seq_to_hash.values()]
+
     # for test
     total = len(hash_list)
     print(f"Total MSAs to write: {total}")
@@ -67,5 +68,28 @@ def lmdb_MSA(env_path=db_env, n_jobs=-1, batch_size=1000):
     print("All done.")
 
 
+def check_lmdb(env_path=db_env):
+    print(f"sequence hash number: {len(load_seq_to_hash())}")
+    hash_list = [str(h).zfill(6) for h in load_seq_to_hash().values()]
+
+    import pickle
+
+    with open("hash_in_lmdb.pkl", "rb") as f:
+        hash_in_lmdb = pickle.load(f)
+
+    breakpoint()
+    assert 1 == 0
+
+    env = lmdb.open(env_path, readonly=True)
+    hash_in_lmdb = set()
+    with env.begin() as txn:
+        keys = {key.decode() for key, _ in txn.cursor()}
+        for key in keys:
+            hash_in_lmdb.add(key)
+    env.close()
+    print(f"Total keys in LMDB: {len(keys)}")
+
+
 if __name__ == "__main__":
-    lmdb_MSA()
+    # lmdb_MSA()
+    check_lmdb()

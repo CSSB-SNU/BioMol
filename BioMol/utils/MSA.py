@@ -688,17 +688,23 @@ class ComplexMSA:  # TODO
         if to_be_sampled[0] < sampled[0]:
             sampled[1] += sampled[0] - to_be_sampled[0]
             sampled[0] = to_be_sampled[0]
+        if to_be_sampled[1] < sampled[1]:
+            sampled[1] = to_be_sampled[1]
 
         query = np.array([0])
         paired_sampled = np.random.choice(
             self.num_of_paired, sampled[0] - 1, replace=False
         )  # -1 for query
-        unpaired_sampled = (
-            np.random.choice(self.num_of_unpaired, sampled[1], replace=False)
-            + self.num_of_paired
-        )
 
-        sampled_indices = np.concatenate([query, paired_sampled, unpaired_sampled])
+        if sampled[1] > 0:
+            unpaired_sampled = (
+                np.random.choice(self.num_of_unpaired, sampled[1], replace=False)
+                + self.num_of_paired
+            )
+
+            sampled_indices = np.concatenate([query, paired_sampled, unpaired_sampled])
+        else:
+            sampled_indices = np.concatenate([query, paired_sampled])
         sampled_indices = np.sort(sampled_indices)
 
         sampled_sequence = self.msa[sampled_indices]

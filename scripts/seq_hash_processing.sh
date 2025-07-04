@@ -7,5 +7,5 @@
 #SBATCH -o ./log/seq_cluster_.out
 #SBATCH -e ./log/seq_cluster_.err
 
-# srun python -u ./preprocessing/sequence_hash_all_molecules.py
-srun python -u ./preprocessing/sequence_clustering_all_molecules.py
+srun python -u ./preprocessing/sequence_hash_all_molecules.py
+# srun python -u ./preprocessing/sequence_clustering_all_molecules.py

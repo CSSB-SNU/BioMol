@@ -4,8 +4,8 @@
 #SBATCH -c 100                   
 #SBATCH --mem=480g
 #SBATCH -p cpu-farm
-#SBATCH -o ./log/MSA_lmdb.out
-#SBATCH -e ./log/MSA_lmdb.err
+#SBATCH -o ./log/MSA_lmdb_check.out
+#SBATCH -e ./log/MSA_lmdb_check.err
 
 # python -u ./preprocessing/check_MSA.py
 python -u ./BioMol/lmdb/MSA_lmdb.py

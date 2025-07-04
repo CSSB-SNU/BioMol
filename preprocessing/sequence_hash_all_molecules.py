@@ -3,11 +3,14 @@ import hashlib
 import pickle
 from BioMol import DB_PATH, SIGNALP_PATH
 
-pickle_file = f"{DB_PATH}/entity/sequence_hashes.pkl"
+pickle_file = f"{DB_PATH}/entity/sequence_hashes_protein_only.pkl"
 
 with open(pickle_file, "rb") as pf:
     protein_only_seq_hashes = pickle.load(pf)
-protein_only_seq_hashes = {k :  str(v).zfill(6) for k, v in protein_only_seq_hashes.items()}
+protein_only_seq_hashes = {
+    k: str(v).zfill(6) for k, v in protein_only_seq_hashes.items()
+}
+
 
 def filter_protein(fasta_txt):
     first_line = fasta_txt.split("\n")[0]
@@ -94,6 +97,7 @@ def get_unique_hash(sequence, digits, used_candidates):
 #             unique_seq_hash[current_seq] = candidate
 #     return unique_seq_hash
 
+
 def parse_fasta_unique_hash(file_path: str, digits: int) -> dict[str, str]:
     mod = 10**digits
     width = digits
@@ -101,14 +105,14 @@ def parse_fasta_unique_hash(file_path: str, digits: int) -> dict[str, str]:
     unique_seqs = set()
     seq = ""
     molecule_type_map = {
-        'PolymerType.PROTEIN': '[PROTEIN]:',
-        'PolymerType.DNA': '[DNA]:',
-        'PolymerType.RNA': '[RNA]:',
-        'PolymerType.NA_HYBRID': '[NA_HYBRID]:',
-        'NONPOLYMER': '[NONPOLYMER]:',
-        'BRANCHED': '[BRANCHED]:',
+        "PolymerType.PROTEIN": "[PROTEIN]:",
+        "PolymerType.DNA": "[DNA]:",
+        "PolymerType.RNA": "[RNA]:",
+        "PolymerType.NA_HYBRID": "[NA_HYBRID]:",
+        "NONPOLYMER": "[NONPOLYMER]:",
+        "BRANCHED": "[BRANCHED]:",
     }
-    molecule_type_tag = ''
+    molecule_type_tag = ""
 
     with open(file_path, "r") as f:
         for line in f:
@@ -117,15 +121,15 @@ def parse_fasta_unique_hash(file_path: str, digits: int) -> dict[str, str]:
                 continue
             if line[0] == ">":
                 if seq:
-                    if '  | ' in seq:
-                        seq = seq.replace('  | ', '|')
+                    if "  | " in seq:
+                        seq = seq.replace("  | ", "|")
                     unique_seqs.add(f"{molecule_type_tag}{seq}")
                 molecule_type_tag = molecule_type_map[line.split("| ")[-1]]
                 seq = ""
             else:
                 seq += line
         if seq:
-            unique_seqs.add(seq)
+            unique_seqs.add(f"{molecule_type_tag}{seq}")
     updated_hashes = protein_only_seq_hashes.copy()
     used_hashes = set(protein_only_seq_hashes.values())
     unique_seqs = list(unique_seqs)
@@ -154,12 +158,14 @@ if __name__ == "__main__":
     #     f"{DB_PATH}/entity/merged_all_molecules.fasta",
     # )
 
-
     fasta_file = f"{DB_PATH}/entity/merged_all_molecules.fasta"
-    pickle_file = f"{DB_PATH}/entity/sequence_hashes_all_molecules.pkl"
+    pickle_file = f"{DB_PATH}/entity/sequence_hashes.pkl"
 
     # Parse the FASTA file and get the hash for each unique sequence
-    seq_hashes = parse_fasta_unique_hash(fasta_file, digits=6,)
+    seq_hashes = parse_fasta_unique_hash(
+        fasta_file,
+        digits=6,
+    )
 
     # Save the dictionary to a pickle file using the highest protocol for fast serialization
     with open(pickle_file, "wb") as pf:
