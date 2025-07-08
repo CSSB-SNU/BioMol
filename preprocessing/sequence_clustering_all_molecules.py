@@ -72,7 +72,10 @@ def seq_cluster(
 
         if chain_ID in protein_cluster:
             # If the chain_ID is already in the protein cluster, use its cluster ID
-            cluster_id = protein_cluster[chain_ID]
+            if seq_hash in hash_to_cluster:
+                cluster_id = hash_to_cluster[seq_hash]
+            else:
+                cluster_id = protein_cluster[chain_ID]
         else:
             if seq_hash not in hash_to_cluster:
                 max_cluster += 1
@@ -80,10 +83,28 @@ def seq_cluster(
             else:
                 cluster_id = hash_to_cluster[seq_hash]
 
+        if seq in all_mol_seq_to_cluster:
+            if all_mol_seq_to_cluster[seq] != cluster_id:
+                print(
+                    f"Warning: Sequence {seq} already exists in all_mol_seq_to_cluster with a different cluster ID."
+                )
+                print(
+                    f"Existing cluster ID: {all_mol_seq_to_cluster[seq]}, New cluster ID: {cluster_id}"
+                )
+                assert 1==0
+
         # print(f"cluster_id: {cluster_id}")
         all_mol_chain_ID_to_cluster[chain_ID] = cluster_id
         all_mol_seq_to_cluster[seq] = cluster_id
         hash_to_cluster[seq_hash] = cluster_id
+
+    chain_ID_to_cluster_test = set(all_mol_chain_ID_to_cluster.values())
+    seq_to_cluster_test = set(all_mol_seq_to_cluster.values())
+
+    diff1 = seq_to_cluster_test.difference(chain_ID_to_cluster_test)
+    diff2 = chain_ID_to_cluster_test.difference(seq_to_cluster_test)
+    print(f"len(diff1): {len(diff1)}")
+    print(f"len(diff2): {len(diff2)}")
 
     with open(all_mol_chain_ID_to_cluster_path, "wb") as f:
         pickle.dump(all_mol_chain_ID_to_cluster, f, protocol=pickle.HIGHEST_PROTOCOL)

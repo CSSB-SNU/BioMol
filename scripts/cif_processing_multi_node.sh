@@ -6,6 +6,6 @@
 #SBATCH -p cpu-farm
 #SBATCH -o ./log/cif_lmdb_%a.out
 #SBATCH -e ./log/cif_lmdb__%a.err
-#SBATCH --array=0-4                  
+#SBATCH --array=0-14                 
 
 srun python -u ./BioMol/lmdb/cif_lmdb_multi_node.py

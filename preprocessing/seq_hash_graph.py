@@ -13,7 +13,7 @@ import re
 
 metadata_path = os.path.join(DB_PATH, "metadata", "metadata_psk.csv")
 hash_to_graph_path = os.path.join(CONTACT_GRAPH_PATH, "unique_graphs.pkl")
-CIF_dir = os.path.join(DB_PATH, "cif")
+CIF_dir = os.path.join(DB_PATH, "cif/cif_raw")
 CONTACT_TH = 6.0
 seq_to_hash_path = f"{DB_PATH}/entity/sequence_hashes.pkl"
 with open(seq_to_hash_path, "rb") as f:
@@ -432,9 +432,18 @@ def get_all_graphs(graph_dir, save_path):
         pickle.dump(graphs, f)
 
 
+def test(cif_ID: str):
+    biomol, ID_list = load_biomol(cif_ID)
+    for ids in ID_list:
+        assembly_ID, model_ID, alt_ID = ids
+        biomol.choose(assembly_ID, model_ID, alt_ID)
+        node, edge = get_contact_graph(biomol)
+        breakpoint()
+
+
 if __name__ == "__main__":
     # Example usage
     save_dir = os.path.join(DB_PATH, "contact_graphs")
-    # save_protein_graph(save_dir, n_jobs=-1)
-    # get_all_edge(save_dir, os.path.join(DB_PATH, 'statistics', "all_edges.pkl"))
+    save_protein_graph(save_dir, n_jobs=-1)
+    get_all_edge(save_dir, os.path.join(DB_PATH, "statistics", "all_edges.pkl"))
     get_all_graphs(save_dir, os.path.join(DB_PATH, "statistics", "all_graphs.pkl"))

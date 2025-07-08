@@ -2952,6 +2952,10 @@ class BioMolStructure:
         self.same_entity = self.same_entity[entity_mask][:, entity_mask]
         self.residue_chain_break = new_residue_chain_break
         self.atom_chain_break = new_atom_chain_break
+        if hasattr(self, "contact_graph"):
+            self.contact_graph.filter_vertices(
+                [i for i, v in enumerate(new_chain_mask.values()) if v]
+            )
 
     def remove_signal_peptide(self):
         signalp_results = {}

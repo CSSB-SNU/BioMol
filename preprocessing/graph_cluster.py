@@ -25,19 +25,21 @@ with open(SEQ_TO_HASH_PATH, "rb") as f:
 with open(all_mol_seq_to_cluster_path, "rb") as f:
     seq_to_cluster = pickle.load(f)
 
+# breakpoint()
+
 with open(chain_to_cluster_path, "rb") as f:
     chain_to_cluster = pickle.load(f)
 
-print(51759 in chain_to_cluster.values())
-print(51759 in seq_to_cluster.values())
+# print(51759 in chain_to_cluster.values())
+# print(51759 in seq_to_cluster.values())
 
-cluster_to_chain = {}
-for chain_ID, cluster in chain_to_cluster.items():
-    if cluster not in cluster_to_chain:
-        cluster_to_chain[cluster] = []
-    cluster_to_chain[cluster].append(chain_ID)
+# cluster_to_chain = {}
+# for chain_ID, cluster in chain_to_cluster.items():
+#     if cluster not in cluster_to_chain:
+#         cluster_to_chain[cluster] = []
+#     cluster_to_chain[cluster].append(chain_ID)
 
-breakpoint()
+# breakpoint()
 
 
 seq_hash_to_cluster = {}
@@ -49,6 +51,7 @@ for seq, cluster in seq_to_cluster.items():
 protein_chain_ID_to_cluster = {}
 with open(protein_cluster_path, "rb") as f:
     protein_chain_ID_to_cluster = pickle.load(f)
+
 
 # Regex pattern to capture the three groups inside the tuple
 pattern = re.compile(r"\('([^']+)', '([^']+)', '([^']+)'\)")
@@ -95,7 +98,13 @@ def parse_graph(file_path: str) -> List[nx.Graph]:
             elif parts[0] == "v":  # Vertex line: "v id label"
                 node_id = int(parts[1])
                 seq_hash = parts[2]
-                seq_cluster = seq_hash_to_cluster[seq_hash]
+                try:
+                    seq_cluster = seq_hash_to_cluster[seq_hash]
+                except:
+                    print(file_path)
+                    assert file_path == 0, (
+                        f"file_path: {file_path}, seq_hash: {seq_hash}"
+                    )
                 hash_G.add_node(node_id, label=seq_hash)
                 cluster_G.add_node(node_id, label=seq_cluster)
             elif parts[0] == "e":  # Edge line: "e src tgt"
@@ -106,6 +115,11 @@ def parse_graph(file_path: str) -> List[nx.Graph]:
             hash_G_dict[ID] = hash_G
             cluster_G_dict[ID] = cluster_G
     return hash_G_dict, cluster_G_dict
+
+
+# graph_path = f"{DB_PATH}/contact_graphs/rs/3rsq.graph"
+# out = parse_graph(graph_path)
+# breakpoint()
 
 
 def has_common_node(G1, G2):
@@ -667,21 +681,21 @@ if __name__ == "__main__":
         f"{DB_PATH}/cluster/graph_cluster/cluster_level_unique_graphs.pkl"
     )
 
-    # level0_graph_cluster(
-    #     graph_dir,
-    #     hash_level_csv_path,
-    #     hash_level_graph_path,
-    #     cluster_level_csv_path,
-    #     cluster_level_graph_path,
-    # )
+    level0_graph_cluster(
+        graph_dir,
+        hash_level_csv_path,
+        hash_level_graph_path,
+        cluster_level_csv_path,
+        cluster_level_graph_path,
+    )
 
     # test()
 
     edge_to_graph_save_path = f"{DB_PATH}/cluster/graph_cluster/edge_to_graph.pkl"
     edge_level_csv_path = f"{DB_PATH}/cluster/graph_cluster/edge_level_cluster.csv"
-    # level1_graph_cluster(
-    #     cluster_level_graph_path, edge_to_graph_save_path, edge_level_csv_path
-    # )
+    level1_graph_cluster(
+        cluster_level_graph_path, edge_to_graph_save_path, edge_level_csv_path
+    )
 
     # # unittest_level1_graph(meta_graph_path, unique_graph_path)
 

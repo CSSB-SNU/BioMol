@@ -89,6 +89,32 @@ class ContactGraph:
                 "edges": current_edges,
             }
 
+    def filter_vertices(self, vertex_ids: list[int]):
+        """
+        Filter the vertices of the current graph section by a list of vertex IDs.
+        This modifies the current graph section to only include the specified vertices.
+        """
+        if self.id is None:
+            raise ValueError("No graph section selected. Use choose() to select one.")
+        
+        graph_data = self.graphs.get(self.id, {})
+        vertices = graph_data.get("vertices", {})
+        edges = graph_data.get("edges", [])
+
+        # Filter vertices
+        filtered_vertices = {k: v for k, v in vertices.items() if k in vertex_ids}
+        
+        # Filter edges based on the filtered vertices
+        filtered_edges = [
+            (v1, v2) for v1, v2 in edges if v1 in filtered_vertices and v2 in filtered_vertices
+        ]
+
+        # Update the current graph section
+        self.graphs[self.id] = {
+            "vertices": filtered_vertices,
+            "edges": filtered_edges,
+        }
+
     def choose(self, id: tuple[str, str, str]) -> dict[str, object]:
         """
         Choose a graph section by its header tuple

@@ -61,6 +61,8 @@ def get_frequency(unique_graph_path, node_save_path, edge_save_path):
     print(f"Max-scoring edge {max_edge!r} → {max_edge_score:.6f}")
     print(f"Min-scoring edge {min_edge!r} → {min_edge_score:.6f}")
 
+    breakpoint()
+
     # save node_freq, edge_score_dict
     with open(node_save_path, "wb") as f:
         pickle.dump(node_score_dict, f)

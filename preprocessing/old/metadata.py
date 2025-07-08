@@ -5,13 +5,12 @@ from filelock import FileLock
 import gc
 from BioMol import BioMol
 import pickle
-from BioMol import DB_PATH
 
-chainID_to_cluster_path = f"{DB_PATH}/cluster/seq_clust/chain_ID_to_cluster.pkl"
+chainID_to_cluster_path = "/public_data/BioMolDB_2024Oct21/protein_seq_clust/mmseqs2_seqid30_cov80_covmode0_clustmode1_chainID_to_cluster.pkl"
 with open(chainID_to_cluster_path, "rb") as f:
     chainID_to_cluster = pickle.load(f)
 
-seq_to_hash_path = f"{DB_PATH}/entity/sequence_hashes.pkl"
+seq_to_hash_path = "/public_data/BioMolDB_2024Oct21/entity/sequence_hashes_all_molecules.pkl"
 with open(seq_to_hash_path, "rb") as f:
     seq_to_hash = pickle.load(f)
 
@@ -60,7 +59,7 @@ def save_deposition_resolution(cif_dir, save_path="passed_cif.csv"):
     )
 
 
-def make_metadata(merged_fasta_path, chainID_to_deposition_csv, save_path):
+def make_metadata(merged_fasta_path, chainID_to_deposition_csv, save_path, protein_only=True):
     header = "CHAINID,DEPOSITION,RESOLUTION,HASH,CLUSTER,SEQUENCE\n"
     lines = [header]
 
@@ -93,8 +92,9 @@ def make_metadata(merged_fasta_path, chainID_to_deposition_csv, save_path):
             else:
                 seq = line
                 if '  | ' in seq:
-                    seq = seq.replace('  | ', '|')
-                seq = f"{molecule_type_tag}{seq}"
+                    seq.replace('  | ', '|')
+                if not protein_only : # TODO
+                    seq = f"{molecule_type_tag}{seq}"
                 hash = seq_to_hash[seq]
                 cluster = chainID_to_cluster[ID]
                 deposition_date, resolution = ID_to_deposition[ID.split("_")[0]]
@@ -290,13 +290,16 @@ def pickle_deposition_resolution(
 # TODO filter out (small peptides, low resolution, too many unknown residues)
 
 if __name__ == "__main__":
-    cif_dir = f"{DB_PATH}/cif/"
-    ID_to_deposition = f"{DB_PATH}/metadata/ID_to_deposition.csv"
+    cif_dir = "/public_data/BioMolDB_2024Oct21/cif/"
+    ID_to_deposition = "/public_data/BioMolDB_2024Oct21/metadata/ID_to_deposition.csv"
 
-    merged_fasta_path = f"{DB_PATH}/entity/merged_all_molecules.fasta"
+    merged_fasta_path = "/public_data/BioMolDB_2024Oct21/entity/merged_protein.fasta"
     # save_deposition_resolution(cif_dir, save_path = ID_to_deposition)
-    pickle_deposition_resolution_path = f"{DB_PATH}/metadata/ID_to_deposition.pkl"
-    # pickle_deposition_resolution(ID_to_deposition, save_path = pickle_deposition_resolution_path)
+    pickle_deposition_resolution_path = "/public_data/BioMolDB_2024Oct21/metadata/ID_to_deposition.pkl"
+    pickle_deposition_resolution(ID_to_deposition, save_path = pickle_deposition_resolution_path)
 
-    make_metadata(merged_fasta_path, ID_to_deposition, f"{DB_PATH}/metadata/metadata_psk_new.csv")
+    make_metadata(merged_fasta_path, ID_to_deposition, "/public_data/BioMolDB_2024Oct21/metadata/metadata_psk.csv")
 
+    # new_meta_csv = "/public_data/BioMolDB_2024Oct21/metadata/metadata_psk.csv"
+    # old_meta_csv = "/public_data/ml/RF2_train/PDB-2021AUG02/list_v02.csv"
+    # compare(new_meta_csv, old_meta_csv)

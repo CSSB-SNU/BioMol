@@ -77,9 +77,6 @@ def check_lmdb(env_path=db_env):
     with open("hash_in_lmdb.pkl", "rb") as f:
         hash_in_lmdb = pickle.load(f)
 
-    breakpoint()
-    assert 1 == 0
-
     env = lmdb.open(env_path, readonly=True)
     hash_in_lmdb = set()
     with env.begin() as txn:

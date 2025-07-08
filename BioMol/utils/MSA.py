@@ -446,7 +446,7 @@ class ComplexMSA:  # TODO
     def _pairing_MSAs(
         self,
         MSAs: dict[int, MSA],
-        max_paired_depth: int = 8191,
+        max_paired_depth: int = 8191,  # 8192 - 1 (query sequence is always included in the paired sequences)
     ) -> tuple[dict[int, list[int]], set, int]:
         species_to_idx_dict = {ii: MSA.species_to_idx for ii, MSA in MSAs.items()}
         # gap_idx = np.where((new_sequences == AA2num["-"]).all(axis=1))[0]
@@ -509,65 +509,20 @@ class ComplexMSA:  # TODO
         sum_of_incides = np.array(list(msa_indices.values()))
         sum_of_incides = np.sum(sum_of_incides, axis=0)
         sorted_indices = np.argsort(sum_of_incides)
-        num_of_seqs = len(sorted_indices)
+        num_of_seqs = min(len(sorted_indices), max_paired_depth)
 
         msa_indices = {
             # key: [indices[ii] for ii in sorted_indices]
-            key: indices[sorted_indices]
+            key: indices[sorted_indices][:num_of_seqs]
             for key, indices in msa_indices.items()
         }
         self._test_uniqueness(msa_indices)
 
         return msa_indices, paired_species, num_of_seqs
 
-    # def _get_chain_weight(
-    #     self, MSAs: dict[int, MSA], first_common_species: set
-    # ) -> np.ndarray:
-    #     msa_depth_list = [len(MSA) for MSA in MSAs.values()]
-    #     species_to_idx_list = [MSA.species_to_idx for MSA in MSAs.values()]
-    #     chain_weight = np.zeros(
-    #         (self.num_of_MSAs, self.num_of_MSAs)
-    #     )  # (i, j) : weight of MSA_i and MSA_j
-
-    #     # Stoer-Wagner algorithm
-    #     for ii in range(self.num_of_MSAs):
-    #         hash_ii = MSAs[ii].sequence_hash
-    #         for jj in range(ii + 1, self.num_of_MSAs):
-    #             hash_jj = MSAs[jj].sequence_hash
-    #             if hash_ii == hash_jj:
-    #                 chain_weight[ii, jj] = 1
-    #                 chain_weight[jj, ii] = 1
-    #                 continue
-    #             species_to_idx_i = species_to_idx_list[ii]
-    #             species_to_idx_j = species_to_idx_list[jj]
-
-    #             species_i = set(species_to_idx_i.keys())
-    #             species_j = set(species_to_idx_j.keys())
-    #             common_species = species_i.intersection(species_j)
-    #             common_species.discard("N/A")
-    #             common_species = common_species - first_common_species
-    #             if len(common_species) == 0:
-    #                 continue
-
-    #             weight_ij = 0
-    #             for species in common_species:
-    #                 seq_i = species_to_idx_i[species]
-    #                 seq_j = species_to_idx_j[species]
-    #                 weight_ij += (
-    #                     len(seq_i)
-    #                     * len(seq_j)
-    #                     / math.sqrt(msa_depth_list[ii] * msa_depth_list[jj])
-    #                 )
-    #             chain_weight[ii, jj] = weight_ij
-    #             chain_weight[jj, ii] = weight_ij
-
-    #     return chain_weight
-
     def _prepare_MSA(self, MSAs: list[MSA]) -> None:
         MSAs = dict(enumerate(MSAs))
-        msa_depth_list = [len(MSA) for MSA in MSAs.values()]
-        max_msa_depth = max(msa_depth_list)
-        max_msa_depth = min(max_msa_depth, self.max_MSA_depth)
+        max_msa_depth = self.max_MSA_depth
 
         # 0. Query sequence
         query_indices = {ii: [0] for ii in MSAs.keys()}
@@ -656,7 +611,7 @@ class ComplexMSA:  # TODO
         self.deletion_mean = deletion_mean
 
         self.num_of_paired = paired_num_of_seqs
-        self.num_of_unpaired = self.msa.shape[0] - paired_num_of_seqs - len(gap_idx)
+        self.num_of_unpaired = self.msa.shape[0] - paired_num_of_seqs  # - len(gap_idx)
         self.total_depth = self.num_of_paired + self.num_of_unpaired
 
     def to_a3m(self, msa: np.ndarray, save_path: str):
