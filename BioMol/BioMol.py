@@ -259,6 +259,7 @@ class BioMol:
         spatial_crop_weight: float = 0.4,
         interface_crop_weight: float = 0.4,
         crop_length: int = 384,
+        level="residue",  # "residue" or "atom"
     ) -> None:
         assert self.structure_loaded, "Structure is not loaded."
 
@@ -280,29 +281,30 @@ class BioMol:
             # 20250620, Change contiguous crop to monomer version
             try:
                 crop_indices, crop_chain = crop_contiguous_monomer(
-                    chain_bias, self.structure, crop_length
+                    chain_bias, self.structure, crop_length, level=level
                 )
             except NoValidChainsError:
                 # print("No valid chains found. Using spatial crop instead of contiguous crop.")
                 crop_indices, crop_chain = crop_spatial(
-                    chain_bias, self.structure, crop_length
+                    chain_bias, self.structure, crop_length, level=level
                 )
         elif method == "spatial":
             crop_indices, crop_chain = crop_spatial(
-                chain_bias, self.structure, crop_length
+                chain_bias, self.structure, crop_length, level=level
             )
         elif method == "interface":
             try:
                 crop_indices, crop_chain = crop_spatial_interface(
-                    interface_bias, self.structure, crop_length
+                    interface_bias, self.structure, crop_length, level=level
                 )
             except NoInterfaceError:
                 # print(
                 #     "No interface found. Using spatial crop instead of interface crop."
                 # )
                 crop_indices, crop_chain = crop_spatial(
-                    chain_bias, self.structure, crop_length
+                    chain_bias, self.structure, crop_length, level=level
                 )
+
 
         crop_sequence_hash = {
             chain: self.structure.sequence_hash[chain] for chain in crop_chain

@@ -1,5 +1,6 @@
 import random
 import torch
+from typing import Literal
 from BioMol.utils.hierarchy import BioMolStructure
 from BioMol.utils.error import NoInterfaceError, NoValidChainsError
 
@@ -52,80 +53,29 @@ def crop_contiguous(
     return crop_indices, chain_crop
 
 
-def crop_contiguous_monomer(
-    chain_bias: str | None, biomolstructure: BioMolStructure, crop_length: int
-) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
-    """
-    Crop the structure and sequence into a contiguous region
-    """
-    residue_chain_break = biomolstructure.residue_chain_break
-    residue_tensor = biomolstructure.residue_tensor
-
-    chain_id = None
-    if chain_bias is not None:
-        chain_id = chain_bias
-        chain_start, chain_end = residue_chain_break[chain_id]
-        valid_residue_indices = torch.where(
-            residue_tensor[chain_start : chain_end + 1, 4] == 1
-        )[0]
-        valid_num = valid_residue_indices.size(0)
-        if valid_num == 0:
-            chain_id = None
-
-    if chain_id is None:
-        chain_id_list = list(residue_chain_break.keys())
-        find_valid_chain = False
-        while not find_valid_chain:
-            chain_id = random.sample(chain_id_list, 1)[0]
-            chain_id_list.remove(chain_id)
-            chain_start, chain_end = residue_chain_break[chain_id]
-            valid_residue_indices = torch.where(
-                residue_tensor[chain_start : chain_end + 1, 4] == 1
-            )[0]
-            valid_num = valid_residue_indices.size(0)
-            if valid_num == 0:
-                continue
-            find_valid_chain = True
-        if not find_valid_chain:
-            print(
-                f"Warning: No valid chain found in the {biomolstructure.ID}. "
-                "Using a random chain."
-            )
-            raise NoValidChainsError(
-                f"No valid chains found in the {biomolstructure.ID}"
-            )
-
-    chain_start, chain_end = residue_chain_break[chain_id]
-    valid_residue_indices = torch.where(
-        residue_tensor[chain_start : chain_end + 1, 4] == 1
-    )[0]
-
-    if valid_residue_indices.size(0) < crop_length:
-        crop_indices = chain_start + valid_residue_indices
-    else:
-        # uniformly sample a contiguous region
-        n_k = valid_residue_indices.size(0)
-        n_start = random.randint(0, n_k - crop_length)
-        crop_indices = (
-            chain_start + valid_residue_indices[n_start : n_start + crop_length]
-        )
-    chain_crop = get_chain_crop_indices(residue_chain_break, crop_indices)
-    return crop_indices, chain_crop
-
-
 def crop_spatial(
-    chain_bias: str | None, biomolstructure: BioMolStructure, crop_length: int
+    chain_bias: str | None, biomolstructure: BioMolStructure, crop_length: int, level: Literal["atom", "residue"] = "atom"
 ) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
     """
     Crop the structure and sequence into a spatial region
     """
     residue_chain_break = biomolstructure.residue_chain_break
     residue_tensor = biomolstructure.residue_tensor
-    (valid_residue_indices,) = torch.where(residue_tensor[:, 4] == 1)
-    valid_residue_num = valid_residue_indices.size(0)
-    if valid_residue_num < crop_length:
-        chain_crop = get_chain_crop_indices(residue_chain_break, valid_residue_indices)
+    valid_residue_indices = torch.where(residue_tensor[:, 4] == 1)[0]
+    if level == "atom":
+        atom_chain_break = biomolstructure.atom_chain_break
+        atom_tensor = biomolstructure.atom_tensor
+        _, atom_to_residue_idx_map = torch.unique(atom_tensor[:, 2], sorted=True, return_inverse=True)
 
+    if level == "residue":
+        valid_indices = valid_residue_indices
+    else:  # level == "atom"
+        valid_indices = torch.where(atom_tensor[:, 4] == 1)[0]
+
+    valid_num = valid_indices.size(0)
+
+    if valid_num < crop_length:
+        chain_crop = get_chain_crop_indices(residue_chain_break, valid_residue_indices)
         return valid_residue_indices, chain_crop
 
     chain_list = list(residue_chain_break.keys())
@@ -137,21 +87,32 @@ def crop_spatial(
         pivot_chain = chain_bias
     else:
         pivot_chain = random.choice(chain_list)
-    pivot_chain_residue_idx = list(
-        range(
-            residue_chain_break[pivot_chain][0], residue_chain_break[pivot_chain][1] + 1
+    
+    if level == "residue":
+        pivot_chain_idx = list(
+            range(
+                residue_chain_break[pivot_chain][0], residue_chain_break[pivot_chain][1] + 1
+            )
         )
-    )
-    pivot_residue = random.choice(pivot_chain_residue_idx)
+        pivot_idx = random.choice(pivot_chain_idx)
 
-    residue_xyz = residue_tensor[:, 5:8]
-    residue_mask = residue_tensor[:, 4] == 1
-    missing_indices = torch.where(~residue_mask)[0]
-    pivot_residue_tensor = residue_tensor[pivot_residue]
-    pivot_residue_xyz = pivot_residue_tensor[5:8]
+        xyz = residue_tensor[:, 5:8]
+        mask = residue_tensor[:, 4] == 1
+    else:  # level == "atom"
+        pivot_chain_idx = list(
+            range(
+                atom_chain_break[pivot_chain][0], atom_chain_break[pivot_chain][1] + 1
+            )
+        )
+        pivot_idx = random.choice(pivot_chain_idx)
+        xyz = atom_tensor[:, 5:8]
+        mask = atom_tensor[:, 4] == 1
 
-    distance_map = torch.norm(residue_xyz - pivot_residue_xyz, dim=1)
-    distance_map[~residue_mask] = float("inf")
+    missing_indices = torch.where(~mask)[0]
+    pivot_xyz = xyz[pivot_idx]
+
+    distance_map = torch.norm(xyz - pivot_xyz, dim=1)
+    distance_map[~mask] = float("inf")
 
     crop_indices = torch.topk(distance_map, crop_length, largest=False).indices
 
@@ -159,13 +120,8 @@ def crop_spatial(
     crop_indices = crop_indices[~torch.isin(crop_indices, missing_indices)]
     crop_indices = torch.sort(crop_indices).values
 
-    crop_chain = []
-    for chain in chain_list:
-        chain_residue_idx = torch.arange(
-            residue_chain_break[chain][0], residue_chain_break[chain][1] + 1
-        )
-        if torch.any(torch.isin(crop_indices, chain_residue_idx)):
-            crop_chain.append(chain)
+    if level == "atom":
+        crop_indices = atom_to_residue_idx(crop_indices, atom_to_residue_idx_map, valid_residue_indices)
 
     chain_crop = get_chain_crop_indices(residue_chain_break, crop_indices)
 
@@ -176,18 +132,31 @@ def crop_spatial_interface(
     interface_bias: tuple[str, str] | None,
     biomolstructure: BioMolStructure,
     crop_length: int,
+    level: Literal["atom", "residue"] = "atom",
 ) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
     """
     Crop the structure and sequence into a spatial region
     """
     interface_distance_cutoff = 15.0
 
+    
     residue_chain_break = biomolstructure.residue_chain_break
     residue_tensor = biomolstructure.residue_tensor
-    (valid_residue_indices,) = torch.where(residue_tensor[:, 4] == 1)
-    valid_residue_num = valid_residue_indices.size(0)
-    if valid_residue_num < crop_length:
+    valid_residue_indices = torch.where(residue_tensor[:, 4] == 1)[0]
+    if level == "atom":
+        atom_chain_break = biomolstructure.atom_chain_break
+        atom_tensor = biomolstructure.atom_tensor
+        _, atom_to_residue_idx_map = torch.unique(atom_tensor[:, 2], sorted=True, return_inverse=True)
+
+    if level == "residue":
+        valid_indices = valid_residue_indices
+    else:  # level == "atom"
+        valid_indices = torch.where(atom_tensor[:, 4] == 1)[0]
+
+    valid_num = valid_indices.size(0)
+    if valid_num < crop_length:
         chain_crop = get_chain_crop_indices(residue_chain_break, valid_residue_indices)
+
         return valid_residue_indices, chain_crop
 
     chain_list = list(residue_chain_break.keys())
@@ -264,16 +233,25 @@ def crop_spatial_interface(
     pivot_residue_idx = random.choice(interface_residue_indices)
     pivot_residue_idx += residue_chain_break[pivot_chain][0]
 
-    # pivot_residue = random.choice(pivot_chain_residue_idx)
+    if level == "residue":
+        pivot_idx = pivot_residue_idx
+        xyz = residue_tensor[:, 5:8]
+        mask = residue_tensor[:, 4] == 1
+    else:  # level == "atom"
+        pivot_idxs = torch.where(atom_to_residue_idx_map == pivot_residue_idx)[0]
+        if len(pivot_idxs) == 0:
+            raise NoInterfaceError(
+            f"No interface residues found for chain {pivot_chain} with cutoff {interface_distance_cutoff}"
+        )  # TODO bug
+        pivot_idx = random.choice(pivot_idxs)
+        xyz = atom_tensor[:, 5:8]
+        mask = atom_tensor[:, 4] == 1
 
-    residue_xyz = residue_tensor[:, 5:8]
-    residue_mask = residue_tensor[:, 4] == 1
-    missing_indices = torch.where(~residue_mask)[0]
-    pivot_residue_tensor = residue_tensor[pivot_residue_idx]
-    pivot_residue_xyz = pivot_residue_tensor[5:8]
+    missing_indices = torch.where(~mask)[0]
+    pivot_xyz = xyz[pivot_idx]
 
-    distance_map = torch.norm(residue_xyz - pivot_residue_xyz, dim=1)
-    distance_map[~residue_mask] = float("inf")
+    distance_map = torch.norm(xyz - pivot_xyz, dim=1)
+    distance_map[~mask] = float("inf")
 
     crop_indices = torch.topk(distance_map, crop_length, largest=False).indices
 
@@ -281,50 +259,85 @@ def crop_spatial_interface(
     crop_indices = crop_indices[~torch.isin(crop_indices, missing_indices)]
     crop_indices = torch.sort(crop_indices).values
 
-    crop_chain = []
-    for chain in chain_list:
-        chain_residue_idx = torch.arange(
-            residue_chain_break[chain][0], residue_chain_break[chain][1] + 1
-        )
-        if torch.any(torch.isin(crop_indices, chain_residue_idx)):
-            crop_chain.append(chain)
+    if level == "atom":
+        crop_indices = atom_to_residue_idx(crop_indices, atom_to_residue_idx_map, valid_residue_indices)
 
     chain_crop = get_chain_crop_indices(residue_chain_break, crop_indices)
 
     return crop_indices, chain_crop
 
+def crop_contiguous_monomer(
+    chain_bias: str | None, biomolstructure: BioMolStructure, crop_length: int, level: Literal["atom", "residue"] = "atom"
+) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
+    """
+    Crop the structure and sequence into a contiguous region
+    """
+    residue_chain_break = biomolstructure.residue_chain_break
+    residue_tensor = biomolstructure.residue_tensor
+    valid_residue_indices = torch.where(residue_tensor[:, 4] == 1)[0]
+    if level == "atom":
+        atom_chain_break = biomolstructure.atom_chain_break
+        atom_tensor = biomolstructure.atom_tensor
+        _, atom_to_residue_idx_map = torch.unique(atom_tensor[:, 2], sorted=True, return_inverse=True)
 
-# def get_crop_indices(
-#     biomolstructure: BioMolStructure,
-#     seq_hash_to_crop_indices: dict[str, torch.Tensor],
-# ) -> list[torch.Tensor]:
-#     contact_graph = biomolstructure.contact_graph
-#     chain_id_to_seq_hash = biomolstructure.sequence_hash
-#     seq_hash_to_chain_id = {value: key for key, value in chain_id_to_seq_hash.items()}
+    def is_valid_chain(chain_id: str) -> bool:
+        chain_start, chain_end = residue_chain_break[chain_id]
+        valid_residue_indices = torch.where(
+            residue_tensor[chain_start : chain_end + 1, 4] == 1
+        )[0]
+        return valid_residue_indices.size(0) > 0
 
-#     biomolstructure_hash = set(biomolstructure.sequence_hash.values())
-#     cropped_hash = set(seq_hash_to_crop_indices.keys())
+    chain_id = None
+    if chain_bias is not None:
+        chain_id = chain_bias if is_valid_chain(chain_bias) else None
 
-#     assert cropped_hash.issubset(biomolstructure_hash), (
-#         f"cropped_hash: {cropped_hash} \
-#         biomolstructure_hash: {biomolstructure_hash}"
-#     )
+    if chain_id is None:
+        chain_id_list = list(residue_chain_break.keys())
+        find_valid_chain = False
+        while not find_valid_chain:
+            chain_id = random.sample(chain_id_list, 1)[0]
+            chain_id_list.remove(chain_id)
+            if is_valid_chain(chain_id):
+                find_valid_chain = True
+        if not find_valid_chain:
+            raise NoValidChainsError(
+                f"No valid chains found in the {biomolstructure.ID}"
+            )
 
-#     seq_hash_to_num = {}
-#     for seq_hash in cropped_hash:
-#         assert len(seq_hash_to_crop_indices[seq_hash]) <= len(
-#             seq_hash_to_chain_id[seq_hash]
-#         ), (
-#             f"seq_hash: {seq_hash} \
-#             len(seq_hash_to_crop_indices[seq_hash]): {len(seq_hash_to_crop_indices[seq_hash])} \
-#             len(seq_hash_to_chain_id[seq_hash]): {len(seq_hash_to_chain_id[seq_hash])}"
-#         )
-#         seq_hash_to_num[seq_hash] = len(seq_hash_to_crop_indices[seq_hash])
+    if level == "residue":
+        chain_start, chain_end = residue_chain_break[chain_id]
+        valid_indices = torch.where(
+            residue_tensor[chain_start : chain_end + 1, 4] == 1
+        )[0]
+    else : # level == "atom"
+        chain_start, chain_end = atom_chain_break[chain_id]
+        valid_indices = torch.where(
+            atom_tensor[chain_start : chain_end + 1, 4] == 1
+        )[0]
+    if valid_indices.size(0) < crop_length:
+        crop_indices = chain_start + valid_indices
+    else:
+        # uniformly sample a contiguous region
+        n_k = valid_indices.size(0)
+        n_start = random.randint(0, n_k - crop_length)
+        crop_indices = chain_start + valid_indices[n_start : n_start + crop_length]
 
-#     # find all combinations of cropped_hash
-#     seq_hash_to_combinations = {}
-#     for seq_hash, num in seq_hash_to_num.items():
-#         chain_ids = seq_hash_to_chain_id.get(seq_hash, [])
-#         seq_hash_to_combinations[seq_hash] = list(itertools.combinations(chain_ids, num))
+    if level == "atom":
+        crop_indices = atom_to_residue_idx(crop_indices, atom_to_residue_idx_map, valid_residue_indices)
 
-#     contact_nodes = contact_graph.get_contact_node(None, pivot_chain_id)
+    chain_crop = get_chain_crop_indices(residue_chain_break, crop_indices)
+    return crop_indices, chain_crop
+
+def atom_to_residue_idx(
+    crop_indices_atom: torch.Tensor, atom_to_residue_idx_map: torch.Tensor, valid_residue_indices: torch.Tensor
+):
+    """
+    Convert atom indices to residue indices.
+    """
+    residue_indices = atom_to_residue_idx_map[crop_indices_atom]
+    # Ensure residue indices are unique
+    residue_indices = torch.unique(residue_indices)
+    # remove invalid residues
+    valid_mask = torch.isin(residue_indices, valid_residue_indices)
+    return residue_indices[valid_mask]
+

@@ -6,8 +6,9 @@ if __name__ == "__main__":
     # BioMol automatically generate all biological assemblies.
     biomol = BioMol(
         # pdb_ID="6nu2", # lower case
-        # cif=f"{DB_PATH}/cif/an/1an2.cif.gz",
+        # cif=f"{DB_PATH}/cif/cif_raw/an/1an2.cif.gz",
         cif=f"{DB_PATH}/cif/cif_raw/s3/6s3z.cif.gz",
+        # cif=f"{DB_PATH}/cif/cif_raw/b0/5b0w.cif.gz",
         remove_signal_peptide=True,
         mol_types=["protein", "nucleic_acid", "ligand"],  # only protein
         use_lmdb=False,
@@ -20,10 +21,17 @@ if __name__ == "__main__":
     # )
     biomol.choose("1", "1", ".")
     crop_indices, seq_hash_to_crop_indices = biomol.get_crop_indices(
-        chain_bias="A_1",
-        spatial_crop_weight=0.5, interface_crop_weight=0.0, crop_length=128
+        # chain_bias="A_1",
+        contiguous_crop_weight=0.0,
+        spatial_crop_weight=0.0,
+        interface_crop_weight=1.0,
+        crop_length=2560,
+        level="atom"
     )
+    breakpoint()
+
     biomol.crop(crop_indices)
+    breakpoint()
     biomol.structure.to_mmcif("6s3z_cropped.cif")  # save the loaded structure
 
     breakpoint()
