@@ -66,11 +66,12 @@ def crop_spatial(
         atom_chain_break = biomolstructure.atom_chain_break
         atom_tensor = biomolstructure.atom_tensor
         _, atom_to_residue_idx_map = torch.unique(atom_tensor[:, 2], sorted=True, return_inverse=True)
+        atom_mask = atom_tensor[:, 4] == 1
 
     if level == "residue":
         valid_indices = valid_residue_indices
     else:  # level == "atom"
-        valid_indices = torch.where(atom_tensor[:, 4] == 1)[0]
+        valid_indices = torch.where(atom_mask)[0]
 
     valid_num = valid_indices.size(0)
 
@@ -121,7 +122,7 @@ def crop_spatial(
     crop_indices = torch.sort(crop_indices).values
 
     if level == "atom":
-        crop_indices = atom_to_residue_idx(crop_indices, atom_to_residue_idx_map, valid_residue_indices)
+        crop_indices = atom_to_residue_idx(crop_indices, atom_to_residue_idx_map, valid_residue_indices, atom_mask)
 
     chain_crop = get_chain_crop_indices(residue_chain_break, crop_indices)
 
@@ -147,6 +148,7 @@ def crop_spatial_interface(
         atom_chain_break = biomolstructure.atom_chain_break
         atom_tensor = biomolstructure.atom_tensor
         _, atom_to_residue_idx_map = torch.unique(atom_tensor[:, 2], sorted=True, return_inverse=True)
+        atom_mask = atom_tensor[:, 4] == 1
 
     if level == "residue":
         valid_indices = valid_residue_indices
@@ -260,7 +262,7 @@ def crop_spatial_interface(
     crop_indices = torch.sort(crop_indices).values
 
     if level == "atom":
-        crop_indices = atom_to_residue_idx(crop_indices, atom_to_residue_idx_map, valid_residue_indices)
+        crop_indices = atom_to_residue_idx(crop_indices, atom_to_residue_idx_map, valid_residue_indices, atom_mask)
 
     chain_crop = get_chain_crop_indices(residue_chain_break, crop_indices)
 
@@ -279,6 +281,7 @@ def crop_contiguous_monomer(
         atom_chain_break = biomolstructure.atom_chain_break
         atom_tensor = biomolstructure.atom_tensor
         _, atom_to_residue_idx_map = torch.unique(atom_tensor[:, 2], sorted=True, return_inverse=True)
+        atom_mask = atom_tensor[:, 4] == 1
 
     def is_valid_chain(chain_id: str) -> bool:
         chain_start, chain_end = residue_chain_break[chain_id]
@@ -323,21 +326,40 @@ def crop_contiguous_monomer(
         crop_indices = chain_start + valid_indices[n_start : n_start + crop_length]
 
     if level == "atom":
-        crop_indices = atom_to_residue_idx(crop_indices, atom_to_residue_idx_map, valid_residue_indices)
+        crop_indices = atom_to_residue_idx(crop_indices, atom_to_residue_idx_map, valid_residue_indices, atom_mask)
 
     chain_crop = get_chain_crop_indices(residue_chain_break, crop_indices)
     return crop_indices, chain_crop
 
 def atom_to_residue_idx(
-    crop_indices_atom: torch.Tensor, atom_to_residue_idx_map: torch.Tensor, valid_residue_indices: torch.Tensor
+    crop_indices_atom: torch.Tensor, atom_to_residue_idx_map: torch.Tensor, valid_residue_indices: torch.Tensor, atom_mask: torch.Tensor
 ):
     """
     Convert atom indices to residue indices.
     """
-    residue_indices = atom_to_residue_idx_map[crop_indices_atom]
-    # Ensure residue indices are unique
-    residue_indices = torch.unique(residue_indices)
-    # remove invalid residues
-    valid_mask = torch.isin(residue_indices, valid_residue_indices)
-    return residue_indices[valid_mask]
+    # residue_indices = atom_to_residue_idx_map[crop_indices_atom]
+    # # Ensure residue indices are unique
+    # residue_indices = torch.unique(residue_indices)
+    # # remove invalid residues
+    # valid_mask = torch.isin(residue_indices, valid_residue_indices)
+    # return residue_indices[valid_mask]
+
+    crop_atom = torch.zeros_like(atom_to_residue_idx_map)
+    crop_atom[crop_indices_atom] = 1
+
+    ones = torch.ones_like(crop_atom)
+
+    max_res_id = int(atom_to_residue_idx_map.max().item())
+    present_counts = torch.zeros(max_res_id + 1, dtype=torch.long)
+    total_counts   = torch.zeros_like(present_counts)
+
+    present_counts.scatter_add_(0, atom_to_residue_idx_map, crop_atom)
+    total_counts.scatter_add_(0, atom_to_residue_idx_map, atom_mask.long())
+
+    full_res_mask = present_counts == total_counts
+
+    valid_full = full_res_mask[valid_residue_indices]
+    residue_idx = valid_residue_indices[valid_full]
+    residue_idx = torch.unique(residue_idx)
+    return residue_idx
 
