@@ -10,6 +10,7 @@ from BioMol.utils.crop import (
     # crop_contiguous,
     crop_contiguous_monomer,
     crop_spatial,
+    crop_spatial_monomer,
     crop_spatial_interface,
     get_chain_crop_indices,
 )
@@ -277,7 +278,7 @@ class BioMol:
         if len(self.structure.residue_chain_break) == 1 and method == "interface":
             # If there is only one chain, use spatial crop instead of interface crop
             method = "spatial"
-
+        breakpoint()
         if method == "contiguous":
             # 20250620, Change contiguous crop to monomer version
             try:
@@ -286,12 +287,12 @@ class BioMol:
                 )
             except NoValidChainsError:
                 # print("No valid chains found. Using spatial crop instead of contiguous crop.")
-                crop_indices, crop_chain = crop_spatial(
+                crop_indices, crop_chain = crop_spatial_monomer(
                     chain_bias, self.structure, crop_length, level=level
                 )
         elif method == "spatial":
             if monomer_only:
-                crop_indices, crop_chain = crop_spatial(
+                crop_indices, crop_chain = crop_spatial_monomer(
                     chain_bias, self.structure, crop_length
                 )
             else:
