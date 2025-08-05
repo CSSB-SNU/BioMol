@@ -28,9 +28,11 @@ def merge_all_protein_seq(entity_dir, save_path):
             f.write(fasta_txt)
 
 
-def run_mmseqs_cluster(fasta_path, cluster_dir):
+def run_mmseqs_cluster(fasta_path, cluster_dir, seq_id=0.3, cov=0.8):
+    if not os.path.exists(cluster_dir):
+        os.makedirs(cluster_dir)
     os.system(
-        f"mmseqs easy-cluster {fasta_path} {cluster_dir} /data/psk6950/PDB_2024Mar18/protein_seq_clust/tmp/ --min-seq-id 0.3 -c 0.8 --cov-mode 0 --cluster-mode 1"
+        f"mmseqs easy-cluster {fasta_path} {cluster_dir} {cluster_dir}/tmp/ --min-seq-id {seq_id} -c {cov} --cov-mode 0 --cluster-mode 1"
     )
 
 
@@ -58,12 +60,15 @@ def save_chainID_to_cluster(mmseq_tsv, mmseq_rep_seq_fasta, save_path):
 
 
 if __name__ == "__main__":
-    entity_dir = "/data/psk6950/PDB_2024Mar18/entity"
-    merged_fasta_path = "/data/psk6950/PDB_2024Mar18/entity/merged_protein.fasta"
+    entity_dir = "/public_data/BioMolDB_2024Oct21/entity"
+    merged_fasta_path = "/public_data/BioMolDB_2024Oct21/entity/merged_protein.fasta"
     # merge_all_protein_seq(entity_dir, merged_fasta_path)
-    # run_mmseqs_cluster(merged_fasta_path, '/data/psk6950/PDB_2024Mar18/protein_seq_clust/mmseqs2_seqid30_cov80_covmode0_clustmode1')
+    seq_id = 0.7
+    cov = 0.8
+    output_dir = f"/public_data/BioMolDB_2024Oct21/cluster/seq_clust/protein_seq_clust/mmseqs2_seqid{seq_id*100}_cov{cov*100}_covmode0_clustmode1"
+    run_mmseqs_cluster(merged_fasta_path, output_dir, seq_id=seq_id, cov=cov)
 
-    mmseq_tsv = "/data/psk6950/PDB_2024Mar18/protein_seq_clust/mmseqs2_seqid30_cov80_covmode0_clustmode1_cluster.tsv"
-    mmseq_rep_seq_fasta = "/data/psk6950/PDB_2024Mar18/protein_seq_clust/mmseqs2_seqid30_cov80_covmode0_clustmode1_rep_seq.fasta"
-    save_path = "/data/psk6950/PDB_2024Mar18/protein_seq_clust/mmseqs2_seqid30_cov80_covmode0_clustmode1_chainID_to_cluster.pkl"
-    save_chainID_to_cluster(mmseq_tsv, merged_fasta_path, mmseq_rep_seq_fasta, save_path)
+    # mmseq_tsv = "/data/psk6950/PDB_2024Mar18/protein_seq_clust/mmseqs2_seqid30_cov80_covmode0_clustmode1_cluster.tsv"
+    # mmseq_rep_seq_fasta = "/data/psk6950/PDB_2024Mar18/protein_seq_clust/mmseqs2_seqid30_cov80_covmode0_clustmode1_rep_seq.fasta"
+    # save_path = "/data/psk6950/PDB_2024Mar18/protein_seq_clust/mmseqs2_seqid30_cov80_covmode0_clustmode1_chainID_to_cluster.pkl"
+    # save_chainID_to_cluster(mmseq_tsv, merged_fasta_path, mmseq_rep_seq_fasta, save_path)
