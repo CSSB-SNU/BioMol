@@ -294,9 +294,10 @@ class BioMol:
                 crop_indices, crop_chain = crop_spatial(
                     chain_bias, self.structure, crop_length
                 )
-            crop_indices, crop_chain = crop_spatial(
-                chain_bias, self.structure, crop_length, level=level
-            )
+            else:
+                crop_indices, crop_chain = crop_spatial(
+                    chain_bias, self.structure, crop_length, level=level
+                )
         elif method == "interface":
             if monomer_only:
                 raise ValueError("Interface crop is not supported for monomer only.")
