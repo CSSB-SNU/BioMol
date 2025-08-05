@@ -278,7 +278,6 @@ class BioMol:
         if len(self.structure.residue_chain_break) == 1 and method == "interface":
             # If there is only one chain, use spatial crop instead of interface crop
             method = "spatial"
-        breakpoint()
         if method == "contiguous":
             # 20250620, Change contiguous crop to monomer version
             try:
