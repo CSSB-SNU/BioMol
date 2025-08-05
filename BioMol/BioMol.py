@@ -260,6 +260,7 @@ class BioMol:
         interface_crop_weight: float = 0.4,
         crop_length: int = 384,
         level="residue",  # "residue" or "atom"
+        monomer_only: bool = False,  # if True, only use monomer chains
     ) -> None:
         assert self.structure_loaded, "Structure is not loaded."
 
@@ -289,10 +290,16 @@ class BioMol:
                     chain_bias, self.structure, crop_length, level=level
                 )
         elif method == "spatial":
+            if monomer_only:
+                crop_indices, crop_chain = crop_spatial(
+                    chain_bias, self.structure, crop_length
+                )
             crop_indices, crop_chain = crop_spatial(
                 chain_bias, self.structure, crop_length, level=level
             )
         elif method == "interface":
+            if monomer_only:
+                raise ValueError("Interface crop is not supported for monomer only.")
             try:
                 crop_indices, crop_chain = crop_spatial_interface(
                     interface_bias, self.structure, crop_length, level=level
@@ -304,7 +311,6 @@ class BioMol:
                 crop_indices, crop_chain = crop_spatial(
                     chain_bias, self.structure, crop_length, level=level
                 )
-
 
         crop_sequence_hash = {
             chain: self.structure.sequence_hash[chain] for chain in crop_chain
