@@ -523,7 +523,7 @@ def separate_and_map_graphs(
         cluster_hashes = cluster_to_cluster_hash[cluster_id]
         train_graph_hash.extend(cluster_hashes)
     for cluster_id in valid_clusters_ids:
-        cluster_hashes = cluster_to_hash_hash[cluster_id]
+        cluster_hashes = cluster_to_cluster_hash[cluster_id]
         valid_graph_hash.extend(cluster_hashes)
 
     graph_cluster_metadata = {}
@@ -681,21 +681,21 @@ if __name__ == "__main__":
         f"{DB_PATH}/cluster/graph_cluster/cluster_level_unique_graphs.pkl"
     )
 
-    level0_graph_cluster(
-        graph_dir,
-        hash_level_csv_path,
-        hash_level_graph_path,
-        cluster_level_csv_path,
-        cluster_level_graph_path,
-    )
+    # level0_graph_cluster(
+    #     graph_dir,
+    #     hash_level_csv_path,
+    #     hash_level_graph_path,
+    #     cluster_level_csv_path,
+    #     cluster_level_graph_path,
+    # )
 
-    # test()
+    # # test()
 
     edge_to_graph_save_path = f"{DB_PATH}/cluster/graph_cluster/edge_to_graph.pkl"
     edge_level_csv_path = f"{DB_PATH}/cluster/graph_cluster/edge_level_cluster.csv"
-    level1_graph_cluster(
-        cluster_level_graph_path, edge_to_graph_save_path, edge_level_csv_path
-    )
+    # level1_graph_cluster(
+    #     cluster_level_graph_path, edge_to_graph_save_path, edge_level_csv_path
+    # )
 
     # # unittest_level1_graph(meta_graph_path, unique_graph_path)
 
