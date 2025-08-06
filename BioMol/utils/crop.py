@@ -369,7 +369,7 @@ def crop_spatial_monomer(
         chain_crop = get_chain_crop_indices(residue_chain_break, valid_residue_indices)
         return valid_residue_indices, chain_crop
 
-    pivot_chain_idx = list(range(idx_start, idx_end + 1))
+    pivot_chain_idx = list(range(0, idx_end - idx_start + 1))
     pivot_idx = random.choice(pivot_chain_idx)
 
     xyz = residue_tensor[:, 5:8]
@@ -388,7 +388,6 @@ def crop_spatial_monomer(
     crop_indices = torch.sort(crop_indices).values
 
     chain_crop = get_chain_crop_indices(residue_chain_break, crop_indices)
-
     return crop_indices, chain_crop
 
 
