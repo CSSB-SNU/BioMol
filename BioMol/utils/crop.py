@@ -298,7 +298,7 @@ def crop_contiguous_monomer(
         )
         atom_mask = atom_tensor[:, 4] == 1
 
-    def is_valid_chain(chain_id: str, min_residue_length=32) -> bool:
+    def is_valid_chain(chain_id: str, min_residue_length=1) -> bool:
         chain_start, chain_end = residue_chain_break[chain_id]
         valid_residue_indices = torch.where(
             residue_tensor[chain_start : chain_end + 1, 4] == 1
@@ -308,6 +308,12 @@ def crop_contiguous_monomer(
     chain_id = None
     if chain_bias is not None:
         chain_id = chain_bias if is_valid_chain(chain_bias) else None
+
+    if not is_valid_chain(chain_bias):
+        raise ValueError(
+            f"Invalid chain: {chain_bias} \
+            valid chains = {list(residue_chain_break.keys())}"
+        )
 
     if chain_id is None:
         chain_id_list = list(residue_chain_break.keys())
@@ -366,8 +372,12 @@ def crop_spatial_monomer(
     valid_num = valid_indices.size(0)
 
     if valid_num < crop_length:
-        chain_crop = get_chain_crop_indices(residue_chain_break, valid_residue_indices)
-        return valid_residue_indices, chain_crop
+        crop_indices = valid_residue_indices + idx_start
+        chain_crop = get_chain_crop_indices(residue_chain_break, crop_indices)
+        assert pivot_chain in chain_crop, (
+            f"Pivot chain {pivot_chain} not found in chain_crop: {chain_crop}"
+        )
+        return crop_indices, chain_crop
 
     pivot_chain_idx = list(range(0, idx_end - idx_start + 1))
     pivot_idx = random.choice(pivot_chain_idx)
@@ -386,8 +396,13 @@ def crop_spatial_monomer(
     # remove missing residues
     crop_indices = crop_indices[~torch.isin(crop_indices, missing_indices)]
     crop_indices = torch.sort(crop_indices).values
+    crop_indices = crop_indices + idx_start
 
     chain_crop = get_chain_crop_indices(residue_chain_break, crop_indices)
+
+    assert pivot_chain in chain_crop, (
+        f"Pivot chain {pivot_chain} not found in chain_crop: {chain_crop}"
+    )
     return crop_indices, chain_crop
 
 
