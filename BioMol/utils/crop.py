@@ -64,10 +64,6 @@ def crop_spatial(
     biomolstructure: BioMolStructure,
     crop_length: int,
     level: Literal["atom", "residue"] = "atom",
-    chain_bias: str | None,
-    biomolstructure: BioMolStructure,
-    crop_length: int,
-    level: Literal["atom", "residue"] = "atom",
 ) -> tuple[torch.Tensor, dict[str, torch.Tensor]]:
     """
     Crop the structure and sequence into a spatial region
@@ -78,9 +74,6 @@ def crop_spatial(
     if level == "atom":
         atom_chain_break = biomolstructure.atom_chain_break
         atom_tensor = biomolstructure.atom_tensor
-        _, atom_to_residue_idx_map = torch.unique(
-            atom_tensor[:, 2], sorted=True, return_inverse=True
-        )
         _, atom_to_residue_idx_map = torch.unique(
             atom_tensor[:, 2], sorted=True, return_inverse=True
         )
@@ -107,12 +100,9 @@ def crop_spatial(
     else:
         pivot_chain = random.choice(chain_list)
 
-
     if level == "residue":
         pivot_chain_idx = list(
             range(
-                residue_chain_break[pivot_chain][0],
-                residue_chain_break[pivot_chain][1] + 1,
                 residue_chain_break[pivot_chain][0],
                 residue_chain_break[pivot_chain][1] + 1,
             )
@@ -123,7 +113,6 @@ def crop_spatial(
         mask = residue_tensor[:, 4] == 1
     else:  # level == "atom"
         pivot_chain_idx = list(
-            range(atom_chain_break[pivot_chain][0], atom_chain_break[pivot_chain][1] + 1)
             range(atom_chain_break[pivot_chain][0], atom_chain_break[pivot_chain][1] + 1)
         )
         pivot_idx = random.choice(pivot_chain_idx)
@@ -146,9 +135,6 @@ def crop_spatial(
         crop_indices = atom_to_residue_idx(
             crop_indices, atom_to_residue_idx_map, valid_residue_indices, atom_mask
         )
-        crop_indices = atom_to_residue_idx(
-            crop_indices, atom_to_residue_idx_map, valid_residue_indices, atom_mask
-        )
 
     chain_crop = get_chain_crop_indices(residue_chain_break, crop_indices)
 
@@ -166,16 +152,12 @@ def crop_spatial_interface(
     """
     interface_distance_cutoff = 15.0
 
-
     residue_chain_break = biomolstructure.residue_chain_break
     residue_tensor = biomolstructure.residue_tensor
     valid_residue_indices = get_valid_residue_indices(residue_tensor)
     if level == "atom":
         atom_chain_break = biomolstructure.atom_chain_break
         atom_tensor = biomolstructure.atom_tensor
-        _, atom_to_residue_idx_map = torch.unique(
-            atom_tensor[:, 2], sorted=True, return_inverse=True
-        )
         _, atom_to_residue_idx_map = torch.unique(
             atom_tensor[:, 2], sorted=True, return_inverse=True
         )
@@ -276,8 +258,6 @@ def crop_spatial_interface(
             raise NoInterfaceError(
                 f"No interface residues found for chain {pivot_chain} with cutoff {interface_distance_cutoff}"
             )  # TODO bug
-                f"No interface residues found for chain {pivot_chain} with cutoff {interface_distance_cutoff}"
-            )  # TODO bug
         pivot_idx = random.choice(pivot_idxs)
         xyz = atom_tensor[:, 5:8]
         mask = atom_tensor[:, 4] == 1
@@ -298,21 +278,13 @@ def crop_spatial_interface(
         crop_indices = atom_to_residue_idx(
             crop_indices, atom_to_residue_idx_map, valid_residue_indices, atom_mask
         )
-        crop_indices = atom_to_residue_idx(
-            crop_indices, atom_to_residue_idx_map, valid_residue_indices, atom_mask
-        )
 
     chain_crop = get_chain_crop_indices(residue_chain_break, crop_indices)
 
     return crop_indices, chain_crop
 
 
-
 def crop_contiguous_monomer(
-    chain_bias: str | None,
-    biomolstructure: BioMolStructure,
-    crop_length: int,
-    level: Literal["atom", "residue"] = "atom",
     chain_bias: str | None,
     biomolstructure: BioMolStructure,
     crop_length: int,
@@ -330,18 +302,13 @@ def crop_contiguous_monomer(
         _, atom_to_residue_idx_map = torch.unique(
             atom_tensor[:, 2], sorted=True, return_inverse=True
         )
-        _, atom_to_residue_idx_map = torch.unique(
-            atom_tensor[:, 2], sorted=True, return_inverse=True
-        )
         atom_mask = atom_tensor[:, 4] == 1
 
-    def is_valid_chain(chain_id: str, min_residue_length=1) -> bool:
     def is_valid_chain(chain_id: str, min_residue_length=1) -> bool:
         chain_start, chain_end = residue_chain_break[chain_id]
         valid_residue_indices = torch.where(
             residue_tensor[chain_start : chain_end + 1, 4] == 1
         )[0]
-        return valid_residue_indices.size(0) > min_residue_length
         return valid_residue_indices.size(0) > min_residue_length
 
     chain_id = None
@@ -354,16 +321,9 @@ def crop_contiguous_monomer(
             valid chains = {list(residue_chain_break.keys())}"
         )
 
-    if not is_valid_chain(chain_bias):
-        raise ValueError(
-            f"Invalid chain: {chain_bias} \
-            valid chains = {list(residue_chain_break.keys())}"
-        )
-
     if chain_id is None:
         chain_id_list = list(residue_chain_break.keys())
         find_valid_chain = False
-        while len(chain_id_list) > 0 and not find_valid_chain:
         while len(chain_id_list) > 0 and not find_valid_chain:
             chain_id = random.sample(chain_id_list, 1)[0]
             chain_id_list.remove(chain_id)
@@ -380,12 +340,7 @@ def crop_contiguous_monomer(
             0
         ]
     else:  # level == "atom"
-        valid_indices = torch.where(residue_tensor[chain_start : chain_end + 1, 4] == 1)[
-            0
-        ]
-    else:  # level == "atom"
         chain_start, chain_end = atom_chain_break[chain_id]
-        valid_indices = torch.where(atom_tensor[chain_start : chain_end + 1, 4] == 1)[0]
         valid_indices = torch.where(atom_tensor[chain_start : chain_end + 1, 4] == 1)[0]
     if valid_indices.size(0) < crop_length:
         crop_indices = chain_start + valid_indices
@@ -396,9 +351,6 @@ def crop_contiguous_monomer(
         crop_indices = chain_start + valid_indices[n_start : n_start + crop_length]
 
     if level == "atom":
-        crop_indices = atom_to_residue_idx(
-            crop_indices, atom_to_residue_idx_map, valid_residue_indices, atom_mask
-        )
         crop_indices = atom_to_residue_idx(
             crop_indices, atom_to_residue_idx_map, valid_residue_indices, atom_mask
         )
@@ -467,10 +419,6 @@ def atom_to_residue_idx(
     atom_to_residue_idx_map: torch.Tensor,
     valid_residue_indices: torch.Tensor,
     atom_mask: torch.Tensor,
-    crop_indices_atom: torch.Tensor,
-    atom_to_residue_idx_map: torch.Tensor,
-    valid_residue_indices: torch.Tensor,
-    atom_mask: torch.Tensor,
 ):
     """
     Convert atom indices to residue indices.
@@ -489,7 +437,6 @@ def atom_to_residue_idx(
 
     max_res_id = int(atom_to_residue_idx_map.max().item())
     present_counts = torch.zeros(max_res_id + 1, dtype=torch.long)
-    total_counts = torch.zeros_like(present_counts)
     total_counts = torch.zeros_like(present_counts)
 
     present_counts.scatter_add_(0, atom_to_residue_idx_map, crop_atom)
