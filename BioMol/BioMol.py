@@ -323,6 +323,8 @@ class BioMol:
                 seq_hash_to_crop_indices[seq_hash] = []
             seq_hash_to_crop_indices[seq_hash].append(crop_chain[chain])
 
+        
+
         return crop_indices, seq_hash_to_crop_indices
 
     def crop(
