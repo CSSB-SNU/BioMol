@@ -24,6 +24,11 @@ target-version = "py310"
 
 [tool.ruff.lint]
 select = ["ALL"]
+ignore = [
+    "F722", # Incompatible with jaxtyping
+    "D100", # Missing docstring in public module
+    "D104", # Missing docstring in public package
+]
 
 [tool.ruff.lint.pydocstyle]
 convention = "numpy"
@@ -39,3 +44,5 @@ biomol = { path = ".", editable = true }
 python = "~=3.10"
 ruff = ">=0.11.6,<0.12"
 pytest = ">=8.4.1,<9"
+jaxtyping = ">=0.3.2,<0.4"
+beartype = ">=0.21.0,<0.22"
