@@ -1,21 +1,7 @@
-example_cif/
-dataloader.py
-sampling.py
-log/
-__pycache__/
-backup/
-.vscode/
-.ruff_cache/
+/logs/
+*__pycache__/
 BioMol/configs/datapath.json
 
 # pixi environments
 .pixi
 *.egg-info
-*.cif
-pixi.lock
-*.a3m
-*.a3m.gz
-github_token
-test.py
-*.pt
-*.pkl
