@@ -9,11 +9,8 @@ from typing import Any
 @enum.unique
 class FeatureLevel(enum.Enum):
     ATOM = "atom"
-    CHEMCOMP = "chem_comp"
-    ENTITY = "entity"
+    RESIDUE = "residue"
     CHAIN = "chain"
-    UNIT = "asymmetric_unit"
-    FULL = "full"
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
@@ -90,19 +87,8 @@ class Feature0D(Feature):
 class FeatureMap0D(FeatureMap, _HelpMixin):
     feature_map: Mapping[str, Feature0D]
 
-    def keys(self) -> list[str]:
-        return list(self.feature_map.keys())
-
-    def values(self) -> list[Feature0D]:
-        return list(self.feature_map.values())
-
-    def describe(self, key: str | None = None) -> str | Sequence[str]:
-        if key is None:
-            return self._collect_help(self.feature_map)
-        return self.feature_map[key].describe()
-
-    def __contains__(self, key: str) -> bool:
-        return key in self.feature_map
+    def __post_init__(self):
+        self._check_level()
 
     def __repr__(self) -> str:
         output = "FeatureMap0D(\n"
@@ -115,6 +101,26 @@ class FeatureMap0D(FeatureMap, _HelpMixin):
         if not isinstance(key, str):
             raise ValueError("Key should be a string for 0D feature map")
         return self.feature_map[key]
+
+    def __contains__(self, key: str) -> bool:
+        return key in self.feature_map
+
+    def keys(self) -> list[str]:
+        return list(self.feature_map.keys())
+
+    def values(self) -> list[Feature0D]:
+        return list(self.feature_map.values())
+
+    def describe(self, key: str | None = None) -> str | Sequence[str]:
+        if key is None:
+            return self._collect_help(self.feature_map)
+        return self.feature_map[key].describe()
+
+    def _check_level(self):
+        levels = {feature.level for feature in self.feature_map.values()}
+        if len(levels) != 1:
+            raise ValueError(f"Invalid feature levels: {levels}")
+        self.level = levels.pop()  # Set the level to the single level found
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
@@ -134,6 +140,56 @@ class Feature1D(Feature):
     def describe(self) -> str | Sequence[str]:
         return self.additional_info  # TODO : parse additional_info
 
+    def crop(self, indices: np.ndarray) -> "Feature1D":
+        """
+        Crop Feature1D along the first axis.
+
+        Parameters
+        ----------
+        indices : np.ndarray
+            - 1D integer array of indices (negative allowed)
+            - 1D boolean mask (must have same length as value)
+            - slice object (will be converted internally to np.arange)
+
+        Returns
+        -------
+        Feature1D
+            Cropped feature.
+        """
+        L = self.value.shape[0]
+
+        if isinstance(indices, slice):
+            sel = np.arange(L)[indices]
+        else:
+            sel = np.asarray(indices)
+
+        if sel.dtype == bool:
+            if sel.shape[0] != L:
+                raise ValueError(
+                    f"Boolean mask must have shape ({L},), got {sel.shape}."
+                )
+            new_value = self.value[sel]
+            new_mask = None if self.mask is None else self.mask[sel]
+        elif np.issubdtype(sel.dtype, np.integer):
+            if sel.ndim != 1:
+                raise ValueError("Integer indices must be a 1D array.")
+            if ((sel >= L) | (sel < -L)).any():
+                raise IndexError(f"Indices out of range for length {L}.")
+            new_value = self.value[sel]
+            new_mask = None if self.mask is None else self.mask[sel]
+        else:
+            raise TypeError(
+                f"indices must be int array, bool mask, or slice; got {sel.dtype}"
+            )
+
+        return Feature1D(
+            key=self.key,
+            value=new_value,
+            mask=new_mask,
+            level=self.level,
+            additional_info=self.additional_info,
+        )
+
 
 @dataclasses.dataclass()
 class FeatureMap1D(FeatureMap, _HelpMixin):
@@ -141,17 +197,14 @@ class FeatureMap1D(FeatureMap, _HelpMixin):
 
     def __post_init__(self):
         self._check_length()
+        self._check_level()
 
-    def _check_length(self):
-        lengths = [len(v) for v in self.values()]
-        if not all(length == lengths[0] for length in lengths):
-            raise ValueError("All features must have the same length")
-
-    def keys(self) -> list[str]:
-        return list(self.feature_map.keys())
-
-    def values(self) -> list[Feature1D]:
-        return list(self.feature_map.values())
+    def __repr__(self) -> str:
+        output = "FeatureMap1D(\n"
+        for value in self.feature_map.values():
+            output += f"  {value}\n"
+        output += ")"
+        return output
 
     def __getitem__(self, key: str | int | slice) -> Any:
         if isinstance(key, str):
@@ -161,17 +214,48 @@ class FeatureMap1D(FeatureMap, _HelpMixin):
     def __contains__(self, key: str) -> bool:
         return key in self.feature_map
 
+    def keys(self) -> list[str]:
+        return list(self.feature_map.keys())
+
+    def values(self) -> list[Feature1D]:
+        return list(self.feature_map.values())
+
     def describe(self, key: str | None = None) -> Sequence[str]:
         if key is None:
             return self._collect_help(self.feature_map)
         return self.feature_map[key].describe()
 
-    def __repr__(self) -> str:
-        output = "FeatureMap1D(\n"
-        for value in self.feature_map.values():
-            output += f"  {value}\n"
-        output += ")"
-        return output
+    def crop(self, indices: np.ndarray) -> "FeatureMap1D":
+        """
+        Crop FeatureMap1D along the first axis.
+
+        Parameters
+        ----------
+        indices : np.ndarray
+            - 1D integer array of indices (negative allowed)
+            - 1D boolean mask (must have same length as value)
+            - slice object (will be converted internally to np.arange)
+
+        Returns
+        -------
+        FeatureMap1D
+            Cropped feature map.
+        """
+        cropped_map = {}
+        for key, feature in self.feature_map.items():
+            cropped_map[key] = feature.crop(indices)
+        return FeatureMap1D(cropped_map)
+
+    def _check_length(self):
+        lengths = [len(v) for v in self.values()]
+        if not all(length == lengths[0] for length in lengths):
+            raise ValueError("All features must have the same length")
+
+    def _check_level(self):
+        levels = {feature.level for feature in self.feature_map.values()}
+        if len(levels) != 1:
+            raise ValueError(f"Invalid feature levels: {levels}")
+        self.level = levels.pop()  # Set the level to the single level found
 
 
 @dataclasses.dataclass(frozen=True)
@@ -191,6 +275,70 @@ class FeaturePair(Feature):
     def indices(self) -> list[tuple[int, int]]:
         return list(self.value.keys())
 
+    def crop(self, indices: np.ndarray) -> "FeaturePair":
+        """
+        Keep only pairs (i, j) whose both endpoints are in `indices`,
+        and remap old node indices -> new compact indices [0..K-1]
+        in the given order.
+
+        Parameters
+        ----------
+        indices : np.ndarray
+            - 1D integer array of UNIQUE, NON-NEGATIVE node indices to keep
+              (defines new ordering)
+            - OR 1D boolean mask where True means keep (length = #nodes)
+
+        Returns
+        -------
+        FeaturePair
+            Cropped pair feature with remapped node indices.
+
+        Notes
+        -----
+        - Negative integer indices are not supported because FeaturePair
+          does not know the global length.
+        - Duplicate integer indices are not allowed.
+        - The unidirectional flag is preserved. Only the existing edges
+          are filtered and remapped; no symmetric edges are added.
+        """
+        if not isinstance(indices, np.ndarray):
+            raise TypeError("indices must be a numpy.ndarray")
+
+        if indices.dtype == bool:
+            if indices.ndim != 1:
+                raise ValueError("Boolean mask for FeaturePair.crop must be 1D.")
+            selected = np.flatnonzero(indices)
+        elif np.issubdtype(indices.dtype, np.integer):
+            if indices.ndim != 1:
+                raise ValueError("Integer indices for FeaturePair.crop must be 1D.")
+            if (indices < 0).any():
+                raise ValueError(
+                    "Negative indices are not supported for FeaturePair.crop."
+                )
+            if np.unique(indices).shape[0] != indices.shape[0]:
+                raise ValueError("Integer indices must be unique.")
+            selected = indices
+        else:
+            raise TypeError("indices must be a 1D integer array or a 1D boolean mask.")
+
+        index_map = {int(old): int(new) for new, old in enumerate(selected)}
+        selected_set = set(index_map.keys())
+
+        new_mapping: dict[tuple[int, int], Any] = {}
+        for (i, j), v in self.value.items():
+            if (i in selected_set) and (j in selected_set):
+                ni = index_map[i]
+                nj = index_map[j]
+                new_mapping[(ni, nj)] = v
+
+        return FeaturePair(
+            key=self.key,
+            value=new_mapping,
+            level=self.level,
+            unidirectional=self.unidirectional,
+            additional_info=self.additional_info,
+        )
+
     def to_numpy(self) -> dict[str, np.ndarray]:
         """Convert pair mapping into numpy arrays (I, J, V)."""
         I, J, V = [], [], []
@@ -198,8 +346,6 @@ class FeaturePair(Feature):
             I.append(i)
             J.append(j)
             V.append(v)
-
-        # stack : (i,j,v)
         stacked = np.stack((I, J, V), axis=-1)
         return stacked
 
@@ -228,11 +374,15 @@ class FeaturePair(Feature):
 class FeatureMapPair(FeatureMap, _HelpMixin):
     feature_map: Mapping[str, FeaturePair]
 
-    def keys(self) -> list[str]:
-        return list(self.feature_map.keys())
+    def __post_init__(self):
+        self._check_level()
 
-    def values(self) -> list[FeaturePair]:
-        return list(self.feature_map.values())
+    def __repr__(self) -> str:
+        output = "FeatureMapPair(\n"
+        for value in self.feature_map.values():
+            output += f"  {value}\n"
+        output += ")"
+        return output
 
     def __getitem__(self, key: str | tuple[int, int]) -> Any:
         if isinstance(key, str):
@@ -242,183 +392,39 @@ class FeatureMapPair(FeatureMap, _HelpMixin):
     def __contains__(self, key: str) -> bool:
         return key in self.feature_map
 
+    def keys(self) -> list[str]:
+        return list(self.feature_map.keys())
+
+    def values(self) -> list[FeaturePair]:
+        return list(self.feature_map.values())
+
+    def crop(self, indices: np.ndarray) -> "FeatureMapPair":
+        """
+        Crop the feature map pair to only include the specified indices.
+
+        Parameters
+        ----------
+        indices : np.ndarray
+            1D array of indices to keep.
+
+        Returns
+        -------
+        FeatureMapPair
+            A new FeatureMapPair containing only the specified indices.
+        """
+        cropped_feature_map = {
+            key: feature_pair.crop(indices)
+            for key, feature_pair in self.feature_map.items()
+        }
+        return FeatureMapPair(cropped_feature_map)
+
     def describe(self, key: str | None = None) -> Sequence[str]:
         if key is None:
             return self._collect_help(self.feature_map)
         return self.feature_map[key].describe()
 
-    def __repr__(self) -> str:
-        output = "FeatureMapPair(\n"
-        for value in self.feature_map.values():
-            output += f"  {value}\n"
-        output += ")"
-        return output
-
-
-@dataclasses.dataclass(slots=True)
-class FeatureContainer:
-    feature_map_0D: FeatureMap0D
-    feature_map_1D: FeatureMap1D
-    feature_map_pair: FeatureMapPair
-
-    def __init__(
-        self,
-        feature_map_0D: FeatureMap0D | None = None,
-        feature_map_1D: FeatureMap1D | None = None,
-        feature_map_pair: FeatureMapPair | None = None,
-    ):
-        # Ensure consistent types for empty defaults
-        self.feature_map_0D = feature_map_0D or FeatureMap0D({})
-        self.feature_map_1D = feature_map_1D or FeatureMap1D({})
-        self.feature_map_pair = feature_map_pair or FeatureMapPair({})
-        self._check_duplicate_keys()
-        self._check_length()
-        self._check_feature_level()
-        self.key_to_map = {
-            **self.feature_map_0D.feature_map,
-            **self.feature_map_1D.feature_map,
-            **self.feature_map_pair.feature_map,
-        }
-
-    def _check_duplicate_keys(self) -> None:
-        keys_0D = self.feature_map_0D.keys()
-        keys_1D = self.feature_map_1D.keys()
-        keys_pair = self.feature_map_pair.keys()
-        total_keys = list(keys_0D) + list(keys_1D) + list(keys_pair)
-        if len(set(total_keys)) != len(total_keys):
-            raise ValueError("Duplicate keys found in feature maps")
-
-    def _check_length(self) -> None:
-        if len(self.feature_map_1D) == 0:
-            return
-        length = len(self.feature_map_1D.values()[0])
-        for pair_feature in self.feature_map_pair.values():
-            ii, jj = pair_feature.indices()
-            if ii >= length or jj >= length:
-                raise ValueError(f"Feature pair indices out of bounds: {ii}, {jj}")
-
-    def _check_feature_level(self) -> None:
-        levels = {
-            **self.feature_map_0D.levels(),
-            **self.feature_map_1D.levels(),
-            **self.feature_map_pair.levels(),
-        }
-        for key, level in levels.items():
-            if level != FeatureLevel.FULL:
-                raise ValueError(f"Feature '{key}' is not at FULL level")
-
-    def __getitem__(self, idx: str | int | slice | tuple[int, int]) -> Any:
-        if isinstance(idx, str):
-            return self.key_to_map[idx]
-        elif isinstance(idx, int | slice):
-            return self.feature_map_1D[idx]
-        elif isinstance(idx, tuple):
-            return self.feature_map_pair[idx]
-        else:
-            raise TypeError(f"Unsupported index type: {type(idx).__name__}")
-
-    def get_0d_features(self) -> FeatureMap0D:
-        return self.feature_map_0D
-
-    def get_1d_features(self) -> FeatureMap1D:
-        return self.feature_map_1D
-
-    def get_pair_features(self) -> FeatureMapPair:
-        return self.feature_map_pair
-
-    def to_numpy(self) -> dict[str, Any]:
-        return {
-            "0D": {
-                k: {
-                    "value": v.value,
-                    "level": v.level.value,
-                    "info": v.additional_info,
-                }
-                for k, v in self.feature_map_0D.feature_map.items()
-            },
-            "1D": {
-                k: {
-                    "value": v.value,
-                    "mask": v.mask,
-                    "level": v.level.value,
-                    "info": v.additional_info,
-                }
-                for k, v in self.feature_map_1D.feature_map.items()
-            },
-            "pair": {
-                k: {
-                    "ijv": v.to_numpy(),  # (N,3) stacked [i,j,v]
-                    "unidirectional": v.unidirectional,
-                    "level": v.level.value,
-                    "info": v.additional_info,
-                }
-                for k, v in self.feature_map_pair.feature_map.items()
-            },
-        }
-
-    @classmethod
-    def from_numpy(cls, data: dict[str, Any]) -> "FeatureContainer":
-        # 0D (supports legacy: value is stored directly)
-        f0d_items: dict[str, Feature0D] = {}
-        for k, raw in data.get("0D", {}).items():
-            if isinstance(raw, dict) and "value" in raw:
-                val = raw["value"]
-                lvl = FeatureLevel(raw.get("level", FeatureLevel.FULL.value))
-                info = raw.get("info", None)
-            else:
-                val = raw
-                lvl = FeatureLevel.FULL
-                info = None
-            f0d_items[k] = Feature0D(key=k, value=val, level=lvl, additional_info=info)
-        f0d = FeatureMap0D(f0d_items)
-
-        # 1D (supports legacy: only {"value","mask"})
-        f1d_items: dict[str, Feature1D] = {}
-        for k, raw in data.get("1D", {}).items():
-            val = raw["value"] if isinstance(raw, dict) else raw
-            msk = raw.get("mask", None) if isinstance(raw, dict) else None
-            lvl = (
-                FeatureLevel(raw.get("level", FeatureLevel.FULL.value))
-                if isinstance(raw, dict)
-                else FeatureLevel.FULL
-            )
-            info = raw.get("info", None) if isinstance(raw, dict) else None
-            f1d_items[k] = Feature1D(
-                key=k, value=val, mask=msk, level=lvl, additional_info=info
-            )
-        f1d = FeatureMap1D(f1d_items)
-
-        # pair (supports legacy: value was a bare (N,3) array)
-        fpair_items: dict[str, FeaturePair] = {}
-        for k, raw in data.get("pair", {}).items():
-            if isinstance(raw, dict) and "ijv" in raw:
-                ijv = raw["ijv"]
-                unidir = bool(raw.get("unidirectional", True))
-                lvl = FeatureLevel(raw.get("level", FeatureLevel.FULL.value))
-                info = raw.get("info", None)
-            else:
-                ijv = raw
-                unidir = True
-                lvl = FeatureLevel.FULL
-                info = None
-            fpair_items[k] = FeaturePair.from_numpy(
-                key=k,
-                data=ijv,
-                level=lvl,
-                unidirectional=unidir,
-                additional_info=info,
-            )
-        fpair = FeatureMapPair(fpair_items)
-
-        return cls(f0d, f1d, fpair)
-
-@dataclasses.dataclass(slots=True)
-class AtomFeatureContainer(FeatureContainer):
-
-
-def combine_feature_map_container():
-    pass
-
-
-def crop():
-    pass
+    def _check_level(self):
+        levels = {feature.level for feature in self.feature_map.values()}
+        if len(levels) != 1:
+            raise ValueError(f"Invalid feature levels: {levels}")
+        self.level = levels.pop()  # Set the level to the single level found
