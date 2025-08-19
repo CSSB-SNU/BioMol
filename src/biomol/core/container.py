@@ -1,17 +1,19 @@
-import numpy as np
 import dataclasses
 import enum
 from collections.abc import Iterable
 from typing import Any
 
+import numpy as np
+
 from biomol.core.feature import (
-    FeatureLevel,
+    Feature,
     Feature0D,
     Feature1D,
-    FeaturePair,
+    FeatureLevel,
     FeatureMap0D,
     FeatureMap1D,
     FeatureMapPair,
+    FeaturePair,
 )
 
 
@@ -30,7 +32,7 @@ class PolymerType(enum.Enum):
     PROTEIN_D = "polypeptide(D)"
     PNA = "peptide nucleic acid"
     RNA = "polyribonucleotide"
-    DNA = "polydeoxyribonucleotide"  # TODO
+    DNA = "polydeoxyribonucleotide"
     NA_HYBRID = "polydeoxyribonucleotide/polyribonucleotide hybrid"
     ETC = "etc"
 
@@ -40,6 +42,7 @@ class FeatureContainer:
     feature_map_0D: FeatureMap0D
     feature_map_1D: FeatureMap1D
     feature_map_pair: FeatureMapPair
+    level: FeatureLevel
 
     def __init__(
         self,
@@ -53,21 +56,43 @@ class FeatureContainer:
         self._check_duplicate_keys()
         self._check_length()
         self._check_level()
-        self.key_to_map = {
-            **self.feature_map_0D.feature_map,
-            **self.feature_map_1D.feature_map,
-            **self.feature_map_pair.feature_map,
-        }
 
-    def __getitem__(self, idx: str | int | slice | tuple[int, int]) -> Any:
+    def __getitem__(self, idx: str | int | slice | tuple[int, int]) -> Feature:
         if isinstance(idx, str):
-            return self.key_to_map[idx]
-        elif isinstance(idx, int | slice):
-            return self.feature_map_1D[idx]
-        elif isinstance(idx, tuple):
+            if idx in self.feature_map_0D:
+                return self.feature_map_0D[idx]
+            if idx in self.feature_map_1D:
+                return self.feature_map_1D[idx]
             return self.feature_map_pair[idx]
-        else:
-            raise TypeError(f"Unsupported index type: {type(idx).__name__}")
+        if isinstance(idx, int | slice):
+            return self.feature_map_1D[idx]
+        if isinstance(idx, tuple):
+            return self.feature_map_pair[idx]
+        raise TypeError(f"Unsupported index type: {type(idx).__name__}")
+
+    def __getattr__(self, name: str) -> str | int | float | bool | np.ndarray:
+        """
+        Allow accessing features by attribute syntax.
+
+        container.key1  <=> container.key_to_map["key1"].
+        """
+        if name in self.feature_map_0D:
+            return self.feature_map_0D[name].value
+        if name in self.feature_map_1D:
+            return self.feature_map_1D[name].value
+        if name in self.feature_map_pair:
+            return self.feature_map_pair[name].value
+
+        raise AttributeError(
+            f"'{type(self).__name__}' object has no attribute '{name}'"
+        )
+
+    def keys(self) -> list[str]:
+        return (
+            list(self.feature_map_0D.keys())
+            + list(self.feature_map_1D.keys())
+            + list(self.feature_map_pair.keys())
+        )
 
     def get_0d_features(self) -> FeatureMap0D:
         return self.feature_map_0D
@@ -109,7 +134,6 @@ class FeatureContainer:
             "1D": {
                 k: {
                     "value": v.value,
-                    "mask": v.mask,
                     "level": v.level.value,
                     "info": v.additional_info,
                 }
@@ -117,8 +141,7 @@ class FeatureContainer:
             },
             "pair": {
                 k: {
-                    "ijv": v.to_numpy(),  # (N,3) stacked [i,j,v]
-                    "unidirectional": v.unidirectional,
+                    "value": v.value,
                     "level": v.level.value,
                     "info": v.additional_info,
                 }
@@ -135,7 +158,6 @@ class FeatureContainer:
                 level if isinstance(level, FeatureLevel) else FeatureLevel(level)
             )
             map_0d[k] = Feature0D(
-                key=k,
                 value=d.get("value"),
                 level=level_enum,
                 additional_info=d.get("info"),
@@ -148,9 +170,7 @@ class FeatureContainer:
                 level if isinstance(level, FeatureLevel) else FeatureLevel(level)
             )
             map_1d[k] = Feature1D(
-                key=k,
                 value=d.get("value"),
-                mask=d.get("mask"),
                 level=level_enum,
                 additional_info=d.get("info"),
             )
@@ -161,19 +181,9 @@ class FeatureContainer:
             level_enum = (
                 level if isinstance(level, FeatureLevel) else FeatureLevel(level)
             )
-            ijv = d.get("ijv")
-            if ijv is None:
-                raise ValueError(f"Missing 'ijv' for pair feature '{k}'")
-            ijv = np.asarray(ijv)
-            if ijv.ndim != 2 or ijv.shape[1] != 3:
-                raise ValueError(
-                    f"'ijv' must have shape (N,3); got {ijv.shape} for '{k}'"
-                )
-            fp = FeaturePair.from_numpy(
-                key=k,
-                data=ijv,
+            fp = FeaturePair(
+                value=d.get("value"),
                 level=level_enum,
-                unidirectional=bool(d.get("unidirectional", False)),
                 additional_info=d.get("info"),
             )
             map_pair[k] = fp
@@ -183,8 +193,44 @@ class FeatureContainer:
         fmpair = FeatureMapPair(map_pair)
         return cls(fm0d, fm1d, fmpair)
 
+    def _check_duplicate_keys(self) -> None:
+        keys_0D = self.feature_map_0D.keys()
+        keys_1D = self.feature_map_1D.keys()
+        keys_pair = self.feature_map_pair.keys()
+        total_keys = list(keys_0D) + list(keys_1D) + list(keys_pair)
+        if len(set(total_keys)) != len(total_keys):
+            raise ValueError("Duplicate keys found in feature maps")
 
-@dataclasses.dataclass(slots=True)
+    def _check_length(self) -> None:
+        if len(self.feature_map_1D) == 0:
+            return
+        length = len(self.feature_map_1D.values()[0])
+        for pair_feature in self.feature_map_pair.values():
+            ii, jj = pair_feature.indices()
+            if ii >= length or jj >= length:
+                raise ValueError(f"Feature pair indices out of bounds: {ii}, {jj}")
+
+    def _check_level(self):
+        levels = {
+            "0D": self.feature_map_0D.level,
+            "1D": self.feature_map_1D.level,
+            "pair": self.feature_map_pair.level,
+        }
+        if any(level != self.level for level in levels.values()):
+            raise ValueError(f"All feature maps must have level {self.level}.")
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, FeatureContainer):
+            return NotImplemented
+        return (
+            self.level == other.level
+            and self.feature_map_0D == other.feature_map_0D
+            and self.feature_map_1D == other.feature_map_1D
+            and self.feature_map_pair == other.feature_map_pair
+        )
+
+
+@dataclasses.dataclass(slots=True, eq=False)
 class AtomContainer(FeatureContainer):
     """
     Container for atom-level features.
@@ -199,18 +245,7 @@ class AtomContainer(FeatureContainer):
     feature_map_0D: FeatureMap0D
     feature_map_1D: FeatureMap1D
     feature_map_pair: FeatureMapPair
-
-    def __post_init__(self):
-        self._check_level()
-
-    def _check_level(self):
-        levels = {
-            "0D": self.feature_map_0D.level,
-            "1D": self.feature_map_1D.level,
-            "pair": self.feature_map_pair.level,
-        }
-        if any(level != FeatureLevel.ATOM for level in levels.values()):
-            raise ValueError("All feature maps must have level ATOM.")
+    level: FeatureLevel = FeatureLevel.ATOM
 
 
 @dataclasses.dataclass(slots=True)
@@ -228,18 +263,11 @@ class ResidueContainer(FeatureContainer):
     feature_map_0D: FeatureMap0D
     feature_map_1D: FeatureMap1D
     feature_map_pair: FeatureMapPair
+    level: FeatureLevel = FeatureLevel.RESIDUE
+    type: MoleculeType = None
 
-    def __post_init__(self):
-        self._check_level()
-
-    def _check_level(self):
-        levels = {
-            "0D": self.feature_map_0D.level,
-            "1D": self.feature_map_1D.level,
-            "pair": self.feature_map_pair.level,
-        }
-        if any(level != FeatureLevel.RESIDUE for level in levels.values()):
-            raise ValueError("All feature maps must have level RESIDUE.")
+    def get_type(self):
+        return self.type
 
 
 @dataclasses.dataclass(slots=True)
@@ -257,21 +285,12 @@ class ChainContainer(FeatureContainer):
     feature_map_0D: FeatureMap0D
     feature_map_1D: FeatureMap1D
     feature_map_pair: FeatureMapPair
-
-    def __post_init__(self):
-        self._check_level()
-
-    def _check_level(self):
-        levels = {
-            "0D": self.feature_map_0D.level,
-            "1D": self.feature_map_1D.level,
-            "pair": self.feature_map_pair.level,
-        }
-        if any(level != FeatureLevel.CHAIN for level in levels.values()):
-            raise ValueError("All feature maps must have level CHAIN.")
+    level: FeatureLevel = FeatureLevel.CHAIN
 
 
-def combine_container(list_of_container: Iterable[FeatureContainer]) -> FeatureContainer:
+def combine_container(
+    list_of_container: Iterable[FeatureContainer],
+) -> FeatureContainer:
     containers = list(list_of_container)
     if not containers:
         raise ValueError("combine_container requires at least one container.")
