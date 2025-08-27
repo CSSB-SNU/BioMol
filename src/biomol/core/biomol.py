@@ -1,16 +1,9 @@
-from dataclasses import dataclass
 from pathlib import Path
 
-import numpy as np
-from biotite.structure import AtomArray, AtomArrayStack
 from biotite.structure import io as strucio
 
 
 class BioMol:
-    def __init__(self, atom_features, residues_features, chain_features):
-        self._atom_features = atom_features
-        pass
-
     @classmethod
     def from_path(cls, path: str | Path) -> "BioMol":
         """

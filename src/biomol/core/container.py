@@ -1,40 +1,19 @@
 import dataclasses
-import enum
 from collections.abc import Iterable
 from typing import Any
 
 import numpy as np
 
-from biomol.core.feature import (
+from .feature import (
     Feature,
     Feature0D,
     Feature1D,
-    FeatureLevel,
     FeatureMap0D,
     FeatureMap1D,
     FeatureMapPair,
     FeaturePair,
 )
-
-
-@enum.unique
-class MoleculeType(enum.Enum):
-    POLYMER = "polymer"
-    NONPOLYMER = "non-polymer"
-    BRANCHED = "branched"
-    WATER = "water"
-    BIOASSEMBLY = "bioassembly"
-
-
-@enum.unique
-class PolymerType(enum.Enum):
-    PROTEIN = "polypeptide(L)"
-    PROTEIN_D = "polypeptide(D)"
-    PNA = "peptide nucleic acid"
-    RNA = "polyribonucleotide"
-    DNA = "polydeoxyribonucleotide"
-    NA_HYBRID = "polydeoxyribonucleotide/polyribonucleotide hybrid"
-    ETC = "etc"
+from .types import MoleculeType, StructureLevel
 
 
 @dataclasses.dataclass(slots=True)
@@ -42,7 +21,7 @@ class FeatureContainer:
     feature_map_0D: FeatureMap0D
     feature_map_1D: FeatureMap1D
     feature_map_pair: FeatureMapPair
-    level: FeatureLevel
+    level: StructureLevel
 
     def __init__(
         self,
@@ -155,7 +134,7 @@ class FeatureContainer:
         for k, d in (data.get("0D") or {}).items():
             level = d.get("level")
             level_enum = (
-                level if isinstance(level, FeatureLevel) else FeatureLevel(level)
+                level if isinstance(level, StructureLevel) else StructureLevel(level)
             )
             map_0d[k] = Feature0D(
                 value=d.get("value"),
@@ -167,7 +146,7 @@ class FeatureContainer:
         for k, d in (data.get("1D") or {}).items():
             level = d.get("level")
             level_enum = (
-                level if isinstance(level, FeatureLevel) else FeatureLevel(level)
+                level if isinstance(level, StructureLevel) else StructureLevel(level)
             )
             map_1d[k] = Feature1D(
                 value=d.get("value"),
@@ -179,7 +158,7 @@ class FeatureContainer:
         for k, d in (data.get("pair") or {}).items():
             level = d.get("level")
             level_enum = (
-                level if isinstance(level, FeatureLevel) else FeatureLevel(level)
+                level if isinstance(level, StructureLevel) else StructureLevel(level)
             )
             fp = FeaturePair(
                 value=d.get("value"),
@@ -245,7 +224,7 @@ class AtomContainer(FeatureContainer):
     feature_map_0D: FeatureMap0D
     feature_map_1D: FeatureMap1D
     feature_map_pair: FeatureMapPair
-    level: FeatureLevel = FeatureLevel.ATOM
+    level: StructureLevel = StructureLevel.ATOM
 
 
 @dataclasses.dataclass(slots=True)
@@ -263,7 +242,7 @@ class ResidueContainer(FeatureContainer):
     feature_map_0D: FeatureMap0D
     feature_map_1D: FeatureMap1D
     feature_map_pair: FeatureMapPair
-    level: FeatureLevel = FeatureLevel.RESIDUE
+    level: StructureLevel = StructureLevel.RESIDUE
     type: MoleculeType = None
 
     def get_type(self):
@@ -285,7 +264,7 @@ class ChainContainer(FeatureContainer):
     feature_map_0D: FeatureMap0D
     feature_map_1D: FeatureMap1D
     feature_map_pair: FeatureMapPair
-    level: FeatureLevel = FeatureLevel.CHAIN
+    level: StructureLevel = StructureLevel.CHAIN
 
 
 def combine_container(

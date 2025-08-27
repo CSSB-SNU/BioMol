@@ -1,18 +1,10 @@
 import dataclasses
-import enum
 from collections.abc import Mapping, Sequence
 from typing import Any, Generic, TypeVar
 
 import numpy as np
 
-
-@enum.unique
-class FeatureLevel(enum.Enum):
-    """Represents the level of a feature in the hierarchy."""
-
-    ATOM = "atom"
-    RESIDUE = "residue"
-    CHAIN = "chain"
+from .types import StructureLevel
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
@@ -30,7 +22,7 @@ class Feature:
     """Represents a feature with a value and metadata."""
 
     value: Any
-    level: FeatureLevel
+    level: StructureLevel
     additional_info: Any | Help | None = None
 
     def describe(self) -> str | Sequence[str]:
@@ -111,7 +103,7 @@ class FeatureMap(Generic[T_Feature], _HelpMixin):
         return list(self.feature_map.values())
 
     @property
-    def level(self) -> FeatureLevel:
+    def level(self) -> StructureLevel:
         return self.feature_map[next(iter(self.feature_map))].level
 
 
@@ -120,7 +112,7 @@ class Feature0D(Feature):
     """0D feature with a single scalar value."""
 
     value: str | int | float | bool
-    level: FeatureLevel
+    level: StructureLevel
     additional_info: Any = None
 
     # Equality and inequality based on .value
@@ -165,7 +157,7 @@ class Feature1D:
     """A thin wrapper around np.ndarray that participates in NumPy dispatch."""
 
     value: np.ndarray
-    level: FeatureLevel
+    level: StructureLevel
     additional_info: Any = None
 
     def __len__(self) -> int:
@@ -215,7 +207,7 @@ class Feature1D:
         return None
 
     @staticmethod
-    def _wrap(result: Any, ref_len: int, level: FeatureLevel, info: Any) -> Any:
+    def _wrap(result: Any, ref_len: int, level: StructureLevel, info: Any) -> Any:
         """Wrap arrays back into Feature1D if leading length matches ref_len."""
 
         def _maybe(arr: Any) -> Any:
@@ -371,7 +363,7 @@ class FeatureMap1D(FeatureMap[Feature1D], _HelpMixin):
 @dataclasses.dataclass(frozen=True)
 class FeaturePair(Feature):
     value: np.ndarray  # (i,j, v1, v2, ...)
-    level: FeatureLevel
+    level: StructureLevel
     additional_info: Any
 
     def __eq__(self, other: object) -> bool:
