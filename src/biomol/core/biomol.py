@@ -2,17 +2,17 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
-from jaxtyping import Float
+from biotite.structure import AtomArray, AtomArrayStack
+from biotite.structure import io as strucio
 
-from biomol.utils.typecheck import typecheck
 
-
-@typecheck
-@dataclass
 class BioMol:
-    atom_positions: Float[np.ndarray, "N 3"]
+    def __init__(self, atom_features, residues_features, chain_features):
+        self._atom_features = atom_features
+        pass
 
-    def from_path(self, path: str | Path) -> "BioMol":
+    @classmethod
+    def from_path(cls, path: str | Path) -> "BioMol":
         """
         Load BioMol data from a file. Supports `.pdb`, `.cif` formats.
 
@@ -30,8 +30,11 @@ class BioMol:
         if not path.exists():
             msg = f"File not found: {path}"
             raise FileNotFoundError(msg)
-        if path.suffix not in [".pdb", ".cif"]:
-            msg = f"Unsupported file format: {path.suffix}."
-            raise ValueError(msg)
 
-        raise NotImplementedError
+        suffix = path.suffix.lower()
+        match suffix:
+            case ".pdb" | ".cif":
+                return cls(atom_array=strucio.load_structure(path))
+            case _:
+                msg = f"Unsupported file format: {suffix}."
+                raise ValueError(msg)
