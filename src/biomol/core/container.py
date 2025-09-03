@@ -1,312 +1,116 @@
-import dataclasses
-from collections.abc import Iterable
-from typing import Any
+from collections.abc import Mapping
+from dataclasses import dataclass, replace
+from typing import ClassVar
 
 import numpy as np
 
-from .feature import (
-    Feature,
-    Feature0D,
-    Feature1D,
-    FeatureMap0D,
-    FeatureMap1D,
-    FeatureMapPair,
-    FeaturePair,
-)
-from .types import MoleculeType, StructureLevel
+from .exceptions import FeatureIndicesError, FeatureKeyError, FeatureShapeError
+from .feature import EdgeFeature, Feature, NodeFeature
+from .types import StructureLevel
 
 
-@dataclasses.dataclass(slots=True)
+@dataclass(frozen=True, slots=True)
 class FeatureContainer:
-    feature_map_0D: FeatureMap0D
-    feature_map_1D: FeatureMap1D
-    feature_map_pair: FeatureMapPair
-    level: StructureLevel
+    """Container for holding either node or pair features."""
 
-    def __init__(
-        self,
-        feature_map_0D: FeatureMap0D | None = None,
-        feature_map_1D: FeatureMap1D | None = None,
-        feature_map_pair: FeatureMapPair | None = None,
-    ):
-        self.feature_map_0D = feature_map_0D or FeatureMap0D({})
-        self.feature_map_1D = feature_map_1D or FeatureMap1D({})
-        self.feature_map_pair = feature_map_pair or FeatureMapPair({})
+    node_features: Mapping[str, NodeFeature]
+    pair_features: Mapping[str, EdgeFeature]
+
+    level: ClassVar[StructureLevel]
+
+    def __post_init__(self) -> None:  # noqa: D105
+        self._check_node_lengths()
+        self._check_pair_indices()
         self._check_duplicate_keys()
-        self._check_length()
-        self._check_level()
 
-    def __getitem__(self, idx: str | int | slice | tuple[int, int]) -> Feature:
-        if isinstance(idx, str):
-            if idx in self.feature_map_0D:
-                return self.feature_map_0D[idx]
-            if idx in self.feature_map_1D:
-                return self.feature_map_1D[idx]
-            return self.feature_map_pair[idx]
-        if isinstance(idx, int | slice):
-            return self.feature_map_1D[idx]
-        if isinstance(idx, tuple):
-            return self.feature_map_pair[idx]
-        raise TypeError(f"Unsupported index type: {type(idx).__name__}")
+    def _check_node_lengths(self) -> None:
+        if not self.node_features:
+            msg = "No node features defined."
+            raise FeatureKeyError(msg)
+        node_lengths = {len(f.value) for f in self.node_features.values()}
+        if len(node_lengths) > 1:
+            msg = f"Inconsistent node feature lengths {node_lengths}"
+            raise FeatureShapeError(msg)
 
-    def __getattr__(self, name: str) -> str | int | float | bool | np.ndarray:
-        """
-        Allow accessing features by attribute syntax.
+    def _check_pair_indices(self) -> None:
+        length = len(next(iter(self.node_features.values())).value)
+        for key, feat in self.pair_features.items():
+            if np.any(feat.src_indices >= length) or np.any(feat.dst_indices >= length):
+                msg = (
+                    f"Pair feature '{key}' has out-of-bounds indices. "
+                    f"Max index allowed is {length - 1}, "
+                    f"but got src_indices max={feat.src_indices.max()} and "
+                    f"dst_indices max={feat.dst_indices.max()}."
+                )
+                raise FeatureIndicesError(msg)
 
-        container.key1  <=> container.key_to_map["key1"].
-        """
-        if name in self.feature_map_0D:
-            return self.feature_map_0D[name].value
-        if name in self.feature_map_1D:
-            return self.feature_map_1D[name].value
-        if name in self.feature_map_pair:
-            return self.feature_map_pair[name].value
+    def _check_duplicate_keys(self) -> None:
+        if len(self.keys) != len(set(self.keys)):
+            duplicate_keys = {key for key in self.keys if self.keys.count(key) > 1}
+            msg = f"Duplicate feature keys found in features: {duplicate_keys}"
+            raise FeatureKeyError(msg)
 
-        raise AttributeError(
-            f"'{type(self).__name__}' object has no attribute '{name}'"
-        )
-
+    @property
     def keys(self) -> list[str]:
-        return (
-            list(self.feature_map_0D.keys())
-            + list(self.feature_map_1D.keys())
-            + list(self.feature_map_pair.keys())
-        )
+        """List of all feature keys in the container."""
+        return list(self.node_features.keys()) + list(self.pair_features.keys())
 
-    def get_0d_features(self) -> FeatureMap0D:
-        return self.feature_map_0D
-
-    def get_1d_features(self) -> FeatureMap1D:
-        return self.feature_map_1D
-
-    def get_pair_features(self) -> FeatureMapPair:
-        return self.feature_map_pair
+    def __getattr__(self, key: str) -> Feature:
+        """Get a feature by its key."""
+        if key in self.node_features:
+            return self.node_features[key]
+        if key in self.pair_features:
+            return self.pair_features[key]
+        raise FeatureKeyError(key)
 
     def crop(self, indices: np.ndarray) -> "FeatureContainer":
-        """
-        Crop the feature container to only include the specified indices.
+        """Crop all features to only include the specified indices.
 
         Parameters
         ----------
         indices : np.ndarray
-            1D array of indices to keep.
+            Indices to keep. Supported formats:
+            - 1D integer array of indices (must be unique)
+            - 1D boolean mask (must have same length as node features)
 
         Returns
         -------
         FeatureContainer
             A new FeatureContainer containing only the specified indices.
         """
-        cropped_1D = self.feature_map_1D.crop(indices)
-        cropped_pair = self.feature_map_pair.crop(indices)
-        return FeatureContainer(self.feature_map_0D, cropped_1D, cropped_pair)
-
-    def to_numpy(self) -> dict[str, Any]:
-        return {
-            "0D": {
-                k: {
-                    "value": v.value,
-                    "level": v.level.value,
-                    "info": v.additional_info,
-                }
-                for k, v in self.feature_map_0D.feature_map.items()
-            },
-            "1D": {
-                k: {
-                    "value": v.value,
-                    "level": v.level.value,
-                    "info": v.additional_info,
-                }
-                for k, v in self.feature_map_1D.feature_map.items()
-            },
-            "pair": {
-                k: {
-                    "value": v.value,
-                    "level": v.level.value,
-                    "info": v.additional_info,
-                }
-                for k, v in self.feature_map_pair.feature_map.items()
-            },
+        node_features = {
+            key: feat.crop(indices) for key, feat in self.node_features.items()
         }
-
-    @classmethod
-    def from_numpy(cls, data: dict[str, Any]) -> "FeatureContainer":
-        map_0d: dict[str, Feature0D] = {}
-        for k, d in (data.get("0D") or {}).items():
-            level = d.get("level")
-            level_enum = (
-                level if isinstance(level, StructureLevel) else StructureLevel(level)
-            )
-            map_0d[k] = Feature0D(
-                value=d.get("value"),
-                level=level_enum,
-                additional_info=d.get("info"),
-            )
-
-        map_1d: dict[str, Feature1D] = {}
-        for k, d in (data.get("1D") or {}).items():
-            level = d.get("level")
-            level_enum = (
-                level if isinstance(level, StructureLevel) else StructureLevel(level)
-            )
-            map_1d[k] = Feature1D(
-                value=d.get("value"),
-                level=level_enum,
-                additional_info=d.get("info"),
-            )
-
-        map_pair: dict[str, FeaturePair] = {}
-        for k, d in (data.get("pair") or {}).items():
-            level = d.get("level")
-            level_enum = (
-                level if isinstance(level, StructureLevel) else StructureLevel(level)
-            )
-            fp = FeaturePair(
-                value=d.get("value"),
-                level=level_enum,
-                additional_info=d.get("info"),
-            )
-            map_pair[k] = fp
-
-        fm0d = FeatureMap0D(map_0d)
-        fm1d = FeatureMap1D(map_1d)
-        fmpair = FeatureMapPair(map_pair)
-        return cls(fm0d, fm1d, fmpair)
-
-    def _check_duplicate_keys(self) -> None:
-        keys_0D = self.feature_map_0D.keys()
-        keys_1D = self.feature_map_1D.keys()
-        keys_pair = self.feature_map_pair.keys()
-        total_keys = list(keys_0D) + list(keys_1D) + list(keys_pair)
-        if len(set(total_keys)) != len(total_keys):
-            raise ValueError("Duplicate keys found in feature maps")
-
-    def _check_length(self) -> None:
-        if len(self.feature_map_1D) == 0:
-            return
-        length = len(self.feature_map_1D.values()[0])
-        for pair_feature in self.feature_map_pair.values():
-            ii, jj = pair_feature.indices()
-            if ii >= length or jj >= length:
-                raise ValueError(f"Feature pair indices out of bounds: {ii}, {jj}")
-
-    def _check_level(self):
-        levels = {
-            "0D": self.feature_map_0D.level,
-            "1D": self.feature_map_1D.level,
-            "pair": self.feature_map_pair.level,
+        pair_features = {
+            key: feat.crop(indices, remapping=True)
+            for key, feat in self.pair_features.items()
         }
-        if any(level != self.level for level in levels.values()):
-            raise ValueError(f"All feature maps must have level {self.level}.")
-
-    def __eq__(self, other: object) -> bool:
-        if not isinstance(other, FeatureContainer):
-            return NotImplemented
-        return (
-            self.level == other.level
-            and self.feature_map_0D == other.feature_map_0D
-            and self.feature_map_1D == other.feature_map_1D
-            and self.feature_map_pair == other.feature_map_pair
-        )
+        return replace(self, node_features=node_features, pair_features=pair_features)
 
 
-@dataclasses.dataclass(slots=True, eq=False)
+@dataclass(frozen=True, slots=True)
 class AtomContainer(FeatureContainer):
-    """
-    Container for atom-level features.
+    """Container for atom-level features."""
 
-    Notes
-    -----
-    - Represents the lowest-level features (individual atoms).
-    - Conceptually corresponds to **Residue** or **ChemComp** in structural biology.
-    - All feature maps inside this container must have `level = FeatureLevel.ATOM`.
-    """
+    node_features: Mapping[str, NodeFeature]
+    pair_features: Mapping[str, EdgeFeature]
 
-    feature_map_0D: FeatureMap0D
-    feature_map_1D: FeatureMap1D
-    feature_map_pair: FeatureMapPair
-    level: StructureLevel = StructureLevel.ATOM
+    level: ClassVar[StructureLevel] = StructureLevel.ATOM
 
 
-@dataclasses.dataclass(slots=True)
 class ResidueContainer(FeatureContainer):
-    """
-    Container for residue-level features.
+    """Container for residue-level features."""
 
-    Notes
-    -----
-    - Groups atoms into residues.
-    - Conceptually corresponds to **Entity** or **Chain** in structural biology.
-    - All feature maps inside this container must have `level = FeatureLevel.RESIDUE`.
-    """
+    node_features: Mapping[str, NodeFeature]
+    pair_features: Mapping[str, EdgeFeature]
 
-    feature_map_0D: FeatureMap0D
-    feature_map_1D: FeatureMap1D
-    feature_map_pair: FeatureMapPair
-    level: StructureLevel = StructureLevel.RESIDUE
-    type: MoleculeType = None
-
-    def get_type(self):
-        return self.type
+    level: ClassVar[StructureLevel] = StructureLevel.RESIDUE
 
 
-@dataclasses.dataclass(slots=True)
 class ChainContainer(FeatureContainer):
-    """
-    Container for chain-level features.
+    """Container for chain-level features."""
 
-    Notes
-    -----
-    - Groups residues into chains or higher-level assemblies.
-    - Conceptually corresponds to a **Biological Assembly** in structural biology.
-    - All feature maps inside this container must have `level = FeatureLevel.CHAIN`.
-    """
+    node_features: Mapping[str, NodeFeature]
+    pair_features: Mapping[str, EdgeFeature]
 
-    feature_map_0D: FeatureMap0D
-    feature_map_1D: FeatureMap1D
-    feature_map_pair: FeatureMapPair
-    level: StructureLevel = StructureLevel.CHAIN
-
-
-def combine_container(
-    list_of_container: Iterable[FeatureContainer],
-) -> FeatureContainer:
-    containers = list(list_of_container)
-    if not containers:
-        raise ValueError("combine_container requires at least one container.")
-
-    cls = type(containers[0])
-    if not all(isinstance(c, cls) for c in containers):
-        raise TypeError("All containers must be of the same class.")
-
-    merged_0d = {}
-    merged_1d = {}
-    merged_pair = {}
-
-    seen_0d, seen_1d, seen_pair = set(), set(), set()
-    for c in containers:
-        # 0D
-        overlap = seen_0d.intersection(c.feature_map_0D.feature_map.keys())
-        if overlap:
-            raise ValueError(f"Duplicate 0D feature keys: {sorted(overlap)}")
-        merged_0d.update(c.feature_map_0D.feature_map)
-        seen_0d.update(c.feature_map_0D.feature_map.keys())
-
-        # 1D
-        overlap = seen_1d.intersection(c.feature_map_1D.feature_map.keys())
-        if overlap:
-            raise ValueError(f"Duplicate 1D feature keys: {sorted(overlap)}")
-        merged_1d.update(c.feature_map_1D.feature_map)
-        seen_1d.update(c.feature_map_1D.feature_map.keys())
-
-        # pair
-        overlap = seen_pair.intersection(c.feature_map_pair.feature_map.keys())
-        if overlap:
-            raise ValueError(f"Duplicate pair feature keys: {sorted(overlap)}")
-        merged_pair.update(c.feature_map_pair.feature_map)
-        seen_pair.update(c.feature_map_pair.feature_map.keys())
-
-    fm0d = FeatureMap0D(merged_0d)
-    fm1d = FeatureMap1D(merged_1d)
-    fmpair = FeatureMapPair(merged_pair)
-
-    return cls(fm0d, fm1d, fmpair)
+    level: ClassVar[StructureLevel] = StructureLevel.CHAIN
