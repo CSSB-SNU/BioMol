@@ -5,13 +5,13 @@ from typing import TYPE_CHECKING, ClassVar, Final, Generic
 
 from typing_extensions import Self, override
 
-from .exceptions import FeatureKeyError
 from .types import AtomProtoT, ChainProtoT, ResidueProtoT, StructureLevel
 
 if TYPE_CHECKING:
     import numpy as np
 
     from .biomol import BioMol
+    from .container import FeatureContainer
     from .feature import Feature
 
 
@@ -57,6 +57,16 @@ class BaseView(ViewLike[AtomProtoT, ResidueProtoT, ChainProtoT]):
         """The structural level of the view."""
         return self._level
 
+    @property
+    def mol(self) -> BioMol[AtomProtoT, ResidueProtoT, ChainProtoT]:
+        """Return the parent molecule."""
+        return self._mol
+
+    @property
+    def features(self) -> FeatureContainer:
+        """Return the features of the view."""
+        return self._mol.get_container(self.level)
+
     def _check_same_level(self, other: Self) -> None:
         if not isinstance(other, BaseView):
             msg = f"Invalid view type: {type(other)}"
@@ -70,12 +80,7 @@ class BaseView(ViewLike[AtomProtoT, ResidueProtoT, ChainProtoT]):
 
     def __getattr__(self, key: str) -> Feature:
         """Get a feature by key."""
-        container = self._mol.get_container(self.level)
-        if key in container.node_features:
-            return container.node_features[key]
-        if key in container.pair_features:
-            return container.pair_features[key]
-        raise FeatureKeyError(key)
+        return self.features[key]
 
     def __len__(self) -> int:
         return len(self._indices)

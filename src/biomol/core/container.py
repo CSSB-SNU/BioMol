@@ -57,6 +57,10 @@ class FeatureContainer:
 
     def __getattr__(self, key: str) -> Feature:
         """Get a feature by its key."""
+        return self.__getitem__(key)
+
+    def __getitem__(self, key: str) -> Feature:
+        """Get a feature by its key."""
         if key in self.node_features:
             return self.node_features[key]
         if key in self.pair_features:
