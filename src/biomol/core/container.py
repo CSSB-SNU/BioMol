@@ -3,6 +3,7 @@ from dataclasses import dataclass, replace
 from typing import ClassVar
 
 import numpy as np
+from numpy.typing import NDArray
 
 from .exceptions import FeatureIndicesError, FeatureKeyError, FeatureShapeError
 from .feature import EdgeFeature, Feature, NodeFeature
@@ -52,8 +53,12 @@ class FeatureContainer:
 
     @property
     def keys(self) -> list[str]:
-        """List of all feature keys in the container."""
+        """List of all features keys in the container."""
         return list(self.node_features.keys()) + list(self.pair_features.keys())
+
+    def __len__(self) -> int:
+        """Return the number of nodes in the container."""
+        return len(next(iter(self.node_features.values())).value)
 
     def __getattr__(self, key: str) -> Feature:
         """Get a feature by its key."""
@@ -67,27 +72,19 @@ class FeatureContainer:
             return self.pair_features[key]
         raise FeatureKeyError(key)
 
-    def crop(self, indices: np.ndarray) -> "FeatureContainer":
+    def crop(self, indices: NDArray[np.integer]) -> "FeatureContainer":
         """Crop all features to only include the specified indices.
 
         Parameters
         ----------
-        indices : np.ndarray
-            Indices to keep. Supported formats:
-            - 1D integer array of indices (must be unique)
-            - 1D boolean mask (must have same length as node features)
-
-        Returns
-        -------
-        FeatureContainer
-            A new FeatureContainer containing only the specified indices.
+        indices: NDArray[np.integer]
+            1D array of global node indices to keep. Only integer arrays is allowed.
         """
         node_features = {
             key: feat.crop(indices) for key, feat in self.node_features.items()
         }
         pair_features = {
-            key: feat.crop(indices, remapping=True)
-            for key, feat in self.pair_features.items()
+            key: feat.crop(indices) for key, feat in self.pair_features.items()
         }
         return replace(self, node_features=node_features, pair_features=pair_features)
 

@@ -1,4 +1,4 @@
-from typing import get_args, get_origin
+from typing import Any, get_args, get_origin
 
 import numpy as np
 from typing_extensions import override
@@ -9,7 +9,7 @@ from .types import AtomProtoT, ChainProtoT, ResidueProtoT, StructureLevel
 from .view import AtomView, ChainView, ResidueView, ViewLike
 
 
-class BioMol(ViewLike[AtomProtoT, ResidueProtoT, ChainProtoT]):
+class BioMol(ViewLike[AtomProtoT, ResidueProtoT, ChainProtoT, Any]):
     """A class representing a biomolecular structure."""
 
     def __init__(
@@ -81,16 +81,16 @@ class BioMol(ViewLike[AtomProtoT, ResidueProtoT, ChainProtoT]):
     @property
     @override
     def atoms(self) -> AtomView[AtomProtoT, ResidueProtoT, ChainProtoT] | AtomProtoT:
-        return AtomView(self, np.arange(len(self._atom_container.node_features)))
+        return AtomView(self, np.arange(len(self._atom_container)))
 
     @property
     @override
     def residues(
         self,
     ) -> ResidueView[AtomProtoT, ResidueProtoT, ChainProtoT] | ResidueProtoT:
-        return ResidueView(self, np.arange(len(self._residue_container.node_features)))
+        return ResidueView(self, np.arange(len(self._residue_container)))
 
     @property
     @override
     def chains(self) -> ChainView[AtomProtoT, ResidueProtoT, ChainProtoT] | ChainProtoT:
-        return ChainView(self, np.arange(len(self._chain_container.node_features)))
+        return ChainView(self, np.arange(len(self._chain_container)))

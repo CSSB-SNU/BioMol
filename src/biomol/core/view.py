@@ -1,21 +1,25 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, ClassVar, Final, Generic
+from typing import TYPE_CHECKING, Any, ClassVar, Final, Generic
 
-from typing_extensions import Self, override
+from typing_extensions import Self, TypeVar, override
 
 from .types import AtomProtoT, ChainProtoT, ResidueProtoT, StructureLevel
 
 if TYPE_CHECKING:
     import numpy as np
+    from numpy.typing import NDArray
 
     from .biomol import BioMol
     from .container import FeatureContainer
     from .feature import Feature
 
 
-class ViewLike(ABC, Generic[AtomProtoT, ResidueProtoT, ChainProtoT]):
+LevelProtoT = TypeVar("LevelProtoT", default=Any)
+
+
+class ViewLike(ABC, Generic[AtomProtoT, ResidueProtoT, ChainProtoT, LevelProtoT]):
     """A generic interface for views."""
 
     @property
@@ -36,7 +40,7 @@ class ViewLike(ABC, Generic[AtomProtoT, ResidueProtoT, ChainProtoT]):
         """View of the chains in the selection."""
 
 
-class BaseView(ViewLike[AtomProtoT, ResidueProtoT, ChainProtoT]):
+class BaseView(ViewLike[AtomProtoT, ResidueProtoT, ChainProtoT, LevelProtoT]):
     """Base class for all views."""
 
     _level: ClassVar[StructureLevel]
@@ -44,7 +48,7 @@ class BaseView(ViewLike[AtomProtoT, ResidueProtoT, ChainProtoT]):
     def __init__(
         self,
         mol: BioMol[AtomProtoT, ResidueProtoT, ChainProtoT],
-        indices: np.ndarray,
+        indices: NDArray[np.integer],
     ) -> None:
         if indices.ndim != 1:
             msg = f"Indices must be 1-dimensional, but got {indices.ndim}D."
@@ -79,14 +83,15 @@ class BaseView(ViewLike[AtomProtoT, ResidueProtoT, ChainProtoT]):
             raise TypeError(msg)
 
     def __getattr__(self, key: str) -> Feature:
-        """Get a feature by key."""
-        return self.features[key]
+        """Return the feature for the given key, cropped to the view's indices."""
+        return self.features[key].crop(self._indices)
 
     def __len__(self) -> int:
         return len(self._indices)
 
-    def __getitem__(self, index: int | np.ndarray) -> Self:
-        return self.__class__(self._mol, self._indices[index])
+    def __getitem__(self, key: Any) -> Self | LevelProtoT:  # noqa: ANN401
+        """Return a new view with the specified indices."""
+        return self.__class__(self._mol, self._indices[key])
 
     def __and__(self, other: Self) -> Self:
         self._check_same_level(other)
@@ -114,7 +119,7 @@ class BaseView(ViewLike[AtomProtoT, ResidueProtoT, ChainProtoT]):
         raise NotImplementedError
 
 
-class AtomView(BaseView[AtomProtoT, ResidueProtoT, ChainProtoT]):
+class AtomView(BaseView[AtomProtoT, ResidueProtoT, ChainProtoT, AtomProtoT]):
     """View of the atoms in the selection."""
 
     _level: Final = StructureLevel.ATOM
@@ -137,7 +142,7 @@ class AtomView(BaseView[AtomProtoT, ResidueProtoT, ChainProtoT]):
         raise NotImplementedError
 
 
-class ResidueView(BaseView[AtomProtoT, ResidueProtoT, ChainProtoT]):
+class ResidueView(BaseView[AtomProtoT, ResidueProtoT, ChainProtoT, ResidueProtoT]):
     """View of the residues in the selection."""
 
     _level: Final = StructureLevel.RESIDUE
@@ -158,7 +163,7 @@ class ResidueView(BaseView[AtomProtoT, ResidueProtoT, ChainProtoT]):
         raise NotImplementedError
 
 
-class ChainView(BaseView[AtomProtoT, ResidueProtoT, ChainProtoT]):
+class ChainView(BaseView[AtomProtoT, ResidueProtoT, ChainProtoT, ChainProtoT]):
     """View of the chains in the selection."""
 
     _level: Final = StructureLevel.CHAIN

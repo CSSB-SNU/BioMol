@@ -1,63 +1,74 @@
+from __future__ import annotations
+
+from abc import ABC, abstractmethod
 from dataclasses import dataclass, replace
-from typing import Protocol
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
-from typing_extensions import Self
+from typing_extensions import Self, override
 
 from .exceptions import FeatureIndicesError, FeatureShapeError
 
-
-class Feature(Protocol):
-    """Protocol for feature objects."""
-
-    value: np.ndarray
-    description: str | None
-
-    def crop(self, indices: np.ndarray) -> Self: ...
+if TYPE_CHECKING:
+    from numpy.typing import NDArray
 
 
-@dataclass(frozen=True, slots=True)
-class NodeFeature:
-    """A feature associated with nodes in a structure."""
+@dataclass(frozen=True, slots=True, kw_only=True)
+class Feature(ABC):
+    """A base class for features in a structure."""
 
     value: np.ndarray
     description: str | None = None
 
-    def crop(self, indices: np.ndarray) -> Self:
+    @abstractmethod
+    def __getitem__(self, key: Any) -> Self:  # noqa: ANN401
+        """Get a subset of the feature."""
+
+    @abstractmethod
+    def crop(self, indices: NDArray[np.integer]) -> Self:
         """Crop the feature to only include the specified indices.
 
         Parameters
         ----------
-        indices : np.ndarray
-            Indices to keep. Supported formats:
-            - 1D integer array of indices (must be unique)
-            - 1D boolean mask (must have same length as value)
-
-        Returns
-        -------
-        NodeFeature
-            A new NodeFeature containing only the specified indices.
+        indices: NDArray[np.integer]
+            1D array of node indices to keep. Only integer arrays is allowed.
         """
-        if not isinstance(indices, np.ndarray):
-            msg = "Indices must be a numpy.ndarray"
-            raise FeatureIndicesError(msg)
-        if indices.ndim != 1:
-            msg = "Indices must be a 1D array"
-            raise FeatureIndicesError(msg)
-        return replace(self, value=self.value[indices])
-
-    def __getitem__(self, indices: np.ndarray) -> Self:
-        return self.crop(indices)
 
 
-@dataclass(frozen=True, slots=True)
-class EdgeFeature:
+@dataclass(frozen=True, slots=True, kw_only=True)
+class NodeFeature(Feature):
+    """A feature associated with nodes in a structure."""
+
+    @override
+    def __getitem__(self, key: Any) -> Self:
+        return replace(self, value=self.value[key])
+
+    @override
+    def crop(self, indices: NDArray[np.integer]) -> Self:
+        return self[indices]
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class EdgeFeature(Feature):
     """A feature associated with edges (pairs of nodes) in a structure."""
 
-    value: np.ndarray
-    src_indices: np.ndarray
-    dst_indices: np.ndarray
-    description: str | None = None
+    src_indices: NDArray[np.integer]
+    dst_indices: NDArray[np.integer]
+
+    @property
+    def src(self) -> NDArray[np.integer]:
+        """Return the source node indices of the edges."""
+        return self.src_indices
+
+    @property
+    def dst(self) -> NDArray[np.integer]:
+        """Return the destination node indices of the edges."""
+        return self.dst_indices
+
+    @property
+    def nodes(self) -> NDArray[np.integer]:
+        """Return the unique node indices involved in the edges."""
+        return np.unique(np.concatenate([self.src_indices, self.dst_indices]))
 
     def __post_init__(self) -> None:  # noqa: D105
         if not (self.src_indices.ndim == 1 and self.dst_indices.ndim == 1):
@@ -78,64 +89,58 @@ class EdgeFeature:
             msg = "src_indices and dst_indices must be non-negative."
             raise FeatureIndicesError(msg)
 
-    def __getitem__(self, indices: np.ndarray) -> Self:
-        return self.crop(indices)
+    @override
+    def __getitem__(self, key: Any) -> Self:
+        return replace(
+            self,
+            value=self.value[key],
+            src_indices=self.src_indices[key],
+            dst_indices=self.dst_indices[key],
+        )
 
-    def crop(self, indices: np.ndarray, remapping: bool = False) -> Self:
+    @override
+    def crop(self, indices: NDArray[np.integer]) -> Self:
         """Crop the feature to only include the specified indices.
 
         Keep only pairs (i, j) whose both endpoints are in `indices`.
 
         Parameters
         ----------
-        indices: np.ndarray
-            Indices to keep. Supported formats:
-            - 1D integer array of indices (negative disallowed, must be unique)
-            - 1D boolean mask (must have same length as value)
+        indices: NDArray[np.integer]
+            1D array of node indices to keep. Only integer arrays is allowed.
         """
         if not isinstance(indices, np.ndarray):
-            msg = "Indices must be a numpy.ndarray"
+            msg = f"Indices must be a numpy.ndarray, got {type(indices)}"
             raise FeatureIndicesError(msg)
         if indices.ndim != 1:
             msg = f"Indices must be a 1D array, got {indices.ndim}D array"
             raise FeatureIndicesError(msg)
-
-        if indices.dtype == bool:
-            if len(indices) != len(self.value):
-                msg = (
-                    "Boolean mask must have the same length as the number of edges. "
-                    f"Got mask length={len(indices)}, value length={len(self.value)}."
-                )
-                raise FeatureIndicesError(msg)
-            kept = np.flatnonzero(indices)
-        elif np.issubdtype(indices.dtype, np.integer):
-            if np.any(indices < 0):
-                msg = "Negative indices are not allowed."
-                raise FeatureIndicesError(msg)
-            if np.unique(indices).size != indices.size:
-                msg = "Integer indices must be unique."
-                raise FeatureIndicesError(msg)
-            kept = indices
-        else:
-            msg = "indices must be a boolean or integer array"
+        if not np.issubdtype(indices.dtype, np.integer):
+            msg = f"Indices must be a integer array, got {indices.dtype}"
             raise FeatureIndicesError(msg)
+        if np.any(indices < 0):
+            msg = "Negative indices are not allowed."
+            raise FeatureIndicesError(msg)
+        if self.value.size == 0 or indices.size == 0:
+            return self._empty_like()
 
-        if self.value.size == 0 or kept.size == 0:
-            empty = np.empty((0,) + self.value.shape[1:], dtype=self.value.dtype)
-            ind = np.empty((0,), dtype=self.src_indices.dtype)
-            return replace(self, value=empty, src_indices=ind, dst_indices=ind)
-
-        src_in_kept = np.isin(self.src_indices, kept, assume_unique=False)
-        dst_in_kept = np.isin(self.dst_indices, kept, assume_unique=False)
+        kept, idx = np.unique(indices, return_index=True)
+        src_in_kept = np.isin(self.src_indices, kept, assume_unique=True)
+        dst_in_kept = np.isin(self.dst_indices, kept, assume_unique=True)
         row_mask = src_in_kept & dst_in_kept
         if not row_mask.any():
-            empty = np.empty((0,) + self.value.shape[1:], dtype=self.value.dtype)
-            ind = np.empty((0,), dtype=self.src_indices.dtype)
-            return replace(self, value=empty, src_indices=ind, dst_indices=ind)
+            return self._empty_like()
 
+        new_src = idx[np.searchsorted(kept, self.src_indices[row_mask])]
+        new_dst = idx[np.searchsorted(kept, self.dst_indices[row_mask])]
         return replace(
             self,
             value=self.value[row_mask],
-            src_indices=self.src_indices[row_mask],
-            dst_indices=self.dst_indices[row_mask],
+            src_indices=new_src,
+            dst_indices=new_dst,
         )
+
+    def _empty_like(self) -> Self:
+        empty = np.empty((0,) + self.value.shape[1:], dtype=self.value.dtype)
+        ind = np.empty((0,), dtype=self.src_indices.dtype)
+        return replace(self, value=empty, src_indices=ind, dst_indices=ind)
