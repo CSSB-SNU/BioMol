@@ -4,6 +4,7 @@ from typing import ClassVar
 
 import numpy as np
 from numpy.typing import NDArray
+from typing_extensions import Self
 
 from .exceptions import FeatureIndicesError, FeatureKeyError, FeatureShapeError
 from .feature import EdgeFeature, Feature, NodeFeature
@@ -23,6 +24,43 @@ class FeatureContainer:
         self._check_node_lengths()
         self._check_pair_indices()
         self._check_duplicate_keys()
+
+    def __len__(self) -> int:
+        """Return the number of nodes in the container."""
+        return len(next(iter(self.node_features.values())).value)
+
+    def __getattr__(self, key: str) -> Feature:
+        """Get a feature by its key."""
+        return self.__getitem__(key)
+
+    def __getitem__(self, key: str) -> Feature:
+        """Get a feature by its key."""
+        if key in self.node_features:
+            return self.node_features[key]
+        if key in self.pair_features:
+            return self.pair_features[key]
+        raise FeatureKeyError(key)
+
+    @property
+    def keys(self) -> list[str]:
+        """List of all features keys in the container."""
+        return list(self.node_features.keys()) + list(self.pair_features.keys())
+
+    def crop(self, indices: NDArray[np.integer]) -> Self:
+        """Crop all features to only include the specified indices.
+
+        Parameters
+        ----------
+        indices: NDArray[np.integer]
+            1D array of global node indices to keep. Only integer arrays is allowed.
+        """
+        node_features = {
+            key: feat.crop(indices) for key, feat in self.node_features.items()
+        }
+        pair_features = {
+            key: feat.crop(indices) for key, feat in self.pair_features.items()
+        }
+        return replace(self, node_features=node_features, pair_features=pair_features)
 
     def _check_node_lengths(self) -> None:
         if not self.node_features:
@@ -50,43 +88,6 @@ class FeatureContainer:
             duplicate_keys = {key for key in self.keys if self.keys.count(key) > 1}
             msg = f"Duplicate feature keys found in features: {duplicate_keys}"
             raise FeatureKeyError(msg)
-
-    @property
-    def keys(self) -> list[str]:
-        """List of all features keys in the container."""
-        return list(self.node_features.keys()) + list(self.pair_features.keys())
-
-    def __len__(self) -> int:
-        """Return the number of nodes in the container."""
-        return len(next(iter(self.node_features.values())).value)
-
-    def __getattr__(self, key: str) -> Feature:
-        """Get a feature by its key."""
-        return self.__getitem__(key)
-
-    def __getitem__(self, key: str) -> Feature:
-        """Get a feature by its key."""
-        if key in self.node_features:
-            return self.node_features[key]
-        if key in self.pair_features:
-            return self.pair_features[key]
-        raise FeatureKeyError(key)
-
-    def crop(self, indices: NDArray[np.integer]) -> "FeatureContainer":
-        """Crop all features to only include the specified indices.
-
-        Parameters
-        ----------
-        indices: NDArray[np.integer]
-            1D array of global node indices to keep. Only integer arrays is allowed.
-        """
-        node_features = {
-            key: feat.crop(indices) for key, feat in self.node_features.items()
-        }
-        pair_features = {
-            key: feat.crop(indices) for key, feat in self.pair_features.items()
-        }
-        return replace(self, node_features=node_features, pair_features=pair_features)
 
 
 @dataclass(frozen=True, slots=True)

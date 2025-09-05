@@ -56,38 +56,19 @@ class BaseView(ViewLike[AtomProtoT, ResidueProtoT, ChainProtoT, LevelProtoT]):
         self._mol = mol
         self._indices = indices
 
-    @property
-    def level(self) -> StructureLevel:
-        """The structural level of the view."""
-        return self._level
+    def __repr__(self) -> str:
+        raise NotImplementedError
 
-    @property
-    def mol(self) -> BioMol[AtomProtoT, ResidueProtoT, ChainProtoT]:
-        """Return the parent molecule."""
-        return self._mol
+    def __iter__(self) -> Self:
+        raise NotImplementedError
 
-    @property
-    def features(self) -> FeatureContainer:
-        """Return the features of the view."""
-        return self._mol.get_container(self.level)
-
-    def _check_same_level(self, other: Self) -> None:
-        if not isinstance(other, BaseView):
-            msg = f"Invalid view type: {type(other)}"
-            raise TypeError(msg)
-        if self.level != other.level:
-            msg = (
-                f"Cannot operate on views of different levels: "
-                f"{self.level} and {other.level}"
-            )
-            raise TypeError(msg)
+    def __len__(self) -> int:
+        """Return the number of elements in the view."""
+        return len(self._indices)
 
     def __getattr__(self, key: str) -> Feature:
         """Return the feature for the given key, cropped to the view's indices."""
-        return self.features[key].crop(self._indices)
-
-    def __len__(self) -> int:
-        return len(self._indices)
+        return self.get_feature(key)
 
     def __getitem__(self, key: Any) -> Self | LevelProtoT:  # noqa: ANN401
         """Return a new view with the specified indices."""
@@ -112,11 +93,34 @@ class BaseView(ViewLike[AtomProtoT, ResidueProtoT, ChainProtoT, LevelProtoT]):
         self._check_same_level(other)
         raise NotImplementedError
 
-    def __repr__(self) -> str:
-        raise NotImplementedError
+    @property
+    def level(self) -> StructureLevel:
+        """The structural level of the view."""
+        return self._level
 
-    def __iter__(self) -> Self:
-        raise NotImplementedError
+    @property
+    def mol(self) -> BioMol[AtomProtoT, ResidueProtoT, ChainProtoT]:
+        """Return the parent molecule."""
+        return self._mol
+
+    def get_feature(self, key: str) -> Feature:
+        """Return the feature for the given key, cropped to the view's indices."""
+        return self._mol.get_container(self.level)[key].crop(self._indices)
+
+    def get_features(self) -> FeatureContainer:
+        """Return the features of the view, cropped to the view's indices."""
+        return self._mol.get_container(self.level).crop(self._indices)
+
+    def _check_same_level(self, other: Self) -> None:
+        if not isinstance(other, BaseView):
+            msg = f"Invalid view type: {type(other)}"
+            raise TypeError(msg)
+        if self.level != other.level:
+            msg = (
+                f"Cannot operate on views of different levels: "
+                f"{self.level} and {other.level}"
+            )
+            raise TypeError(msg)
 
 
 class AtomView(BaseView[AtomProtoT, ResidueProtoT, ChainProtoT, AtomProtoT]):

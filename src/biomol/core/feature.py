@@ -55,21 +55,6 @@ class EdgeFeature(Feature):
     src_indices: NDArray[np.integer]
     dst_indices: NDArray[np.integer]
 
-    @property
-    def src(self) -> NDArray[np.integer]:
-        """Return the source node indices of the edges."""
-        return self.src_indices
-
-    @property
-    def dst(self) -> NDArray[np.integer]:
-        """Return the destination node indices of the edges."""
-        return self.dst_indices
-
-    @property
-    def nodes(self) -> NDArray[np.integer]:
-        """Return the unique node indices involved in the edges."""
-        return np.unique(np.concatenate([self.src_indices, self.dst_indices]))
-
     def __post_init__(self) -> None:  # noqa: D105
         if not (self.src_indices.ndim == 1 and self.dst_indices.ndim == 1):
             msg = (
@@ -97,6 +82,21 @@ class EdgeFeature(Feature):
             src_indices=self.src_indices[key],
             dst_indices=self.dst_indices[key],
         )
+
+    @property
+    def src(self) -> NDArray[np.integer]:
+        """Return the source node indices of the edges."""
+        return self.src_indices
+
+    @property
+    def dst(self) -> NDArray[np.integer]:
+        """Return the destination node indices of the edges."""
+        return self.dst_indices
+
+    @property
+    def nodes(self) -> NDArray[np.integer]:
+        """Return the unique node indices involved in the edges."""
+        return np.unique(np.concatenate([self.src_indices, self.dst_indices]))
 
     @override
     def crop(self, indices: NDArray[np.integer]) -> Self:

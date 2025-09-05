@@ -23,6 +23,23 @@ class BioMol(ViewLike[AtomProtoT, ResidueProtoT, ChainProtoT, Any]):
         self._chain_container = chain_container
         self._check_protocol_type()
 
+    @property
+    @override
+    def atoms(self) -> AtomView[AtomProtoT, ResidueProtoT, ChainProtoT] | AtomProtoT:
+        return AtomView(self, np.arange(len(self._atom_container)))
+
+    @property
+    @override
+    def residues(
+        self,
+    ) -> ResidueView[AtomProtoT, ResidueProtoT, ChainProtoT] | ResidueProtoT:
+        return ResidueView(self, np.arange(len(self._residue_container)))
+
+    @property
+    @override
+    def chains(self) -> ChainView[AtomProtoT, ResidueProtoT, ChainProtoT] | ChainProtoT:
+        return ChainView(self, np.arange(len(self._chain_container)))
+
     def get_container(self, level: StructureLevel) -> FeatureContainer:
         """Get the feature container for a specific structure level.
 
@@ -77,20 +94,3 @@ class BioMol(ViewLike[AtomProtoT, ResidueProtoT, ChainProtoT, Any]):
             if not _is_satisfied:
                 msg = f"{name} view must satisfy {proto.__name__}."
                 raise ViewProtocolError(msg)
-
-    @property
-    @override
-    def atoms(self) -> AtomView[AtomProtoT, ResidueProtoT, ChainProtoT] | AtomProtoT:
-        return AtomView(self, np.arange(len(self._atom_container)))
-
-    @property
-    @override
-    def residues(
-        self,
-    ) -> ResidueView[AtomProtoT, ResidueProtoT, ChainProtoT] | ResidueProtoT:
-        return ResidueView(self, np.arange(len(self._residue_container)))
-
-    @property
-    @override
-    def chains(self) -> ChainView[AtomProtoT, ResidueProtoT, ChainProtoT] | ChainProtoT:
-        return ChainView(self, np.arange(len(self._chain_container)))
