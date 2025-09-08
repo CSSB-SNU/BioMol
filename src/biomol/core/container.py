@@ -13,16 +13,16 @@ from .types import StructureLevel
 
 @dataclass(frozen=True, slots=True)
 class FeatureContainer:
-    """Container for holding either node or pair features."""
+    """Container for holding either node or edge features."""
 
     node_features: Mapping[str, NodeFeature]
-    pair_features: Mapping[str, EdgeFeature]
+    edge_features: Mapping[str, EdgeFeature]
 
     level: ClassVar[StructureLevel]
 
     def __post_init__(self) -> None:  # noqa: D105
         self._check_node_lengths()
-        self._check_pair_indices()
+        self._check_edge_indices()
         self._check_duplicate_keys()
 
     def __len__(self) -> int:
@@ -37,14 +37,14 @@ class FeatureContainer:
         """Get a feature by its key."""
         if key in self.node_features:
             return self.node_features[key]
-        if key in self.pair_features:
-            return self.pair_features[key]
+        if key in self.edge_features:
+            return self.edge_features[key]
         raise FeatureKeyError(key)
 
     @property
     def keys(self) -> list[str]:
         """List of all features keys in the container."""
-        return list(self.node_features.keys()) + list(self.pair_features.keys())
+        return list(self.node_features.keys()) + list(self.edge_features.keys())
 
     def crop(self, indices: NDArray[np.integer]) -> Self:
         """Crop all features to only include the specified indices.
@@ -57,10 +57,10 @@ class FeatureContainer:
         node_features = {
             key: feat.crop(indices) for key, feat in self.node_features.items()
         }
-        pair_features = {
-            key: feat.crop(indices) for key, feat in self.pair_features.items()
+        edge_features = {
+            key: feat.crop(indices) for key, feat in self.edge_features.items()
         }
-        return replace(self, node_features=node_features, pair_features=pair_features)
+        return replace(self, node_features=node_features, edge_features=edge_features)
 
     def _check_node_lengths(self) -> None:
         if not self.node_features:
@@ -71,9 +71,9 @@ class FeatureContainer:
             msg = f"Inconsistent node feature lengths {node_lengths}"
             raise FeatureShapeError(msg)
 
-    def _check_pair_indices(self) -> None:
+    def _check_edge_indices(self) -> None:
         length = len(next(iter(self.node_features.values())).value)
-        for key, feat in self.pair_features.items():
+        for key, feat in self.edge_features.items():
             if np.any(feat.src_indices >= length) or np.any(feat.dst_indices >= length):
                 msg = (
                     f"Pair feature '{key}' has out-of-bounds indices. "
@@ -94,25 +94,18 @@ class FeatureContainer:
 class AtomContainer(FeatureContainer):
     """Container for atom-level features."""
 
-    node_features: Mapping[str, NodeFeature]
-    pair_features: Mapping[str, EdgeFeature]
-
     level: ClassVar[StructureLevel] = StructureLevel.ATOM
 
 
+@dataclass(frozen=True, slots=True)
 class ResidueContainer(FeatureContainer):
     """Container for residue-level features."""
-
-    node_features: Mapping[str, NodeFeature]
-    pair_features: Mapping[str, EdgeFeature]
 
     level: ClassVar[StructureLevel] = StructureLevel.RESIDUE
 
 
+@dataclass(frozen=True, slots=True)
 class ChainContainer(FeatureContainer):
     """Container for chain-level features."""
-
-    node_features: Mapping[str, NodeFeature]
-    pair_features: Mapping[str, EdgeFeature]
 
     level: ClassVar[StructureLevel] = StructureLevel.CHAIN
