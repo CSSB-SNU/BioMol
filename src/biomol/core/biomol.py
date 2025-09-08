@@ -1,7 +1,7 @@
-from typing import Any, get_args, get_origin
+from typing import get_args, get_origin
 
 import numpy as np
-from typing_extensions import override
+from typing_extensions import Self, override
 
 from .container import AtomContainer, ChainContainer, FeatureContainer, ResidueContainer
 from .exceptions import FeatureKeyError, StructureLevelError, ViewProtocolError
@@ -9,7 +9,7 @@ from .types import AtomProtoT, ChainProtoT, ResidueProtoT, StructureLevel
 from .view import AtomView, ChainView, ResidueView, ViewLike
 
 
-class BioMol(ViewLike[AtomProtoT, ResidueProtoT, ChainProtoT, Any]):
+class BioMol(ViewLike[AtomProtoT, ResidueProtoT, ChainProtoT]):
     """A class representing a biomolecular structure."""
 
     def __init__(
@@ -25,19 +25,23 @@ class BioMol(ViewLike[AtomProtoT, ResidueProtoT, ChainProtoT, Any]):
 
     @property
     @override
-    def atoms(self) -> AtomView[AtomProtoT, ResidueProtoT, ChainProtoT] | AtomProtoT:
+    def atoms(
+        self,
+    ) -> AtomView[AtomProtoT, ResidueProtoT, ChainProtoT, Self] | AtomProtoT:
         return AtomView(self, np.arange(len(self._atom_container)))
 
     @property
     @override
     def residues(
         self,
-    ) -> ResidueView[AtomProtoT, ResidueProtoT, ChainProtoT] | ResidueProtoT:
+    ) -> ResidueView[AtomProtoT, ResidueProtoT, ChainProtoT, Self] | ResidueProtoT:
         return ResidueView(self, np.arange(len(self._residue_container)))
 
     @property
     @override
-    def chains(self) -> ChainView[AtomProtoT, ResidueProtoT, ChainProtoT] | ChainProtoT:
+    def chains(
+        self,
+    ) -> ChainView[AtomProtoT, ResidueProtoT, ChainProtoT, Self] | ChainProtoT:
         return ChainView(self, np.arange(len(self._chain_container)))
 
     def get_container(self, level: StructureLevel) -> FeatureContainer:
@@ -76,7 +80,7 @@ class BioMol(ViewLike[AtomProtoT, ResidueProtoT, ChainProtoT, Any]):
                 continue
             if not getattr(proto, "_is_protocol", False):
                 msg = f"{proto.__name__} is not a Protocol."
-                raise TypeError(msg)
+                raise ViewProtocolError(msg)
 
             name = ["atoms", "residues", "chains"][i]
             view = getattr(self, name)
@@ -87,10 +91,18 @@ class BioMol(ViewLike[AtomProtoT, ResidueProtoT, ChainProtoT, Any]):
                     f"{proto.__name__} must be marked with @runtime_checkable "
                     "to allow runtime Protocol checks."
                 )
-                raise TypeError(msg) from e
+                raise ViewProtocolError(msg) from e
             except FeatureKeyError as e:
                 msg = f"Feature key '{e.args[0]}' not found on {name} view."
                 raise ViewProtocolError(msg) from e
             if not _is_satisfied:
                 msg = f"{name} view must satisfy {proto.__name__}."
                 raise ViewProtocolError(msg)
+
+    def __repr__(self) -> str:
+        """Return a string representation of the BioMol object."""
+        return (
+            f"<{self.__class__.__name__} with {len(self._atom_container)} atoms, "
+            f"{len(self._residue_container)} residues, "
+            f"and {len(self._chain_container)} chains>"
+        )

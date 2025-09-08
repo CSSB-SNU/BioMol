@@ -3,12 +3,13 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Any, ClassVar, Final, Generic
 
+import numpy as np
 from typing_extensions import Self, TypeVar, override
 
+from .exceptions import FeatureShapeError, ViewOperationError
 from .types import AtomProtoT, ChainProtoT, ResidueProtoT, StructureLevel
 
 if TYPE_CHECKING:
-    import numpy as np
     from numpy.typing import NDArray
 
     from .biomol import BioMol
@@ -16,50 +17,95 @@ if TYPE_CHECKING:
     from .feature import Feature
 
 
-LevelProtoT = TypeVar("LevelProtoT", default=Any)
+MolT = TypeVar("MolT", bound="BioMol", default="BioMol")
+LevelProtoT = TypeVar("LevelProtoT", bound="BaseView", default="BaseView")
 
 
-class ViewLike(ABC, Generic[AtomProtoT, ResidueProtoT, ChainProtoT, LevelProtoT]):
+class ViewLike(ABC, Generic[AtomProtoT, ResidueProtoT, ChainProtoT, MolT, LevelProtoT]):
     """A generic interface for views."""
 
     @property
     @abstractmethod
-    def atoms(self) -> AtomView[AtomProtoT, ResidueProtoT, ChainProtoT] | AtomProtoT:
+    def atoms(
+        self,
+    ) -> AtomView[AtomProtoT, ResidueProtoT, ChainProtoT, MolT] | AtomProtoT:
         """View of the atoms in the selection."""
 
     @property
     @abstractmethod
     def residues(
         self,
-    ) -> ResidueView[AtomProtoT, ResidueProtoT, ChainProtoT] | ResidueProtoT:
+    ) -> ResidueView[AtomProtoT, ResidueProtoT, ChainProtoT, MolT] | ResidueProtoT:
         """View of the residues in the selection."""
 
     @property
     @abstractmethod
-    def chains(self) -> ChainView[AtomProtoT, ResidueProtoT, ChainProtoT] | ChainProtoT:
+    def chains(
+        self,
+    ) -> ChainView[AtomProtoT, ResidueProtoT, ChainProtoT, MolT] | ChainProtoT:
         """View of the chains in the selection."""
 
 
-class BaseView(ViewLike[AtomProtoT, ResidueProtoT, ChainProtoT, LevelProtoT]):
+class BaseView(
+    ViewLike[AtomProtoT, ResidueProtoT, ChainProtoT, MolT, LevelProtoT],
+):
     """Base class for all views."""
 
     _level: ClassVar[StructureLevel]
 
     def __init__(
         self,
-        mol: BioMol[AtomProtoT, ResidueProtoT, ChainProtoT],
+        mol: MolT,
         indices: NDArray[np.integer],
     ) -> None:
         if indices.ndim != 1:
             msg = f"Indices must be 1-dimensional, but got {indices.ndim}D."
-            raise ValueError(msg)
+            raise FeatureShapeError(msg)
         self._mol = mol
         self._indices = indices
 
-    def __repr__(self) -> str:
-        raise NotImplementedError
+    @property
+    def level(self) -> StructureLevel:
+        """The structural level of the view."""
+        return self._level
 
-    def __iter__(self) -> Self:
+    @property
+    def mol(self) -> MolT:
+        """Return the parent molecule."""
+        return self._mol
+
+    def get_feature(self, key: str) -> Feature:
+        """Return the feature for the given key, cropped to the view's indices."""
+        return self._mol.get_container(self.level)[key].crop(self._indices)
+
+    def get_features(self) -> FeatureContainer:
+        """Return the features of the view, cropped to the view's indices."""
+        return self._mol.get_container(self.level).crop(self._indices)
+
+    def unique(self) -> Self | LevelProtoT:
+        """Return a new view with unique indices."""
+        unique_indices = np.unique(self._indices)
+        return self.__class__(self._mol, unique_indices)
+
+    def _check_same_level(self, other: Self) -> None:
+        if not isinstance(other, BaseView):
+            msg = f"Invalid view type: {type(other)}"
+            raise ViewOperationError(msg)
+        if self.mol is not other.mol:
+            msg = "Cannot operate on views from different molecules."
+            raise ViewOperationError(msg)
+        if self.level != other.level:
+            msg = (
+                f"Cannot operate on views of different levels: "
+                f"{self.level} and {other.level}"
+            )
+            raise ViewOperationError(msg)
+
+    def __repr__(self) -> str:
+        """Return a string representation of the view."""
+        return f"<{self.__class__.__name__} with {len(self)} elements>"
+
+    def __iter__(self) -> Self | LevelProtoT:
         raise NotImplementedError
 
     def __len__(self) -> int:
@@ -93,37 +139,8 @@ class BaseView(ViewLike[AtomProtoT, ResidueProtoT, ChainProtoT, LevelProtoT]):
         self._check_same_level(other)
         raise NotImplementedError
 
-    @property
-    def level(self) -> StructureLevel:
-        """The structural level of the view."""
-        return self._level
 
-    @property
-    def mol(self) -> BioMol[AtomProtoT, ResidueProtoT, ChainProtoT]:
-        """Return the parent molecule."""
-        return self._mol
-
-    def get_feature(self, key: str) -> Feature:
-        """Return the feature for the given key, cropped to the view's indices."""
-        return self._mol.get_container(self.level)[key].crop(self._indices)
-
-    def get_features(self) -> FeatureContainer:
-        """Return the features of the view, cropped to the view's indices."""
-        return self._mol.get_container(self.level).crop(self._indices)
-
-    def _check_same_level(self, other: Self) -> None:
-        if not isinstance(other, BaseView):
-            msg = f"Invalid view type: {type(other)}"
-            raise TypeError(msg)
-        if self.level != other.level:
-            msg = (
-                f"Cannot operate on views of different levels: "
-                f"{self.level} and {other.level}"
-            )
-            raise TypeError(msg)
-
-
-class AtomView(BaseView[AtomProtoT, ResidueProtoT, ChainProtoT, AtomProtoT]):
+class AtomView(BaseView[AtomProtoT, ResidueProtoT, ChainProtoT, MolT, AtomProtoT]):
     """View of the atoms in the selection."""
 
     _level: Final = StructureLevel.ATOM
@@ -137,23 +154,29 @@ class AtomView(BaseView[AtomProtoT, ResidueProtoT, ChainProtoT, AtomProtoT]):
     @override
     def residues(
         self,
-    ) -> ResidueView[AtomProtoT, ResidueProtoT, ChainProtoT] | ResidueProtoT:
+    ) -> ResidueView[AtomProtoT, ResidueProtoT, ChainProtoT, MolT] | ResidueProtoT:
         raise NotImplementedError
 
     @property
     @override
-    def chains(self) -> ChainView[AtomProtoT, ResidueProtoT, ChainProtoT] | ChainProtoT:
+    def chains(
+        self,
+    ) -> ChainView[AtomProtoT, ResidueProtoT, ChainProtoT, MolT] | ChainProtoT:
         raise NotImplementedError
 
 
-class ResidueView(BaseView[AtomProtoT, ResidueProtoT, ChainProtoT, ResidueProtoT]):
+class ResidueView(
+    BaseView[AtomProtoT, ResidueProtoT, ChainProtoT, MolT, ResidueProtoT],
+):
     """View of the residues in the selection."""
 
     _level: Final = StructureLevel.RESIDUE
 
     @property
     @override
-    def atoms(self) -> AtomView[AtomProtoT, ResidueProtoT, ChainProtoT] | AtomProtoT:
+    def atoms(
+        self,
+    ) -> AtomView[AtomProtoT, ResidueProtoT, ChainProtoT, MolT] | AtomProtoT:
         raise NotImplementedError
 
     @property
@@ -163,28 +186,32 @@ class ResidueView(BaseView[AtomProtoT, ResidueProtoT, ChainProtoT, ResidueProtoT
 
     @property
     @override
-    def chains(self) -> ChainView[AtomProtoT, ResidueProtoT, ChainProtoT] | ChainProtoT:
+    def chains(
+        self,
+    ) -> ChainView[AtomProtoT, ResidueProtoT, ChainProtoT, MolT] | ChainProtoT:
         raise NotImplementedError
 
 
-class ChainView(BaseView[AtomProtoT, ResidueProtoT, ChainProtoT, ChainProtoT]):
+class ChainView(BaseView[AtomProtoT, ResidueProtoT, ChainProtoT, MolT, ChainProtoT]):
     """View of the chains in the selection."""
 
     _level: Final = StructureLevel.CHAIN
 
     @property
     @override
-    def atoms(self) -> AtomView[AtomProtoT, ResidueProtoT, ChainProtoT] | AtomProtoT:
+    def atoms(
+        self,
+    ) -> AtomView[AtomProtoT, ResidueProtoT, ChainProtoT, MolT] | AtomProtoT:
         raise NotImplementedError
 
     @property
     @override
     def residues(
         self,
-    ) -> ResidueView[AtomProtoT, ResidueProtoT, ChainProtoT] | ResidueProtoT:
+    ) -> ResidueView[AtomProtoT, ResidueProtoT, ChainProtoT, MolT] | ResidueProtoT:
         raise NotImplementedError
 
     @property
     @override
-    def chains(self) -> ChainView[AtomProtoT, ResidueProtoT, ChainProtoT] | ChainProtoT:
+    def chains(self) -> Self | ChainProtoT:
         return self
