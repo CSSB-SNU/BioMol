@@ -2,27 +2,66 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, replace
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Final
 
 import numpy as np
+from numpy.lib.mixins import NDArrayOperatorsMixin
 from typing_extensions import Self, override
 
-from .exceptions import FeatureIndicesError, FeatureShapeError
+from .exceptions import FeatureIndicesError, FeatureOperationError, FeatureShapeError
 
 if TYPE_CHECKING:
-    from numpy.typing import NDArray
+    from numpy.typing import DTypeLike, NDArray
 
 
-@dataclass(frozen=True, slots=True, kw_only=True)
-class Feature(ABC):
-    """A base class for features in a structure."""
+_LOGICAL_UFUNCS: Final[set[np.ufunc]] = {
+    np.logical_and,
+    np.logical_or,
+    np.logical_xor,
+    np.logical_not,
+}
+
+_COMPARISON_UFUNCS: Final[set[np.ufunc]] = {
+    np.equal,
+    np.not_equal,
+    np.less,
+    np.less_equal,
+    np.greater,
+    np.greater_equal,
+}
+
+
+@dataclass(frozen=True, slots=True, kw_only=True, eq=False)
+class Feature(ABC, NDArrayOperatorsMixin):
+    """A base class for features in a structure.
+
+    This class supports numpy operations and can be indexed and cropped.
+    """
 
     value: np.ndarray
     description: str | None = None
 
-    @abstractmethod
-    def __getitem__(self, key: Any) -> Self:  # noqa: ANN401
-        """Get a subset of the feature."""
+    __array_priority__ = 1000
+
+    @property
+    def shape(self) -> tuple[int, ...]:
+        """Return the shape of the feature."""
+        return self.value.shape
+
+    @property
+    def ndim(self) -> int:
+        """Return the number of dimensions of the feature."""
+        return self.value.ndim
+
+    @property
+    def dtype(self) -> DTypeLike:
+        """Return the data type of the feature."""
+        return self.value.dtype
+
+    @property
+    def size(self) -> int:
+        """Return the total number of elements in the feature."""
+        return self.value.size
 
     @abstractmethod
     def crop(self, indices: NDArray[np.integer]) -> Self:
@@ -34,21 +73,88 @@ class Feature(ABC):
             1D array of node indices to keep. Only integer arrays is allowed.
         """
 
+    @abstractmethod
+    def __getitem__(self, key: Any) -> Self:  # noqa: ANN401
+        """Get a subset of the feature."""
 
-@dataclass(frozen=True, slots=True, kw_only=True)
+    def __len__(self) -> int:
+        """Return the number of entries in the feature."""
+        return len(self.value)
+
+    def __bool__(self) -> bool:
+        """Prevent ambiguous truth value evaluation."""
+        return bool(self.value)
+
+    def __array__(
+        self,
+        dtype: NDArray[np.generic] | None = None,
+    ) -> NDArray[np.generic]:
+        """Convert the feature to a numpy array.
+
+        This method is called when numpy functions are applied to the feature.
+        """
+        return np.asarray(self.value, dtype=dtype)
+
+    def __array_ufunc__(
+        self,
+        ufunc: np.ufunc,
+        method: str,
+        *inputs: Any,  # noqa: ANN401
+        **kwargs: Any,  # noqa: ANN401
+    ) -> Any:  # noqa: ANN401
+        """Support numpy universal functions (ufuncs).
+
+        This method is called when numpy ufuncs are applied to the feature.
+        """
+        if method == "at":
+            msg = (
+                f"{type(self).__name__} is immutable; "
+                "in-place operations are not supported."
+            )
+            raise FeatureOperationError(msg)
+        if "out" in kwargs and kwargs["out"] is not None:
+            outs = kwargs["out"]
+            if not isinstance(outs, tuple):
+                outs = (outs,)
+            if any(isinstance(o, Feature) for o in outs):
+                msg = (
+                    f"{type(self).__name__} is immutable; "
+                    "in-place operations are not supported."
+                )
+                raise FeatureOperationError(msg)
+
+        args = [x.value if isinstance(x, Feature) else x for x in inputs]
+        res = getattr(ufunc, method)(*args, **kwargs)
+        if method in ("reduce", "reduceat", "accumulate", "outer", "inner"):
+            return res
+        if ufunc in _COMPARISON_UFUNCS or ufunc in _LOGICAL_UFUNCS:
+            return res
+        if isinstance(res, tuple):
+            return (
+                replace(self, value=r)
+                if isinstance(r, np.ndarray) and r.shape == self.shape
+                else r
+                for r in res
+            )
+        if isinstance(res, np.ndarray) and res.shape == self.shape:
+            return replace(self, value=res)
+        return res
+
+
+@dataclass(frozen=True, slots=True, kw_only=True, eq=False)
 class NodeFeature(Feature):
     """A feature associated with nodes in a structure."""
-
-    @override
-    def __getitem__(self, key: Any) -> Self:
-        return replace(self, value=self.value[key])
 
     @override
     def crop(self, indices: NDArray[np.integer]) -> Self:
         return self[indices]
 
+    @override
+    def __getitem__(self, key: Any) -> Self:
+        return replace(self, value=self.value[key])
 
-@dataclass(frozen=True, slots=True, kw_only=True)
+
+@dataclass(frozen=True, slots=True, kw_only=True, eq=False)
 class EdgeFeature(Feature):
     """A feature associated with edges (pairs of nodes) in a structure."""
 
@@ -73,15 +179,6 @@ class EdgeFeature(Feature):
         if np.any(self.src_indices < 0) or np.any(self.dst_indices < 0):
             msg = "src_indices and dst_indices must be non-negative."
             raise FeatureIndicesError(msg)
-
-    @override
-    def __getitem__(self, key: Any) -> Self:
-        return replace(
-            self,
-            value=self.value[key],
-            src_indices=self.src_indices[key],
-            dst_indices=self.dst_indices[key],
-        )
 
     @property
     def src(self) -> NDArray[np.integer]:
@@ -144,3 +241,12 @@ class EdgeFeature(Feature):
         empty = np.empty((0,) + self.value.shape[1:], dtype=self.value.dtype)
         ind = np.empty((0,), dtype=self.src_indices.dtype)
         return replace(self, value=empty, src_indices=ind, dst_indices=ind)
+
+    @override
+    def __getitem__(self, key: Any) -> Self:
+        return replace(
+            self,
+            value=self.value[key],
+            src_indices=self.src_indices[key],
+            dst_indices=self.dst_indices[key],
+        )
