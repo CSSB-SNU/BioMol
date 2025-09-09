@@ -18,7 +18,7 @@ if TYPE_CHECKING:
 
 
 MolT = TypeVar("MolT", bound="BioMol", default="BioMol")
-LevelProtoT = TypeVar("LevelProtoT", bound="BaseView", default="BaseView")
+LevelProtoT = TypeVar("LevelProtoT", default="ViewLike")
 
 
 class ViewLike(ABC, Generic[AtomProtoT, ResidueProtoT, ChainProtoT, MolT, LevelProtoT]):
@@ -58,6 +58,7 @@ class BaseView(
         mol: MolT,
         indices: NDArray[np.integer],
     ) -> None:
+        indices = np.atleast_1d(indices)
         if indices.ndim != 1:
             msg = f"Indices must be 1-dimensional, but got {indices.ndim}D."
             raise FeatureShapeError(msg)
@@ -85,7 +86,11 @@ class BaseView(
     def unique(self) -> Self | LevelProtoT:
         """Return a new view with unique indices."""
         unique_indices = np.unique(self._indices)
-        return self.__class__(self._mol, unique_indices)
+        return self.new(unique_indices)
+
+    def new(self, indices: NDArray[np.integer]) -> Self | LevelProtoT:
+        """Return a new view with the specified indices."""
+        return self.__class__(self._mol, indices)
 
     def _check_same_level(self, other: Self) -> None:
         if not isinstance(other, BaseView):
@@ -105,9 +110,6 @@ class BaseView(
         """Return a string representation of the view."""
         return f"<{self.__class__.__name__} with {len(self)} elements>"
 
-    def __iter__(self) -> Self | LevelProtoT:
-        raise NotImplementedError
-
     def __len__(self) -> int:
         """Return the number of elements in the view."""
         return len(self._indices)
@@ -118,26 +120,75 @@ class BaseView(
 
     def __getitem__(self, key: Any) -> Self | LevelProtoT:  # noqa: ANN401
         """Return a new view with the specified indices."""
-        return self.__class__(self._mol, self._indices[key])
+        return self.new(self._indices[key])
 
-    def __and__(self, other: Self) -> Self:
+    def __add__(self, other: Self) -> Self | LevelProtoT:
+        """Return a new view with concatenated indices.
+
+        Note that the result may contain duplicate indices.
+        """
         self._check_same_level(other)
-        raise NotImplementedError
+        return self.new(np.concatenate((self._indices, other._indices)))
 
-    def __or__(self, other: Self) -> Self:
-        return self.__add__(other)
+    def __sub__(self, other: Self) -> Self | LevelProtoT:
+        """Return a new view with indices in self but not in other.
 
-    def __xor__(self, other: Self) -> Self:
+        Note that the result contains only unique, sorted indices.
+        """
         self._check_same_level(other)
-        raise NotImplementedError
+        _indices = np.setdiff1d(
+            np.unique(self._indices),
+            np.unique(other._indices),
+            assume_unique=True,
+        )
+        return self.new(_indices)
 
-    def __add__(self, other: Self) -> Self:
-        self._check_same_level(other)
-        raise NotImplementedError
+    def __and__(self, other: Self) -> Self | LevelProtoT:
+        """Return a new view with indices in both self and other.
 
-    def __sub__(self, other: Self) -> Self:
+        Note that the result contains only unique, sorted indices.
+        """
         self._check_same_level(other)
-        raise NotImplementedError
+        _indices = np.intersect1d(
+            np.unique(self._indices),
+            np.unique(other._indices),
+            assume_unique=True,
+        )
+        return self.new(_indices)
+
+    def __or__(self, other: Self) -> Self | LevelProtoT:
+        """Return a new view with indices in either self or other.
+
+        Note that the result contains only unique, sorted indices.
+        """
+        self._check_same_level(other)
+        _indices = np.union1d(self._indices, other._indices)
+        return self.new(_indices)
+
+    def __xor__(self, other: Self) -> Self | LevelProtoT:
+        """Return a new view with indices in self or other but not both.
+
+        Note that the result contains only unique, sorted indices.
+        """
+        self._check_same_level(other)
+        _indices = np.setxor1d(
+            np.unique(self._indices),
+            np.unique(other._indices),
+            assume_unique=True,
+        )
+        return self.new(_indices)
+
+    def __invert__(self) -> Self | LevelProtoT:
+        """Return a new view with indices not in the current view.
+
+        Note that the result contains only unique, sorted indices.
+        """
+        _indices = np.setdiff1d(
+            np.arange(len(self._mol.get_container(self.level))),
+            np.unique(self._indices),
+            assume_unique=True,
+        )
+        return self.new(_indices)
 
 
 class AtomView(BaseView[AtomProtoT, ResidueProtoT, ChainProtoT, MolT, AtomProtoT]):
