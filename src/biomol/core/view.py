@@ -1,15 +1,16 @@
 from __future__ import annotations
 
-from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Any, ClassVar, Final, Generic
+from typing import TYPE_CHECKING, Any, ClassVar, Final, Protocol, runtime_checkable
 
 import numpy as np
 from typing_extensions import Self, TypeVar, override
 
 from .exceptions import FeatureShapeError, ViewOperationError
-from .types import AtomProtoT, ChainProtoT, ResidueProtoT, StructureLevel
+from .types import StructureLevel
 
 if TYPE_CHECKING:
+    from collections.abc import Iterator
+
     from numpy.typing import NDArray
 
     from .biomol import BioMol
@@ -17,45 +18,114 @@ if TYPE_CHECKING:
     from .feature import Feature
 
 
-MolT = TypeVar("MolT", bound="BioMol", default="BioMol")
-LevelProtoT = TypeVar("LevelProtoT", default="ViewLike")
+A_co = TypeVar("A_co", bound="ViewProtocol", default="ViewProtocol", covariant=True)
+R_co = TypeVar("R_co", bound="ViewProtocol", default="ViewProtocol", covariant=True)
+C_co = TypeVar("C_co", bound="ViewProtocol", default="ViewProtocol", covariant=True)
+M_co = TypeVar("M_co", bound="BioMol", default="BioMol", covariant=True)
 
 
-class ViewLike(ABC, Generic[AtomProtoT, ResidueProtoT, ChainProtoT, MolT, LevelProtoT]):
-    """A generic interface for views."""
+@runtime_checkable
+class ViewProtocol(Protocol[A_co, R_co, C_co, M_co]):
+    """Protocol for all views."""
+
+    def __init__(
+        self,
+        mol: M_co,
+        indices: NDArray[np.integer],
+    ) -> None: ...
 
     @property
-    @abstractmethod
-    def atoms(
-        self,
-    ) -> AtomView[AtomProtoT, ResidueProtoT, ChainProtoT, MolT] | AtomProtoT:
+    def atoms(self) -> A_co:
         """View of the atoms in the selection."""
 
     @property
-    @abstractmethod
-    def residues(
-        self,
-    ) -> ResidueView[AtomProtoT, ResidueProtoT, ChainProtoT, MolT] | ResidueProtoT:
+    def residues(self) -> R_co:
         """View of the residues in the selection."""
 
     @property
-    @abstractmethod
-    def chains(
-        self,
-    ) -> ChainView[AtomProtoT, ResidueProtoT, ChainProtoT, MolT] | ChainProtoT:
+    def chains(self) -> C_co:
         """View of the chains in the selection."""
 
+    @property
+    def level(self) -> StructureLevel:
+        """The structural level of the view."""
 
-class BaseView(
-    ViewLike[AtomProtoT, ResidueProtoT, ChainProtoT, MolT, LevelProtoT],
-):
+    @property
+    def mol(self) -> M_co:
+        """Return the parent molecule."""
+
+    def get_feature(self, key: str) -> Feature:
+        """Return the feature for the given key, cropped to the view's indices."""
+
+    def get_features(self) -> FeatureContainer:
+        """Return the features of the view, cropped to the view's indices."""
+
+    def unique(self) -> Self:
+        """Return a new view with unique indices."""
+
+    def new(self, indices: NDArray[np.integer]) -> Self:
+        """Return a new view with the specified indices."""
+
+    def __repr__(self) -> str:
+        """Return a string representation of the view."""
+
+    def __len__(self) -> int:
+        """Return the number of elements in the view."""
+
+    def __getattr__(self, key: str) -> Feature:
+        """Return the feature for the given key, cropped to the view's indices."""
+
+    def __getitem__(self, key: Any) -> Self:  # noqa: ANN401
+        """Return a new view with the specified indices."""
+
+    def __iter__(self) -> Iterator[Self]:
+        """Iterate over the elements in the view, yielding single-element views."""
+
+    def __add__(self, other: Self) -> Self:
+        """Return a new view with concatenated indices.
+
+        Note that the result may contain duplicate indices.
+        """
+
+    def __sub__(self, other: Self) -> Self:
+        """Return a new view with indices in self but not in other.
+
+        Note that the result contains only unique, sorted indices.
+        """
+
+    def __and__(self, other: Self) -> Self:
+        """Return a new view with indices in both self and other.
+
+        Note that the result contains only unique, sorted indices.
+        """
+
+    def __or__(self, other: Self) -> Self:
+        """Return a new view with indices in either self or other.
+
+        Note that the result contains only unique, sorted indices.
+        """
+
+    def __xor__(self, other: Self) -> Self:
+        """Return a new view with indices in self or other but not both.
+
+        Note that the result contains only unique, sorted indices.
+        """
+
+    def __invert__(self) -> Self:
+        """Return a new view with indices not in the current view.
+
+        Note that the result contains only unique, sorted indices.
+        """
+
+
+class BaseView(ViewProtocol[A_co, R_co, C_co, M_co]):
     """Base class for all views."""
 
     _level: ClassVar[StructureLevel]
 
     def __init__(
         self,
-        mol: MolT,
+        mol: M_co,
         indices: NDArray[np.integer],
     ) -> None:
         indices = np.atleast_1d(indices)
@@ -66,30 +136,30 @@ class BaseView(
         self._indices = indices
 
     @property
+    @override
     def level(self) -> StructureLevel:
-        """The structural level of the view."""
         return self._level
 
     @property
-    def mol(self) -> MolT:
-        """Return the parent molecule."""
+    @override
+    def mol(self) -> M_co:
         return self._mol
 
+    @override
     def get_feature(self, key: str) -> Feature:
-        """Return the feature for the given key, cropped to the view's indices."""
         return self._mol.get_container(self.level)[key].crop(self._indices)
 
+    @override
     def get_features(self) -> FeatureContainer:
-        """Return the features of the view, cropped to the view's indices."""
         return self._mol.get_container(self.level).crop(self._indices)
 
-    def unique(self) -> Self | LevelProtoT:
-        """Return a new view with unique indices."""
+    @override
+    def unique(self) -> Self:
         unique_indices = np.unique(self._indices)
         return self.new(unique_indices)
 
-    def new(self, indices: NDArray[np.integer]) -> Self | LevelProtoT:
-        """Return a new view with the specified indices."""
+    @override
+    def new(self, indices: NDArray[np.integer]) -> Self:
         return self.__class__(self._mol, indices)
 
     def _check_same_level(self, other: Self) -> None:
@@ -106,35 +176,34 @@ class BaseView(
             )
             raise ViewOperationError(msg)
 
+    @override
     def __repr__(self) -> str:
-        """Return a string representation of the view."""
         return f"<{self.__class__.__name__} with {len(self)} elements>"
 
+    @override
     def __len__(self) -> int:
-        """Return the number of elements in the view."""
         return len(self._indices)
 
+    @override
     def __getattr__(self, key: str) -> Feature:
-        """Return the feature for the given key, cropped to the view's indices."""
         return self.get_feature(key)
 
-    def __getitem__(self, key: Any) -> Self | LevelProtoT:  # noqa: ANN401
-        """Return a new view with the specified indices."""
+    @override
+    def __getitem__(self, key: Any) -> Self:
         return self.new(self._indices[key])
 
-    def __add__(self, other: Self) -> Self | LevelProtoT:
-        """Return a new view with concatenated indices.
+    @override
+    def __iter__(self) -> Iterator[Self]:
+        for i in range(len(self)):
+            yield self[i]
 
-        Note that the result may contain duplicate indices.
-        """
+    @override
+    def __add__(self, other: Self) -> Self:
         self._check_same_level(other)
         return self.new(np.concatenate((self._indices, other._indices)))
 
-    def __sub__(self, other: Self) -> Self | LevelProtoT:
-        """Return a new view with indices in self but not in other.
-
-        Note that the result contains only unique, sorted indices.
-        """
+    @override
+    def __sub__(self, other: Self) -> Self:
         self._check_same_level(other)
         _indices = np.setdiff1d(
             np.unique(self._indices),
@@ -143,11 +212,8 @@ class BaseView(
         )
         return self.new(_indices)
 
-    def __and__(self, other: Self) -> Self | LevelProtoT:
-        """Return a new view with indices in both self and other.
-
-        Note that the result contains only unique, sorted indices.
-        """
+    @override
+    def __and__(self, other: Self) -> Self:
         self._check_same_level(other)
         _indices = np.intersect1d(
             np.unique(self._indices),
@@ -156,20 +222,14 @@ class BaseView(
         )
         return self.new(_indices)
 
-    def __or__(self, other: Self) -> Self | LevelProtoT:
-        """Return a new view with indices in either self or other.
-
-        Note that the result contains only unique, sorted indices.
-        """
+    @override
+    def __or__(self, other: Self) -> Self:
         self._check_same_level(other)
         _indices = np.union1d(self._indices, other._indices)
         return self.new(_indices)
 
-    def __xor__(self, other: Self) -> Self | LevelProtoT:
-        """Return a new view with indices in self or other but not both.
-
-        Note that the result contains only unique, sorted indices.
-        """
+    @override
+    def __xor__(self, other: Self) -> Self:
         self._check_same_level(other)
         _indices = np.setxor1d(
             np.unique(self._indices),
@@ -178,11 +238,8 @@ class BaseView(
         )
         return self.new(_indices)
 
-    def __invert__(self) -> Self | LevelProtoT:
-        """Return a new view with indices not in the current view.
-
-        Note that the result contains only unique, sorted indices.
-        """
+    @override
+    def __invert__(self) -> Self:
         _indices = np.setdiff1d(
             np.arange(len(self._mol.get_container(self.level))),
             np.unique(self._indices),
@@ -191,78 +248,64 @@ class BaseView(
         return self.new(_indices)
 
 
-class AtomView(BaseView[AtomProtoT, ResidueProtoT, ChainProtoT, MolT, AtomProtoT]):
+class AtomView(BaseView):
     """View of the atoms in the selection."""
 
     _level: Final = StructureLevel.ATOM
 
     @property
     @override
-    def atoms(self) -> Self | AtomProtoT:
+    def atoms(self) -> Self:
         return self
 
     @property
     @override
-    def residues(
-        self,
-    ) -> ResidueView[AtomProtoT, ResidueProtoT, ChainProtoT, MolT] | ResidueProtoT:
+    def residues(self) -> ResidueView:
         raise NotImplementedError
 
     @property
     @override
-    def chains(
-        self,
-    ) -> ChainView[AtomProtoT, ResidueProtoT, ChainProtoT, MolT] | ChainProtoT:
+    def chains(self) -> ChainView:
         raise NotImplementedError
 
 
-class ResidueView(
-    BaseView[AtomProtoT, ResidueProtoT, ChainProtoT, MolT, ResidueProtoT],
-):
+class ResidueView(BaseView):
     """View of the residues in the selection."""
 
     _level: Final = StructureLevel.RESIDUE
 
     @property
     @override
-    def atoms(
-        self,
-    ) -> AtomView[AtomProtoT, ResidueProtoT, ChainProtoT, MolT] | AtomProtoT:
+    def atoms(self) -> AtomView:
         raise NotImplementedError
 
     @property
     @override
-    def residues(self) -> Self | ResidueProtoT:
+    def residues(self) -> Self:
         return self
 
     @property
     @override
-    def chains(
-        self,
-    ) -> ChainView[AtomProtoT, ResidueProtoT, ChainProtoT, MolT] | ChainProtoT:
+    def chains(self) -> ChainView:
         raise NotImplementedError
 
 
-class ChainView(BaseView[AtomProtoT, ResidueProtoT, ChainProtoT, MolT, ChainProtoT]):
+class ChainView(BaseView):
     """View of the chains in the selection."""
 
     _level: Final = StructureLevel.CHAIN
 
     @property
     @override
-    def atoms(
-        self,
-    ) -> AtomView[AtomProtoT, ResidueProtoT, ChainProtoT, MolT] | AtomProtoT:
+    def atoms(self) -> AtomView:
         raise NotImplementedError
 
     @property
     @override
-    def residues(
-        self,
-    ) -> ResidueView[AtomProtoT, ResidueProtoT, ChainProtoT, MolT] | ResidueProtoT:
+    def residues(self) -> ResidueView:
         raise NotImplementedError
 
     @property
     @override
-    def chains(self) -> Self | ChainProtoT:
+    def chains(self) -> Self:
         return self

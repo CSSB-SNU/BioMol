@@ -1,15 +1,14 @@
-from typing import get_args, get_origin
+from typing import Generic, get_args, get_origin
 
 import numpy as np
-from typing_extensions import Self, override
 
 from .container import AtomContainer, ChainContainer, FeatureContainer, ResidueContainer
 from .exceptions import FeatureKeyError, StructureLevelError, ViewProtocolError
-from .types import AtomProtoT, ChainProtoT, ResidueProtoT, StructureLevel
-from .view import AtomView, ChainView, ResidueView, ViewLike
+from .types import StructureLevel
+from .view import A_co, AtomView, C_co, ChainView, R_co, ResidueView, ViewProtocol
 
 
-class BioMol(ViewLike[AtomProtoT, ResidueProtoT, ChainProtoT]):
+class BioMol(Generic[A_co, R_co, C_co]):
     """A class representing a biomolecular structure."""
 
     def __init__(
@@ -24,24 +23,18 @@ class BioMol(ViewLike[AtomProtoT, ResidueProtoT, ChainProtoT]):
         self._check_protocol_type()
 
     @property
-    @override
-    def atoms(
-        self,
-    ) -> AtomView[AtomProtoT, ResidueProtoT, ChainProtoT, Self] | AtomProtoT:
+    def atoms(self) -> A_co:
+        """View of the atoms in the selection."""
         return AtomView(self, np.arange(len(self._atom_container)))
 
     @property
-    @override
-    def residues(
-        self,
-    ) -> ResidueView[AtomProtoT, ResidueProtoT, ChainProtoT, Self] | ResidueProtoT:
+    def residues(self) -> R_co:
+        """View of the residues in the selection."""
         return ResidueView(self, np.arange(len(self._residue_container)))
 
     @property
-    @override
-    def chains(
-        self,
-    ) -> ChainView[AtomProtoT, ResidueProtoT, ChainProtoT, Self] | ChainProtoT:
+    def chains(self) -> C_co:
+        """View of the chains in the selection."""
         return ChainView(self, np.arange(len(self._chain_container)))
 
     def get_container(self, level: StructureLevel) -> FeatureContainer:
@@ -57,14 +50,16 @@ class BioMol(ViewLike[AtomProtoT, ResidueProtoT, ChainProtoT]):
         FeatureContainer
             The feature container for the specified structure level.
         """
-        if level == StructureLevel.ATOM:
-            return self._atom_container
-        if level == StructureLevel.RESIDUE:
-            return self._residue_container
-        if level == StructureLevel.CHAIN:
-            return self._chain_container
-        msg = f"Invalid structure level: {level}"
-        raise StructureLevelError(msg)
+        match level:
+            case StructureLevel.ATOM:
+                return self._atom_container
+            case StructureLevel.RESIDUE:
+                return self._residue_container
+            case StructureLevel.CHAIN:
+                return self._chain_container
+            case _:
+                msg = f"Invalid structure level: {level}."
+                raise StructureLevelError(msg)
 
     def _check_protocol_type(self) -> None:
         """Check if the view types satisfy the specified Protocols."""
@@ -76,8 +71,10 @@ class BioMol(ViewLike[AtomProtoT, ResidueProtoT, ChainProtoT]):
 
         args = get_args(_orig_class[0])
         for i, proto in enumerate(args):
-            if proto is type(None):
-                continue
+            bases = getattr(proto, "__mro__", ()) or getattr(proto, "__bases__", ())
+            if not any(b is ViewProtocol for b in bases):
+                msg = f"{proto.__name__} must inherit from ViewProtocol."
+                raise ViewProtocolError(msg)
             if not getattr(proto, "_is_protocol", False):
                 msg = f"{proto.__name__} is not a Protocol."
                 raise ViewProtocolError(msg)

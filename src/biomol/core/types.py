@@ -1,9 +1,6 @@
 from __future__ import annotations
 
 import enum
-from typing import Protocol, runtime_checkable
-
-from typing_extensions import TypeVar
 
 
 @enum.unique
@@ -37,13 +34,3 @@ class StructureLevel(enum.Enum):
     ATOM = "atom"
     RESIDUE = "residue"
     CHAIN = "chain"
-
-
-@runtime_checkable
-class ViewProtocol(Protocol):
-    """Protocol for views."""
-
-
-AtomProtoT = TypeVar("AtomProtoT", default=ViewProtocol)
-ResidueProtoT = TypeVar("ResidueProtoT", default=ViewProtocol)
-ChainProtoT = TypeVar("ChainProtoT", default=ViewProtocol)
