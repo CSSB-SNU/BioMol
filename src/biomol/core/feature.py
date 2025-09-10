@@ -8,7 +8,7 @@ import numpy as np
 from numpy.lib.mixins import NDArrayOperatorsMixin
 from typing_extensions import Self, override
 
-from .exceptions import FeatureIndicesError, FeatureOperationError, FeatureShapeError
+from .exceptions import FeatureOperationError, IndexInvalidError, IndexMismatchError
 
 if TYPE_CHECKING:
     from numpy.typing import DTypeLike, NDArray
@@ -168,17 +168,17 @@ class EdgeFeature(Feature):
                 f"src_indices={self.src_indices.ndim}, "
                 f"dst_indices={self.dst_indices.ndim}"
             )
-            raise FeatureShapeError(msg)
+            raise IndexInvalidError(msg)
         if not (len(self.value) == len(self.src_indices) == len(self.dst_indices)):
             msg = (
                 "All arrays must have the same length. Got "
                 f"value={len(self.value)}, src_indices={len(self.src_indices)}, "
                 f"dst_indices={len(self.dst_indices)}"
             )
-            raise FeatureShapeError(msg)
+            raise IndexMismatchError(msg)
         if np.any(self.src_indices < 0) or np.any(self.dst_indices < 0):
             msg = "src_indices and dst_indices must be non-negative."
-            raise FeatureIndicesError(msg)
+            raise IndexInvalidError(msg)
 
     @property
     def src(self) -> NDArray[np.integer]:
@@ -208,16 +208,16 @@ class EdgeFeature(Feature):
         """
         if not isinstance(indices, np.ndarray):
             msg = f"Indices must be a numpy.ndarray, got {type(indices)}"
-            raise FeatureIndicesError(msg)
+            raise IndexInvalidError(msg)
         if indices.ndim != 1:
             msg = f"Indices must be a 1D array, got {indices.ndim}D array"
-            raise FeatureIndicesError(msg)
+            raise IndexInvalidError(msg)
         if not np.issubdtype(indices.dtype, np.integer):
             msg = f"Indices must be a integer array, got {indices.dtype}"
-            raise FeatureIndicesError(msg)
+            raise IndexInvalidError(msg)
         if np.any(indices < 0):
             msg = "Negative indices are not allowed."
-            raise FeatureIndicesError(msg)
+            raise IndexInvalidError(msg)
         if self.value.size == 0 or indices.size == 0:
             return self._empty_like()
 

@@ -6,7 +6,7 @@ import numpy as np
 from numpy.typing import NDArray
 from typing_extensions import Self
 
-from .exceptions import FeatureIndicesError, FeatureKeyError, FeatureShapeError
+from .exceptions import FeatureKeyError, IndexMismatchError, IndexOutOfBoundsError
 from .feature import EdgeFeature, Feature, NodeFeature
 from .types import StructureLevel
 
@@ -69,7 +69,7 @@ class FeatureContainer:
         node_lengths = {len(f.value) for f in self.node_features.values()}
         if len(node_lengths) > 1:
             msg = f"Inconsistent node feature lengths {node_lengths}"
-            raise FeatureShapeError(msg)
+            raise IndexMismatchError(msg)
 
     def _check_edge_indices(self) -> None:
         length = len(next(iter(self.node_features.values())).value)
@@ -81,7 +81,7 @@ class FeatureContainer:
                     f"but got src_indices max={feat.src_indices.max()} and "
                     f"dst_indices max={feat.dst_indices.max()}."
                 )
-                raise FeatureIndicesError(msg)
+                raise IndexOutOfBoundsError(msg)
 
     def _check_duplicate_keys(self) -> None:
         if len(self.keys) != len(set(self.keys)):
