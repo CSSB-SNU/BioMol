@@ -99,31 +99,31 @@ class ViewProtocol(Protocol[A_co, R_co, C_co, M_co]):
     def __sub__(self, other: Self) -> Self:
         """Return a new view with indices in self but not in other.
 
-        Note that the result contains only unique, sorted indices.
+        Note that the result contains only unique indices.
         """
 
     def __and__(self, other: Self) -> Self:
         """Return a new view with indices in both self and other.
 
-        Note that the result contains only unique, sorted indices.
+        Note that the result contains only unique indices.
         """
 
     def __or__(self, other: Self) -> Self:
         """Return a new view with indices in either self or other.
 
-        Note that the result contains only unique, sorted indices.
+        Note that the result contains only unique indices.
         """
 
     def __xor__(self, other: Self) -> Self:
         """Return a new view with indices in self or other but not both.
 
-        Note that the result contains only unique, sorted indices.
+        Note that the result contains only unique indices.
         """
 
     def __invert__(self) -> Self:
         """Return a new view with indices not in the current view.
 
-        Note that the result contains only unique, sorted indices.
+        Note that the result contains only unique indices.
         """
 
 
@@ -220,52 +220,33 @@ class BaseView(ViewProtocol[A_co, R_co, C_co, M_co]):
     @override
     def __add__(self, other: Self) -> Self:
         self._check_same_level(other)
-        return self.new(np.concatenate((self._indices, other._indices)))
+        return self.new(np.concatenate((self.indices, other.indices)))
 
     @override
     def __sub__(self, other: Self) -> Self:
         self._check_same_level(other)
-        _indices = np.setdiff1d(
-            np.unique(self._indices),
-            np.unique(other._indices),
-            assume_unique=True,
-        )
-        return self.new(_indices)
+        mask = np.isin(self.unique_indices, other.indices, invert=True)
+        return self.new(self.unique_indices[mask])
 
     @override
     def __and__(self, other: Self) -> Self:
         self._check_same_level(other)
-        _indices = np.intersect1d(
-            np.unique(self._indices),
-            np.unique(other._indices),
-            assume_unique=True,
-        )
-        return self.new(_indices)
+        mask = np.isin(self.unique_indices, other.indices)
+        return self.new(self.unique_indices[mask])
 
     @override
     def __or__(self, other: Self) -> Self:
-        self._check_same_level(other)
-        _indices = np.union1d(self._indices, other._indices)
-        return self.new(_indices)
+        return (self + other).unique()
 
     @override
     def __xor__(self, other: Self) -> Self:
-        self._check_same_level(other)
-        _indices = np.setxor1d(
-            np.unique(self._indices),
-            np.unique(other._indices),
-            assume_unique=True,
-        )
-        return self.new(_indices)
+        return (self | other) - (self & other)
 
     @override
     def __invert__(self) -> Self:
-        _indices = np.setdiff1d(
-            np.arange(len(self._mol.get_container(self.level))),
-            np.unique(self._indices),
-            assume_unique=True,
-        )
-        return self.new(_indices)
+        all_indices = np.arange(len(self._mol.get_container(self.level)))
+        mask = np.isin(all_indices, self.indices, invert=True)
+        return self.new(all_indices[mask])
 
 
 class AtomView(BaseView):
