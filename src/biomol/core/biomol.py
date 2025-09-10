@@ -3,7 +3,13 @@ from typing import Generic, get_args, get_origin
 import numpy as np
 
 from .container import AtomContainer, ChainContainer, FeatureContainer, ResidueContainer
-from .exceptions import FeatureKeyError, StructureLevelError, ViewProtocolError
+from .exceptions import (
+    FeatureKeyError,
+    IndexMismatchError,
+    StructureLevelError,
+    ViewProtocolError,
+)
+from .index import IndexTable
 from .types import StructureLevel
 from .view import A_co, AtomView, C_co, ChainView, R_co, ResidueView, ViewProtocol
 
@@ -16,11 +22,14 @@ class BioMol(Generic[A_co, R_co, C_co]):
         atom_container: AtomContainer,
         residue_container: ResidueContainer,
         chain_container: ChainContainer,
+        index_table: IndexTable,
     ) -> None:
         self._atom_container = atom_container
         self._residue_container = residue_container
         self._chain_container = chain_container
+        self._index = index_table
         self._check_protocol_type()
+        self._check_lengths()
 
     @property
     def atoms(self) -> A_co:
@@ -36,6 +45,11 @@ class BioMol(Generic[A_co, R_co, C_co]):
     def chains(self) -> C_co:
         """View of the chains in the selection."""
         return ChainView(self, np.arange(len(self._chain_container)))
+
+    @property
+    def index_table(self) -> IndexTable:
+        """The index table mapping atoms, residues, and chains."""
+        return self._index
 
     def get_container(self, level: StructureLevel) -> FeatureContainer:
         """Get the feature container for a specific structure level.
@@ -95,6 +109,32 @@ class BioMol(Generic[A_co, R_co, C_co]):
             if not _is_satisfied:
                 msg = f"{name} view must satisfy {proto.__name__}."
                 raise ViewProtocolError(msg)
+
+    def _check_lengths(self) -> None:
+        """Check if the lengths of the containers and index table are consistent."""
+        if len(self._atom_container) != len(self._index.atom_to_res):
+            msg = (
+                "Atom length mismatch: "
+                f"atom_container has length {len(self._atom_container)}, "
+                f"but index table has length {len(self._index.atom_to_res)}."
+            )
+            raise IndexMismatchError(msg)
+
+        if len(self._residue_container) != len(self._index.res_to_chain):
+            msg = (
+                "Residue length mismatch: "
+                f"residue_container has length {len(self._residue_container)}, "
+                f"but index table has length {len(self._index.res_to_chain)}."
+            )
+            raise IndexMismatchError(msg)
+
+        if len(self._chain_container) != len(self._index.chain_res_indptr) - 1:
+            msg = (
+                "Chain length mismatch: "
+                f"chain_container has length {len(self._chain_container)}, "
+                f"but index table has length {len(self._index.chain_res_indptr) - 1}."
+            )
+            raise IndexMismatchError(msg)
 
     def __repr__(self) -> str:
         """Return a string representation of the BioMol object."""

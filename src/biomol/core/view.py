@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+from functools import cached_property
 from typing import TYPE_CHECKING, Any, ClassVar, Final, Protocol, runtime_checkable
 
 import numpy as np
 from typing_extensions import Self, TypeVar, override
 
-from .exceptions import FeatureShapeError, ViewOperationError
+from .exceptions import IndexInvalidError, ViewOperationError
 from .types import StructureLevel
 
 if TYPE_CHECKING:
@@ -54,6 +55,14 @@ class ViewProtocol(Protocol[A_co, R_co, C_co, M_co]):
     def mol(self) -> M_co:
         """Return the parent molecule."""
 
+    @property
+    def indices(self) -> NDArray[np.integer]:
+        """Return the indices of the view."""
+
+    @cached_property
+    def unique_indices(self) -> NDArray[np.integer]:
+        """Return the unique indices of the view, preserving first-occurrence order."""
+
     def get_feature(self, key: str) -> Feature:
         """Return the feature for the given key, cropped to the view's indices."""
 
@@ -61,7 +70,7 @@ class ViewProtocol(Protocol[A_co, R_co, C_co, M_co]):
         """Return the features of the view, cropped to the view's indices."""
 
     def unique(self) -> Self:
-        """Return a new view with unique indices."""
+        """Return a new view with unique indices, preserving first-occurrence order."""
 
     def new(self, indices: NDArray[np.integer]) -> Self:
         """Return a new view with the specified indices."""
@@ -131,7 +140,7 @@ class BaseView(ViewProtocol[A_co, R_co, C_co, M_co]):
         indices = np.atleast_1d(indices)
         if indices.ndim != 1:
             msg = f"Indices must be 1-dimensional, but got {indices.ndim}D."
-            raise FeatureShapeError(msg)
+            raise IndexInvalidError(msg)
         self._mol = mol
         self._indices = indices
 
@@ -145,18 +154,29 @@ class BaseView(ViewProtocol[A_co, R_co, C_co, M_co]):
     def mol(self) -> M_co:
         return self._mol
 
+    @property
+    @override
+    def indices(self) -> NDArray[np.integer]:
+        return self._indices
+
+    @cached_property
+    @override
+    def unique_indices(self) -> NDArray[np.integer]:
+        uniq, idx = np.unique(self.indices, return_index=True)
+        order = np.argsort(idx, kind="stable")
+        return uniq[order]
+
     @override
     def get_feature(self, key: str) -> Feature:
-        return self._mol.get_container(self.level)[key].crop(self._indices)
+        return self._mol.get_container(self.level)[key].crop(self.indices)
 
     @override
     def get_features(self) -> FeatureContainer:
-        return self._mol.get_container(self.level).crop(self._indices)
+        return self._mol.get_container(self.level).crop(self.indices)
 
     @override
     def unique(self) -> Self:
-        unique_indices = np.unique(self._indices)
-        return self.new(unique_indices)
+        return self.new(self.unique_indices)
 
     @override
     def new(self, indices: NDArray[np.integer]) -> Self:
@@ -182,7 +202,7 @@ class BaseView(ViewProtocol[A_co, R_co, C_co, M_co]):
 
     @override
     def __len__(self) -> int:
-        return len(self._indices)
+        return len(self.indices)
 
     @override
     def __getattr__(self, key: str) -> Feature:
@@ -190,7 +210,7 @@ class BaseView(ViewProtocol[A_co, R_co, C_co, M_co]):
 
     @override
     def __getitem__(self, key: Any) -> Self:
-        return self.new(self._indices[key])
+        return self.new(self.indices[key])
 
     @override
     def __iter__(self) -> Iterator[Self]:
@@ -261,12 +281,14 @@ class AtomView(BaseView):
     @property
     @override
     def residues(self) -> ResidueView:
-        raise NotImplementedError
+        indices = self._mol.index_table.atoms_to_residues(self.indices)
+        return ResidueView(self._mol, indices)
 
     @property
     @override
     def chains(self) -> ChainView:
-        raise NotImplementedError
+        indices = self._mol.index_table.atoms_to_chains(self.indices)
+        return ChainView(self._mol, indices)
 
 
 class ResidueView(BaseView):
@@ -277,7 +299,8 @@ class ResidueView(BaseView):
     @property
     @override
     def atoms(self) -> AtomView:
-        raise NotImplementedError
+        indices = self._mol.index_table.residues_to_atoms(self.indices)
+        return AtomView(self._mol, indices)
 
     @property
     @override
@@ -287,7 +310,8 @@ class ResidueView(BaseView):
     @property
     @override
     def chains(self) -> ChainView:
-        raise NotImplementedError
+        indices = self._mol.index_table.residues_to_chains(self.indices)
+        return ChainView(self._mol, indices)
 
 
 class ChainView(BaseView):
@@ -298,12 +322,14 @@ class ChainView(BaseView):
     @property
     @override
     def atoms(self) -> AtomView:
-        raise NotImplementedError
+        indices = self._mol.index_table.chains_to_atoms(self.indices)
+        return AtomView(self._mol, indices)
 
     @property
     @override
     def residues(self) -> ResidueView:
-        raise NotImplementedError
+        res_idx = self._mol.index_table.chains_to_residues(self.indices)
+        return ResidueView(self._mol, res_idx)
 
     @property
     @override
