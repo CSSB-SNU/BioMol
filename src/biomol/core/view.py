@@ -63,6 +63,27 @@ class ViewProtocol(Protocol[A_co, R_co, C_co, M_co]):
     def unique_indices(self) -> NDArray[np.integer]:
         """Return the unique indices of the view, preserving first-occurrence order."""
 
+    def to_atoms(self, *, unique: bool = False) -> A_co:
+        """Return an AtomView of the atoms in the selection.
+
+        If `unique` is True, the resulting view will contain only unique indices,
+        preserving first-occurrence order. Default is False.
+        """
+
+    def to_residues(self, *, unique: bool = False) -> R_co:
+        """Return a ResidueView of the residues in the selection.
+
+        If `unique` is True, the resulting view will contain only unique indices,
+        preserving first-occurrence order. Default is False.
+        """
+
+    def to_chains(self, *, unique: bool = False) -> C_co:
+        """Return a ChainView of the chains in the selection.
+
+        If `unique` is True, the resulting view will contain only unique indices,
+        preserving first-occurrence order. Default is False.
+        """
+
     def get_feature(self, key: str) -> Feature:
         """Return the feature for the given key, cropped to the view's indices."""
 
@@ -165,6 +186,21 @@ class BaseView(ViewProtocol[A_co, R_co, C_co, M_co]):
 
     @property
     @override
+    def atoms(self) -> AtomView:
+        return self.to_atoms(unique=True)
+
+    @property
+    @override
+    def residues(self) -> ResidueView:
+        return self.to_residues(unique=True)
+
+    @property
+    @override
+    def chains(self) -> ChainView:
+        return self.to_chains(unique=True)
+
+    @property
+    @override
     def level(self) -> StructureLevel:
         return self._level
 
@@ -186,12 +222,42 @@ class BaseView(ViewProtocol[A_co, R_co, C_co, M_co]):
         return uniq[order]
 
     @override
+    def to_atoms(self, *, unique: bool = False) -> AtomView:
+        indices = self.mol.index_table.convert(
+            self.indices,
+            source=self.level,
+            target=StructureLevel.ATOM,
+        )
+        view = AtomView(self.mol, indices)
+        return view.unique() if unique else view
+
+    @override
+    def to_residues(self, *, unique: bool = False) -> ResidueView:
+        indices = self.mol.index_table.convert(
+            self.indices,
+            source=self.level,
+            target=StructureLevel.RESIDUE,
+        )
+        view = ResidueView(self.mol, indices)
+        return view.unique() if unique else view
+
+    @override
+    def to_chains(self, *, unique: bool = False) -> ChainView:
+        indices = self.mol.index_table.convert(
+            self.indices,
+            source=self.level,
+            target=StructureLevel.CHAIN,
+        )
+        view = ChainView(self.mol, indices)
+        return view.unique() if unique else view
+
+    @override
     def get_feature(self, key: str) -> Feature:
-        return self._mol.get_container(self.level)[key].crop(self.indices)
+        return self.mol.get_container(self.level)[key].crop(self.indices)
 
     @override
     def get_container(self) -> FeatureContainer:
-        return self._mol.get_container(self.level).crop(self.indices)
+        return self.mol.get_container(self.level).crop(self.indices)
 
     @override
     def unique(self) -> Self:
@@ -199,7 +265,7 @@ class BaseView(ViewProtocol[A_co, R_co, C_co, M_co]):
 
     @override
     def new(self, indices: NDArray[np.integer]) -> Self:
-        return self.__class__(self._mol, indices)
+        return self.__class__(self.mol, indices)
 
     @override
     def sort(self) -> Self:
@@ -276,7 +342,7 @@ class BaseView(ViewProtocol[A_co, R_co, C_co, M_co]):
 
     @override
     def __invert__(self) -> Self:
-        all_indices = np.arange(len(self._mol.get_container(self.level)))
+        all_indices = np.arange(len(self.mol.get_container(self.level)))
         mask = np.isin(all_indices, self.indices, invert=True)
         return self.new(all_indices[mask])
 
@@ -286,65 +352,14 @@ class AtomView(BaseView):
 
     _level: Final = StructureLevel.ATOM
 
-    @property
-    @override
-    def atoms(self) -> Self:
-        return self
-
-    @property
-    @override
-    def residues(self) -> ResidueView:
-        indices = self._mol.index_table.atoms_to_residues(self.indices)
-        return ResidueView(self._mol, indices)
-
-    @property
-    @override
-    def chains(self) -> ChainView:
-        indices = self._mol.index_table.atoms_to_chains(self.indices)
-        return ChainView(self._mol, indices)
-
 
 class ResidueView(BaseView):
     """View of the residues in the selection."""
 
     _level: Final = StructureLevel.RESIDUE
 
-    @property
-    @override
-    def atoms(self) -> AtomView:
-        indices = self._mol.index_table.residues_to_atoms(self.indices)
-        return AtomView(self._mol, indices)
-
-    @property
-    @override
-    def residues(self) -> Self:
-        return self
-
-    @property
-    @override
-    def chains(self) -> ChainView:
-        indices = self._mol.index_table.residues_to_chains(self.indices)
-        return ChainView(self._mol, indices)
-
 
 class ChainView(BaseView):
     """View of the chains in the selection."""
 
     _level: Final = StructureLevel.CHAIN
-
-    @property
-    @override
-    def atoms(self) -> AtomView:
-        indices = self._mol.index_table.chains_to_atoms(self.indices)
-        return AtomView(self._mol, indices)
-
-    @property
-    @override
-    def residues(self) -> ResidueView:
-        res_idx = self._mol.index_table.chains_to_residues(self.indices)
-        return ResidueView(self._mol, res_idx)
-
-    @property
-    @override
-    def chains(self) -> Self:
-        return self

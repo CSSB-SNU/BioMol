@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, ClassVar
 
 import numpy as np
 
-from .exceptions import IndexInvalidError, IndexOutOfBoundsError
+from .exceptions import IndexInvalidError, IndexOutOfBoundsError, StructureLevelError
+from .types import StructureLevel
 
 if TYPE_CHECKING:
     from numpy.typing import NDArray
@@ -28,26 +29,12 @@ def _build_csr(
     return indptr, indices
 
 
-def _unique_stable(arr: NDArray[np.integer]) -> NDArray[np.integer]:
-    """Return unique elements preserving first-occurrence order."""
-    uniq, idx = np.unique(arr, return_index=True)
-    order = np.argsort(idx, kind="stable")
-    return uniq[order]
-
-
 @dataclass(frozen=True, slots=True)
 class IndexTable:
     """Index mapping between structural levels.
 
     This class stores forward parent mappings and reverse CSR mappings to
     efficiently move between atoms, residues, and chains.
-
-    Conventions
-    ----------
-    - All indices are global within their respective containers.
-    - Upcast (child->parent) returns unique, stable indices by default.
-    - Downcast (parent->child) returns stable concatenated indices; callers
-      may apply additional uniqueness if needed.
     """
 
     atom_to_res: NDArray[np.integer]
@@ -56,6 +43,15 @@ class IndexTable:
     res_atom_indices: NDArray[np.integer]
     chain_res_indptr: NDArray[np.integer]
     chain_res_indices: NDArray[np.integer]
+
+    _converter_table: ClassVar[dict[tuple[StructureLevel, StructureLevel], str]] = {
+        (StructureLevel.ATOM, StructureLevel.RESIDUE): "atoms_to_residues",
+        (StructureLevel.ATOM, StructureLevel.CHAIN): "atoms_to_chains",
+        (StructureLevel.RESIDUE, StructureLevel.ATOM): "residues_to_atoms",
+        (StructureLevel.RESIDUE, StructureLevel.CHAIN): "residues_to_chains",
+        (StructureLevel.CHAIN, StructureLevel.RESIDUE): "chains_to_residues",
+        (StructureLevel.CHAIN, StructureLevel.ATOM): "chains_to_atoms",
+    }
 
     @classmethod
     def from_parents(
@@ -110,17 +106,15 @@ class IndexTable:
         )
 
     def atoms_to_residues(self, indices: NDArray[np.integer]) -> NDArray[np.integer]:
-        """Map atom indices to unique residue indices."""
-        parents = self.atom_to_res[np.asarray(indices)]
-        return _unique_stable(parents)
+        """Map atom indices to residue indices."""
+        return self.atom_to_res[np.asarray(indices)]
 
     def residues_to_chains(self, indices: NDArray[np.integer]) -> NDArray[np.integer]:
-        """Map residue indices to unique chain indices."""
-        parents = self.res_to_chain[np.asarray(indices)]
-        return _unique_stable(parents)
+        """Map residue indices to chain indices."""
+        return self.res_to_chain[np.asarray(indices)]
 
     def atoms_to_chains(self, indices: NDArray[np.integer]) -> NDArray[np.integer]:
-        """Map atom indices to unique chain indices."""
+        """Map atom indices to chain indices."""
         res_indices = self.atoms_to_residues(indices)
         return self.residues_to_chains(res_indices)
 
@@ -158,6 +152,37 @@ class IndexTable:
         """Map chain indices to concatenated atom indices."""
         res_indices = self.chains_to_residues(indices)
         return self.residues_to_atoms(res_indices)
+
+    def convert(
+        self,
+        indices: NDArray[np.integer],
+        source: StructureLevel,
+        target: StructureLevel,
+    ) -> NDArray[np.integer]:
+        """Convert indices between structural levels.
+
+        Parameters
+        ----------
+        indices : NDArray[np.integer]
+            1D array of indices at the source level.
+        source : StructureLevel
+            The structural level of the input indices.
+        target : StructureLevel
+            The structural level to convert the indices to.
+
+        Returns
+        -------
+        NDArray[np.integer]
+            1D array of indices at the target level.
+        """
+        if source == target:
+            return indices
+
+        if (source, target) not in self._converter_table:
+            msg = f"Invalid level conversion: {source} -> {target}"
+            raise StructureLevelError(msg)
+        method_name = self._converter_table[(source, target)]
+        return getattr(self, method_name)(indices)
 
     @staticmethod
     def _check_indices(indices: NDArray[np.integer]) -> None:
