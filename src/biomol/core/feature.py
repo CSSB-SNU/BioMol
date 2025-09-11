@@ -63,6 +63,22 @@ class Feature(ABC, NDArrayOperatorsMixin):
         """Return the total number of elements in the feature."""
         return self.value.size
 
+    def mean(self, axis: int | None = None, **kwargs: dict) -> np.ndarray:
+        """Return the mean of the feature along the specified axis."""
+        return self.value.mean(axis=axis, **kwargs)
+
+    def sum(self, axis: int | None = None, **kwargs: dict) -> np.ndarray:
+        """Return the sum of the feature along the specified axis."""
+        return self.value.sum(axis=axis, **kwargs)
+
+    def min(self, axis: int | None = None, **kwargs: dict) -> np.ndarray:
+        """Return the minimum of the feature along the specified axis."""
+        return self.value.min(axis=axis, **kwargs)
+
+    def max(self, axis: int | None = None, **kwargs: dict) -> np.ndarray:
+        """Return the maximum of the feature along the specified axis."""
+        return self.value.max(axis=axis, **kwargs)
+
     @abstractmethod
     def crop(self, indices: NDArray[np.integer]) -> Self:
         """Crop the feature to only include the specified indices.
