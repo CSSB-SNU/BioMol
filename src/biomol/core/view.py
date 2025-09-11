@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from functools import cached_property
-from typing import TYPE_CHECKING, Any, ClassVar, Final, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Any, ClassVar, Protocol, runtime_checkable
 
 import numpy as np
 from typing_extensions import Self, TypeVar, override
@@ -104,6 +104,23 @@ class ViewProtocol(Protocol[A_co, R_co, C_co, M_co]):
 
     def is_subset(self, other: Self) -> bool:
         """Return True if the view is a subset of another view."""
+
+    def select(self, **kwargs: Any) -> Self:  # noqa: ANN401
+        """Return a new view filtered by the given feature values.
+
+        Each keyword argument corresponds to a feature name and its desired value.
+        If the value is a sequence-like (list, tuple, set, or ndarray), the feature is
+        checked against any of the values in that sequence. Only elements for which
+        all specified features match the given values are included in the result.
+
+        Example
+        -------
+        Select atoms with name 'CA' and residue id 10:
+        >>> selected_atoms = atom_view.select(name='CA', id=10)
+
+        Select residues with name 'ALA' or 'GLY':
+        >>> selected_residues = residue_view.select(name=['ALA', 'GLY'])
+        """
 
     def __repr__(self) -> str:
         """Return a string representation of the view."""
@@ -280,6 +297,22 @@ class BaseView(ViewProtocol[A_co, R_co, C_co, M_co]):
         self._check_same_level(other)
         return all(np.isin(self.indices, other.indices))
 
+    @override
+    def select(self, **kwargs: Any) -> Self:
+        if not kwargs:
+            return self
+
+        mask = np.ones(len(self), dtype=bool)
+        for key, value in kwargs.items():
+            feature = np.asarray(self.get_feature(key))
+            if isinstance(value, (list, tuple, set, np.ndarray)):
+                feature_mask = np.isin(feature, list(value))
+            else:
+                feature_mask = feature == value
+            mask &= feature_mask
+
+        return self.new(self.indices[mask])
+
     def _check_same_level(self, other: Self) -> None:
         if not isinstance(other, BaseView):
             msg = f"Invalid view type: {type(other)}"
@@ -350,16 +383,16 @@ class BaseView(ViewProtocol[A_co, R_co, C_co, M_co]):
 class AtomView(BaseView):
     """View of the atoms in the selection."""
 
-    _level: Final = StructureLevel.ATOM
+    _level: ClassVar[StructureLevel] = StructureLevel.ATOM
 
 
 class ResidueView(BaseView):
     """View of the residues in the selection."""
 
-    _level: Final = StructureLevel.RESIDUE
+    _level: ClassVar[StructureLevel] = StructureLevel.RESIDUE
 
 
 class ChainView(BaseView):
     """View of the chains in the selection."""
 
-    _level: Final = StructureLevel.CHAIN
+    _level: ClassVar[StructureLevel] = StructureLevel.CHAIN
