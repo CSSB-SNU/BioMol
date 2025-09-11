@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Any, ClassVar, Final, Protocol, runtime_checka
 import numpy as np
 from typing_extensions import Self, TypeVar, override
 
-from .exceptions import IndexInvalidError, ViewOperationError
+from .exceptions import IndexInvalidError, IndexOutOfBoundsError, ViewOperationError
 from .types import StructureLevel
 
 if TYPE_CHECKING:
@@ -141,6 +141,16 @@ class BaseView(ViewProtocol[A_co, R_co, C_co, M_co]):
         if indices.ndim != 1:
             msg = f"Indices must be 1-dimensional, but got {indices.ndim}D."
             raise IndexInvalidError(msg)
+        max_index = len(mol.get_container(self.level)) - 1
+        out_of_bounds = (indices < 0) | (indices > max_index)
+        if np.any(out_of_bounds):
+            invalid_indices = indices[out_of_bounds]
+            msg = (
+                f"Indices contain out-of-bounds values: {invalid_indices}. "
+                f"Valid range is [0, {max_index}]."
+            )
+            raise IndexOutOfBoundsError(msg)
+
         self._mol = mol
         self._indices = indices
 
