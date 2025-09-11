@@ -66,14 +66,23 @@ class ViewProtocol(Protocol[A_co, R_co, C_co, M_co]):
     def get_feature(self, key: str) -> Feature:
         """Return the feature for the given key, cropped to the view's indices."""
 
-    def get_features(self) -> FeatureContainer:
-        """Return the features of the view, cropped to the view's indices."""
+    def get_container(self) -> FeatureContainer:
+        """Return the feature container cropped to the view's indices."""
 
     def unique(self) -> Self:
         """Return a new view with unique indices, preserving first-occurrence order."""
 
     def new(self, indices: NDArray[np.integer]) -> Self:
         """Return a new view with the specified indices."""
+
+    def sort(self) -> Self:
+        """Return a new view with sorted indices."""
+
+    def is_empty(self) -> bool:
+        """Return True if the view is empty (contains no elements)."""
+
+    def is_subset(self, other: Self) -> bool:
+        """Return True if the view is a subset of another view."""
 
     def __repr__(self) -> str:
         """Return a string representation of the view."""
@@ -181,7 +190,7 @@ class BaseView(ViewProtocol[A_co, R_co, C_co, M_co]):
         return self._mol.get_container(self.level)[key].crop(self.indices)
 
     @override
-    def get_features(self) -> FeatureContainer:
+    def get_container(self) -> FeatureContainer:
         return self._mol.get_container(self.level).crop(self.indices)
 
     @override
@@ -191,6 +200,19 @@ class BaseView(ViewProtocol[A_co, R_co, C_co, M_co]):
     @override
     def new(self, indices: NDArray[np.integer]) -> Self:
         return self.__class__(self._mol, indices)
+
+    @override
+    def sort(self) -> Self:
+        return self.new(np.sort(self.indices))
+
+    @override
+    def is_empty(self) -> bool:
+        return len(self) == 0
+
+    @override
+    def is_subset(self, other: Self) -> bool:
+        self._check_same_level(other)
+        return all(np.isin(self.indices, other.indices))
 
     def _check_same_level(self, other: Self) -> None:
         if not isinstance(other, BaseView):
