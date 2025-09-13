@@ -7,6 +7,7 @@ import numpy as np
 from typing_extensions import Self, TypeVar, override
 
 from .exceptions import IndexInvalidError, IndexOutOfBoundsError, ViewOperationError
+from .feature import EdgeFeature
 from .types import StructureLevel
 
 if TYPE_CHECKING:
@@ -106,20 +107,40 @@ class ViewProtocol(Protocol[A_co, R_co, C_co, M_co]):
         """Return True if the view is a subset of another view."""
 
     def select(self, **kwargs: Any) -> Self:  # noqa: ANN401
-        """Return a new view filtered by the given feature values.
+        """Return a new view filtered by feature values.
 
-        Each keyword argument corresponds to a feature name and its desired value.
-        If the value is a sequence-like (list, tuple, set, or ndarray), the feature is
-        checked against any of the values in that sequence. Only elements for which
-        all specified features match the given values are included in the result.
+        This method allows filtering based on both node and edge features.
+        Each keyword argument corresponds to a feature name and its desired value(s).
+
+        Node Feature Selection
+        ----------------------
+        When filtering by a node feature, the selection is performed on the elements
+        **within the current view**. Only elements that match the criteria are kept.
+
+        Edge Feature Selection
+        ----------------------
+        When filtering by an edge feature, the selection considers all edges in the
+        **entire molecule**, not just those within the current view. It then returns
+        the elements from the current view that participate in any of the matching
+        edges. This allows for selecting nodes based on their interactions with
+        elements outside the current view.
+
+        Value Matching
+        --------------
+        If the provided value is a single item, the feature must match it exactly.
+        If the value is a sequence (list, tuple, set, or ndarray), the feature
+        can match any of the values in the sequence.
 
         Example
         -------
-        Select atoms with name 'CA' and residue id 10:
+        Select atoms with name 'CA' and residue id 10 from an atom_view
         >>> selected_atoms = atom_view.select(name='CA', id=10)
 
-        Select residues with name 'ALA' or 'GLY':
+        Select residues with name 'ALA' or 'GLY' from a residue_view
         >>> selected_residues = residue_view.select(name=['ALA', 'GLY'])
+
+        Select atoms from chain_view that form disulfide bonds.
+        >>> selected_atoms = chain_view.select(bond="disulfide")
         """
 
     def __repr__(self) -> str:
@@ -304,12 +325,19 @@ class BaseView(ViewProtocol[A_co, R_co, C_co, M_co]):
 
         mask = np.ones(len(self), dtype=bool)
         for key, value in kwargs.items():
-            feature = np.asarray(self.get_feature(key))
+            feature = self.mol.get_container(self.level)[key]
+            if not isinstance(feature, EdgeFeature):
+                feature = feature.crop(self.indices)
+            feature_value = np.asarray(feature)
             if isinstance(value, (list, tuple, set, np.ndarray)):
-                feature_mask = np.isin(feature, list(value))
+                feature_mask = np.isin(feature_value, list(value))
             else:
-                feature_mask = feature == value
-            mask &= feature_mask
+                feature_mask = feature_value == value
+            if isinstance(feature, EdgeFeature):
+                indices = feature[feature_mask].nodes
+                mask &= np.isin(self.indices, indices)
+            else:
+                mask &= feature_mask
 
         return self.new(self.indices[mask])
 
