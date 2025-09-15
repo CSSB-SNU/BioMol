@@ -12,8 +12,8 @@ dependencies = [
     "lmdb>=1.6.2,<2",
     "jaxtyping>=0.3.2,<0.4",
     "beartype>=0.21.0,<0.22",
-    "biotite>=1.2.0,<2",
     "matplotlib>=3.10.5,<4",
+    "zstandard>=0.24.0,<0.25",
 ]
 
 [build-system]
