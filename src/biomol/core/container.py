@@ -6,8 +6,9 @@ import numpy as np
 from numpy.typing import NDArray
 from typing_extensions import Self
 
-from .enums import StructureLevel
-from .exceptions import FeatureKeyError, IndexMismatchError, IndexOutOfBoundsError
+from biomol.enums import StructureLevel
+from biomol.exceptions import FeatureKeyError, IndexMismatchError, IndexOutOfBoundsError
+
 from .feature import EdgeFeature, Feature, NodeFeature
 from .types import FeatureContainerDict
 

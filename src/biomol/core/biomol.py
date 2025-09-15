@@ -7,14 +7,15 @@ import numpy as np
 from typing_extensions import Self
 from zstandard import ZstdCompressor, ZstdDecompressor
 
-from .container import AtomContainer, ChainContainer, FeatureContainer, ResidueContainer
-from .enums import StructureLevel
-from .exceptions import (
+from biomol.enums import StructureLevel
+from biomol.exceptions import (
     FeatureKeyError,
     IndexMismatchError,
     StructureLevelError,
     ViewProtocolError,
 )
+
+from .container import AtomContainer, ChainContainer, FeatureContainer, ResidueContainer
 from .index import IndexTable
 from .types import BioMolDict
 from .view import A_co, AtomView, C_co, ChainView, R_co, ResidueView, ViewProtocol

@@ -6,8 +6,13 @@ from typing import TYPE_CHECKING, Any, ClassVar, Protocol, runtime_checkable
 import numpy as np
 from typing_extensions import Self, TypeVar, override
 
-from .enums import StructureLevel
-from .exceptions import IndexInvalidError, IndexOutOfBoundsError, ViewOperationError
+from biomol.enums import StructureLevel
+from biomol.exceptions import (
+    IndexInvalidError,
+    IndexOutOfBoundsError,
+    ViewOperationError,
+)
+
 from .feature import EdgeFeature
 
 if TYPE_CHECKING:

@@ -8,7 +8,11 @@ import numpy as np
 from numpy.lib.mixins import NDArrayOperatorsMixin
 from typing_extensions import Self, override
 
-from .exceptions import FeatureOperationError, IndexInvalidError, IndexMismatchError
+from biomol.exceptions import (
+    FeatureOperationError,
+    IndexInvalidError,
+    IndexMismatchError,
+)
 
 if TYPE_CHECKING:
     from numpy.typing import DTypeLike, NDArray
