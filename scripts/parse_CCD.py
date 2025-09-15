@@ -1,181 +1,76 @@
-import numpy as np
+import os
+import sys
+
+from biomol.io.blueprint import Blueprint
+from biomol.io.factory import BioMolFactory
 from Bio.PDB.MMCIF2Dict import MMCIF2Dict as mmcif2dict
 
-from biomol.io.parser import Parser
-from biomol.io.schema import MappingSpec, FeatureSpec, FeatureKind, FeatureLevel
-from biomol.io.registry import MapperRegistry
-from biomol.core.biomol import BioMol
-from biomol.core.container import AtomContainer, ResidueContainer, ChainContainer
-from biomol.core.index import IndexTable
+import biomol.io.instructions.common_instructions
 
 
-CCD_PIPELINE_CONFIG = [
-    # molecular metadata parsing
-    MappingSpec(
-        name="parse_chem_comp_properties",
-        mapper="identity",
-        inputs={"fields": ["_chem_comp.id", "_chem_comp.name", "_chem_comp.formula"]},
-        outputs=[
-            FeatureSpec(
-                name="id",
-                kind=FeatureKind.NODE,
-                level=FeatureLevel.STRUCTURE,
-                dtype=str,
-            ),
-            FeatureSpec(
-                name="name",
-                kind=FeatureKind.NODE,
-                level=FeatureLevel.STRUCTURE,
-                dtype=str,
-            ),
-            FeatureSpec(
-                name="formula",
-                kind=FeatureKind.NODE,
-                level=FeatureLevel.STRUCTURE,
-                dtype=str,
-            ),
-        ],
-    ),
-    # 2. atomic id
-    MappingSpec(
-        name="parse_atoms_as_vocab",
-        mapper="identity",
-        inputs={"fields": ["_chem_comp_atom.atom_id", "_chem_comp_atom.type_symbol"]},
-        outputs=[
-            # atomic id will be only used as vocab for bond parsing,
-            # if you want to keep it as a feature, change FeatureKind.AUX -> FeatureKind.NODE
-            FeatureSpec(
-                name="atom_id",
-                kind=FeatureKind.AUX,
-                level=FeatureLevel.ATOM,
-                dtype=str,
-            ),
-            FeatureSpec(
-                name="atom_symbol",
-                kind=FeatureKind.NODE,
-                level=FeatureLevel.ATOM,
-                dtype=str,
-                on_missing={"?": "X"},
-            ),
-        ],
-    ),
-    # 3. Coordinates
-    MappingSpec(
-        name="parse_ideal_coordinates",
-        mapper="stack",
-        inputs={
-            "fields": [
-                "_chem_comp_atom.pdbx_model_Cartn_x_ideal",
-                "_chem_comp_atom.pdbx_model_Cartn_y_ideal",
-                "_chem_comp_atom.pdbx_model_Cartn_z_ideal",
-            ]
-        },
-        outputs=[
-            FeatureSpec(
-                name="ideal_coords",
-                kind=FeatureKind.NODE,
-                level=FeatureLevel.ATOM,
-                dtype=float,
-                on_missing={"?": 0.0},
-            )
-        ],
-    ),
-    # 4. 2D Features: 결합(bond) 정보 파싱
-    MappingSpec(
-        name="parse_bonds",
-        mapper="bond",
-        inputs={
-            "fields": [
-                "_chem_comp_bond.atom_id_1",  # source node ID
-                "_chem_comp_bond.atom_id_2",  # target node ID
-                "_chem_comp_bond.value_order",  # edge feature 1
-                "_chem_comp_bond.pdbx_aromatic_flag",  # edge feature 2
-                "_chem_comp_bond.pdbx_stereo_config",  # edge feature 3
-            ],
-            "context": ["atom_id"],  # depend on the parsed atom_id vocab
-        },
-        outputs=[
-            FeatureSpec(
-                name="bond_type",
-                kind=FeatureKind.EDGE,
-                level=FeatureLevel.ATOM,
-                dtype=str,
-            ),
-            FeatureSpec(
-                name="aromatic",
-                kind=FeatureKind.EDGE,
-                level=FeatureLevel.ATOM,
-                dtype=str,
-            ),
-            FeatureSpec(
-                name="stereo", kind=FeatureKind.EDGE, level=FeatureLevel.ATOM, dtype=str
-            ),
-        ],
-    ),
-]
+def main():
+    if len(sys.argv) < 2:
+        print("Usage: python parse_CCD.py <path_to_file_>")
+        sys.exit(1)
 
+    cifs_path = sys.argv[1]
+    cif_list = open(cifs_path, "r").readlines()
 
-def parse_cif(cif_file: str) -> BioMol:
-    """Parse a CIF file and return a Biomol object.
-
-    Args:
-        cif_file (str): Path to the CIF file.
-
-    Returns:
-        Biomol: Parsed Biomol object.
-    """
-    # Load the CIF file into a dictionary
-    cif_dict = mmcif2dict(cif_file)
-
-    # Initialize the parser with the CCD pipeline configuration
-    parser = Parser(pipeline=CCD_PIPELINE_CONFIG)
-
-    # Parse the CIF dictionary to create a Biomol object
-    # TODO: separate building BioMol from ParsingContext into builder class
-    parsed_features = parser.parse(cif_dict)
-    atom_container = AtomContainer(
-        node_features=parsed_features.get_features(
-            FeatureSpec(
-                name="", kind=FeatureKind.NODE, level=FeatureLevel.ATOM, dtype=None
-            )
-        ),
-        edge_features=parsed_features.get_features(
-            FeatureSpec(
-                name="", kind=FeatureKind.EDGE, level=FeatureLevel.ATOM, dtype=None
-            )
-        ),
+    # ---- define the parsing plan ----#
+    ccd_plan = (
+        Blueprint()
+        .stage("parse_chem_comp_properties")
+        .using("identity")
+        .from_fields("_chem_comp.id", "_chem_comp.name", "_chem_comp.formula")
+        .to_residue_nodes(id=str, name=str, formula=str)
     )
-    residue_container = ResidueContainer(
-        node_features=parsed_features.get_features(
-            FeatureSpec(
-                name="", kind=FeatureKind.NODE, level=FeatureLevel.STRUCTURE, dtype=None
-            )
-        ),
-        edge_features={},
+    ccd_plan = (
+        ccd_plan.stage("parse_atoms")
+        .using("identity")
+        .from_fields("_chem_comp_atom.atom_id", "_chem_comp_atom.type_symbol")
+        .to_atom_nodes(atom_id=str, atom_symbol=(str, {"?": "X"}))
     )
-    chain_container = ChainContainer(
-        node_features=parsed_features.get_features(
-            FeatureSpec(
-                name="", kind=FeatureKind.NODE, level=FeatureLevel.STRUCTURE, dtype=None
-            )
-        ),
-        edge_features={},
+    ccd_plan = (
+        ccd_plan.stage("parse_ideal_coordinates")
+        .using("stack")
+        .from_fields(
+            "_chem_comp_atom.pdbx_model_Cartn_x_ideal",
+            "_chem_comp_atom.pdbx_model_Cartn_y_ideal",
+            "_chem_comp_atom.pdbx_model_Cartn_z_ideal",
+        )
+        .to_atom_nodes(ideal_coords=(float, {"?": 0.0}))
     )
+    ccd_plan = (
+        ccd_plan.stage("parse_bonds")
+        .using("bond")
+        .from_fields(
+            "_chem_comp_bond.atom_id_1",
+            "_chem_comp_bond.atom_id_2",
+            "_chem_comp_bond.value_order",
+            "_chem_comp_bond.pdbx_aromatic_flag",
+            "_chem_comp_bond.pdbx_stereo_config",
+        )
+        .with_context("atom_id")
+        .to_atom_edges(bond_type=str, aromatic=str, stereo=str)
+    )
+    ccd_plan = ccd_plan.build()
 
-    num_atoms = len(parsed_features.get_feature("atom_id"))
-    index_table = IndexTable.from_parents(
-        atom_to_res=np.zeros((num_atoms,), dtype=np.int32),
-        res_to_chain=np.zeros((1,), dtype=np.int32),
-        n_chain=1,
-    )
+    factory = BioMolFactory(num_workers=4)
+    factory.load_plan(ccd_plan)
 
-    return BioMol(atom_container, residue_container, chain_container, index_table)
+    cif_data = []
+    for cif in cif_list:
+        cif_dict = mmcif2dict(cif.strip())
+        cif_data.append(cif_dict)
+
+    biomol_list = factory.produce(dataset=cif_data)
+
+    # 결과 출력
+    if biomol_list:
+        print("Successfully parsed BioMol object:")
+        for biomol in biomol_list:
+            print(biomol)
 
 
 if __name__ == "__main__":
-    import sys
-    import biomol.io.mappers.ccd_mappers
-
-    cif_path = sys.argv[1]
-    biomol = parse_cif(cif_path)
-    print(biomol)
+    main()

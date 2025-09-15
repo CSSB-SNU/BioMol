@@ -1,10 +1,11 @@
-from dataclasses import dataclass, field, fields, make_dataclass
+from dataclasses import dataclass, field, fields
 from enum import Enum
-from typing import List, Dict, Any, Literal
+from typing import Any, Literal
+from collections.abc import Sequence
 
 
 class FeatureLevel(Enum):
-    """docstring."""
+    """Enumeration for the hierarchical level of a feature."""
 
     STRUCTURE = "structure"
     CHAIN = "chain"
@@ -13,7 +14,7 @@ class FeatureLevel(Enum):
 
 
 class FeatureKind(Enum):
-    """docstring."""
+    """Enumeration for the kind of a feature (node, edge, or auxiliary)."""
 
     NODE = "node"
     EDGE = "edge"
@@ -22,19 +23,44 @@ class FeatureKind(Enum):
 
 @dataclass(frozen=True)
 class FeatureSpec:
-    """bluprint of feature after parsing and mapping."""
+    """
+    A blueprint for a feature, defining its properties and metadata.
 
-    name: str  # <--- the key name of the feature used in the context
+    Attributes
+    ----------
+        name: The key name of the feature used in the context.
+        kind: The kind of feature (e.g., NODE, EDGE).
+        level: The hierarchical level of the feature (e.g., ATOM, RESIDUE).
+        dtype: The expected data type of the feature's values.
+        description: An optional description of the feature.
+        on_missing: A dictionary defining how to handle missing values,
+                    e.g., `{'?': 0.0}` maps '?' to a float of 0.0.
+    """
+
+    name: str
     kind: FeatureKind
     level: FeatureLevel
     dtype: Any
     description: str = ""
     # metadata of missing data
-    on_missing: Dict[str, Any] = field(
+    on_missing: dict[str, Any] = field(
         default_factory=dict
     )  # <--- e.g., {'token': '?', 'fill_value': 0}
 
     def matches(self, other: object) -> bool:
+        """
+        Check if this spec's attributes match another spec's attributes.
+
+        A match occurs if for every non-empty attribute in this spec, the
+        corresponding attribute in the `other` spec is identical.
+
+        Args:
+            other: The other FeatureSpec object to compare against.
+
+        Returns
+        -------
+            True if all specified fields match, False otherwise.
+        """
         if not isinstance(other, FeatureSpec):
             return NotImplemented
 
@@ -52,16 +78,28 @@ class FeatureSpec:
 
 @dataclass
 class MappingSpec:
-    """details of one parsing stage."""
+    """
+    Defines a single stage in the parsing pipeline.
 
-    name: str  # <--- name of the mapping stage(e.g., "parse_atoms")
+    This class specifies which mapper to use, what input fields it needs, and
+    what features (defined by FeatureSpecs) it will produce.
 
-    mapper: str  # <--- name of the mapper name (e.g., "identity", "stack_coords")
+    Attributes
+    ----------
+        name: The name of the mapping stage (e.g., "parse_atoms").
+        mapper: The registered name of the mapper function to use.
+        outputs: A list of FeatureSpec objects describing the output features.
+        inputs: A dictionary specifying input "fields" and/or "context" keys.
+    """
+
+    name: str
+
+    instruction: str
 
     # output
-    outputs: List[FeatureSpec]
+    outputs: Sequence[FeatureSpec]
     # input
-    inputs: Dict[Literal["fields", "context"], List[str]] = field(default_factory=dict)
+    inputs: dict[Literal["fields", "context"], list[str]] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         """
@@ -86,10 +124,4 @@ class MappingSpec:
                 expanded_outputs.append(mask_spec)
 
         # Replace the original outputs with the expanded list
-        self.outputs = expanded_outputs
-        # To make the instance immutable again after modification
-        frozen_class = make_dataclass(
-            self.__class__.__name__, [f.name for f in fields(self)], frozen=True
-        )
-        # Swap the class of the current instance to the new frozen class
-        self.__class__ = frozen_class
+        self.outputs = tuple(expanded_outputs)
