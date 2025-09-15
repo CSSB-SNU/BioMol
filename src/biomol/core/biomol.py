@@ -1,6 +1,6 @@
 from dataclasses import asdict
 from io import BytesIO
-from typing import Generic, get_args, get_origin
+from typing import Any, Generic, get_args, get_origin
 
 import msgpack
 import numpy as np
@@ -29,11 +29,13 @@ class BioMol(Generic[A_co, R_co, C_co]):
         residue_container: ResidueContainer,
         chain_container: ChainContainer,
         index_table: IndexTable,
+        metadata: dict[str, Any] | None = None,
     ) -> None:
         self._atom_container = atom_container
         self._residue_container = residue_container
         self._chain_container = chain_container
         self._index = index_table
+        self._metadata = metadata or {}
         self._check_protocol_type()
         self._check_lengths()
 
@@ -56,6 +58,11 @@ class BioMol(Generic[A_co, R_co, C_co]):
     def index_table(self) -> IndexTable:
         """The index table mapping atoms, residues, and chains."""
         return self._index
+
+    @property
+    def metadata(self) -> dict[str, Any]:
+        """The metadata associated with the biomolecular structure."""
+        return self._metadata
 
     def get_container(self, level: StructureLevel) -> FeatureContainer:
         """Get the feature container for a specific structure level.
@@ -88,6 +95,7 @@ class BioMol(Generic[A_co, R_co, C_co]):
             "residues": self._residue_container.to_dict(),
             "chains": self._chain_container.to_dict(),
             "index_table": asdict(self._index),
+            "metadata": self._metadata,
         }
 
     @classmethod
@@ -104,11 +112,13 @@ class BioMol(Generic[A_co, R_co, C_co]):
         BioMol
             The created BioMol object.
         """
-        atom_container = AtomContainer.from_dict(data["atoms"])
-        residue_container = ResidueContainer.from_dict(data["residues"])
-        chain_container = ChainContainer.from_dict(data["chains"])
-        index_table = IndexTable(**data["index_table"])
-        return cls(atom_container, residue_container, chain_container, index_table)
+        return cls(
+            AtomContainer.from_dict(data["atoms"]),
+            ResidueContainer.from_dict(data["residues"]),
+            ChainContainer.from_dict(data["chains"]),
+            IndexTable(**data["index_table"]),
+            data["metadata"],
+        )
 
     def to_bytes(self, level: int = 6) -> bytes:
         """Serialize the container to zstd-compressed bytes.

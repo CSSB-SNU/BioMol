@@ -1,4 +1,4 @@
-from typing import TypedDict
+from typing import Any, TypedDict
 
 import numpy as np
 
@@ -44,3 +44,4 @@ class BioMolDict(TypedDict):
     residues: FeatureContainerDict
     chains: FeatureContainerDict
     index_table: IndexTableDict
+    metadata: dict[str, Any]
