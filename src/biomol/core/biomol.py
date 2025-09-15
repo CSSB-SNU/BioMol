@@ -1,8 +1,8 @@
+import json
 from dataclasses import asdict
 from io import BytesIO
 from typing import Any, Generic, get_args, get_origin
 
-import msgpack
 import numpy as np
 from typing_extensions import Self
 from zstandard import ZstdCompressor, ZstdDecompressor
@@ -154,7 +154,7 @@ class BioMol(Generic[A_co, R_co, C_co]):
             "template": template,
             "arrays": {key: len(value) for key, value in flatten_data.items()},
         }
-        header_bytes = msgpack.packb(header, use_bin_type=True)
+        header_bytes = json.dumps(header).encode("utf-8")
         payload = b"".join(flatten_data[key] for key in flatten_data)
         raw = len(header_bytes).to_bytes(8, "little") + header_bytes + payload
         return ZstdCompressor(level=level).compress(raw)
@@ -179,7 +179,7 @@ class BioMol(Generic[A_co, R_co, C_co]):
 
         raw = ZstdDecompressor().decompress(byte_data)
         hlen = int.from_bytes(raw[:8], "little")
-        header = msgpack.loads(raw[8 : 8 + hlen], raw=False)
+        header = json.loads(raw[8 : 8 + hlen].decode("utf-8"))
         payload = raw[8 + hlen :]
 
         offset = 0
