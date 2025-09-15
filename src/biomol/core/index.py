@@ -5,8 +5,8 @@ from typing import TYPE_CHECKING, ClassVar
 
 import numpy as np
 
+from .enums import StructureLevel
 from .exceptions import IndexInvalidError, IndexOutOfBoundsError, StructureLevelError
-from .types import StructureLevel
 
 if TYPE_CHECKING:
     from numpy.typing import NDArray

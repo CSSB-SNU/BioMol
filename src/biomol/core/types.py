@@ -1,36 +1,46 @@
-from __future__ import annotations
+from typing import TypedDict
 
-import enum
-
-
-@enum.unique
-class MoleculeType(enum.Enum):
-    """Molecule types commonly found in biomolecular structures."""
-
-    POLYMER = "polymer"
-    NONPOLYMER = "non-polymer"
-    BRANCHED = "branched"
-    WATER = "water"
-    BIOASSEMBLY = "bioassembly"
+import numpy as np
 
 
-@enum.unique
-class PolymerType(enum.Enum):
-    """Types of polymer molecules."""
+class NodeFeatureDict(TypedDict):
+    """TypedDict for node features."""
 
-    PROTEIN = "polypeptide(L)"
-    PROTEIN_D = "polypeptide(D)"
-    PNA = "peptide nucleic acid"
-    RNA = "polyribonucleotide"
-    DNA = "polydeoxyribonucleotide"
-    NA_HYBRID = "polydeoxyribonucleotide/polyribonucleotide hybrid"
-    ETC = "etc"
+    value: np.ndarray
+    description: str | None
 
 
-@enum.unique
-class StructureLevel(enum.Enum):
-    """Levels of structural hierarchy in biomolecules."""
+class EdgeFeatureDict(TypedDict):
+    """TypedDict for edge features."""
 
-    ATOM = "atom"
-    RESIDUE = "residue"
-    CHAIN = "chain"
+    src_indices: np.ndarray
+    dst_indices: np.ndarray
+    value: np.ndarray
+    description: str | None
+
+
+class FeatureContainerDict(TypedDict):
+    """TypedDict for feature container."""
+
+    nodes: dict[str, NodeFeatureDict]
+    edges: dict[str, EdgeFeatureDict]
+
+
+class IndexTableDict(TypedDict):
+    """TypedDict for index table."""
+
+    atom_to_res: np.ndarray
+    res_to_chain: np.ndarray
+    res_atom_indptr: np.ndarray
+    res_atom_indices: np.ndarray
+    chain_res_indptr: np.ndarray
+    chain_res_indices: np.ndarray
+
+
+class BioMolDict(TypedDict):
+    """TypedDict for BioMol object."""
+
+    atoms: FeatureContainerDict
+    residues: FeatureContainerDict
+    chains: FeatureContainerDict
+    index_table: IndexTableDict

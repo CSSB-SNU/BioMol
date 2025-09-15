@@ -1,14 +1,15 @@
 from collections.abc import Mapping
-from dataclasses import dataclass, replace
+from dataclasses import asdict, dataclass, replace
 from typing import ClassVar
 
 import numpy as np
 from numpy.typing import NDArray
 from typing_extensions import Self
 
+from .enums import StructureLevel
 from .exceptions import FeatureKeyError, IndexMismatchError, IndexOutOfBoundsError
 from .feature import EdgeFeature, Feature, NodeFeature
-from .types import StructureLevel
+from .types import FeatureContainerDict
 
 
 @dataclass(frozen=True, slots=True)
@@ -61,6 +62,30 @@ class FeatureContainer:
             key: feat.crop(indices) for key, feat in self.edge_features.items()
         }
         return replace(self, node_features=node_features, edge_features=edge_features)
+
+    def to_dict(self) -> FeatureContainerDict:
+        """Convert the container to a dictionary."""
+        return {
+            "nodes": {k: asdict(v) for k, v in self.node_features.items()},
+            "edges": {k: asdict(v) for k, v in self.edge_features.items()},
+        }
+
+    @classmethod
+    def from_dict(cls, data: FeatureContainerDict) -> Self:
+        """Create a FeatureContainer from a dictionary.
+
+        Parameters
+        ----------
+        data : FeatureContainerDict
+            Dictionary containing node and edge features.
+        """
+        node_features = {
+            key: NodeFeature(**values) for key, values in data.get("nodes", {}).items()
+        }
+        edge_features = {
+            key: EdgeFeature(**values) for key, values in data.get("edges", {}).items()
+        }
+        return cls(node_features=node_features, edge_features=edge_features)
 
     def _check_node_lengths(self) -> None:
         if not self.node_features:

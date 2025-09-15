@@ -1,8 +1,14 @@
+from dataclasses import asdict
+from io import BytesIO
 from typing import Generic, get_args, get_origin
 
+import msgpack
 import numpy as np
+from typing_extensions import Self
+from zstandard import ZstdCompressor, ZstdDecompressor
 
 from .container import AtomContainer, ChainContainer, FeatureContainer, ResidueContainer
+from .enums import StructureLevel
 from .exceptions import (
     FeatureKeyError,
     IndexMismatchError,
@@ -10,7 +16,7 @@ from .exceptions import (
     ViewProtocolError,
 )
 from .index import IndexTable
-from .types import StructureLevel
+from .types import BioMolDict
 from .view import A_co, AtomView, C_co, ChainView, R_co, ResidueView, ViewProtocol
 
 
@@ -74,6 +80,108 @@ class BioMol(Generic[A_co, R_co, C_co]):
             case _:
                 msg = f"Invalid structure level: {level}."
                 raise StructureLevelError(msg)
+
+    def to_dict(self) -> BioMolDict:
+        """Convert the BioMol object to a dictionary."""
+        return {
+            "atoms": self._atom_container.to_dict(),
+            "residues": self._residue_container.to_dict(),
+            "chains": self._chain_container.to_dict(),
+            "index_table": asdict(self._index),
+        }
+
+    @classmethod
+    def from_dict(cls, data: BioMolDict) -> Self:
+        """Create a BioMol object from a dictionary.
+
+        Parameters
+        ----------
+        data: BioMolDict
+            A dictionary containing the data to create the BioMol object.
+
+        Returns
+        -------
+        BioMol
+            The created BioMol object.
+        """
+        atom_container = AtomContainer.from_dict(data["atoms"])
+        residue_container = ResidueContainer.from_dict(data["residues"])
+        chain_container = ChainContainer.from_dict(data["chains"])
+        index_table = IndexTable(**data["index_table"])
+        return cls(atom_container, residue_container, chain_container, index_table)
+
+    def to_bytes(self, level: int = 6) -> bytes:
+        """Serialize the container to zstd-compressed bytes.
+
+        Parameters
+        ----------
+        level: int, optional
+            The compression level for zstd (default is 6).
+        """
+
+        def _flatten_data(data: dict) -> tuple[dict, dict]:
+            template = {}
+            flatten = {}
+            for key, value in data.items():
+                if isinstance(value, np.ndarray):
+                    _key = str(id(value))
+                    template[key] = _key
+                    buffer = BytesIO()
+                    np.save(buffer, np.ascontiguousarray(value), allow_pickle=False)
+                    flatten[_key] = buffer.getvalue()
+                elif isinstance(value, dict):
+                    _template, _flatten = _flatten_data(value)
+                    template[key] = _template
+                    flatten.update(_flatten)
+                else:
+                    template[key] = value
+            return template, flatten
+
+        data = self.to_dict()
+        template, flatten_data = _flatten_data(data)
+        header = {
+            "class": f"{self.__class__.__module__}.{self.__class__.__name__}",
+            "template": template,
+            "arrays": {key: len(value) for key, value in flatten_data.items()},
+        }
+        header_bytes = msgpack.packb(header, use_bin_type=True)
+        payload = b"".join(flatten_data[key] for key in flatten_data)
+        raw = len(header_bytes).to_bytes(8, "little") + header_bytes + payload
+        return ZstdCompressor(level=level).compress(raw)
+
+    @classmethod
+    def from_bytes(cls, byte_data: bytes) -> Self:
+        """Deserialize the container from zstd-compressed bytes."""
+
+        def _reconstruct_data(template: dict, flatten: dict) -> dict:
+            data = {}
+            for key, value in template.items():
+                if isinstance(value, str) and value in flatten:
+                    buffer = BytesIO(flatten[value])
+                    buffer.seek(0)
+                    arr = np.load(buffer, allow_pickle=False)
+                    data[key] = arr
+                elif isinstance(value, dict):
+                    data[key] = _reconstruct_data(value, flatten)
+                else:
+                    data[key] = value
+            return data
+
+        raw = ZstdDecompressor().decompress(byte_data)
+        hlen = int.from_bytes(raw[:8], "little")
+        header = msgpack.loads(raw[8 : 8 + hlen], raw=False)
+        payload = raw[8 + hlen :]
+
+        offset = 0
+        flatten_data = {}
+        for key, ln in header["arrays"].items():
+            chunk = payload[offset : offset + ln]
+            offset += ln
+            flatten_data[key] = chunk
+
+        template_dict = header["template"]
+        data = _reconstruct_data(template_dict, flatten_data)
+        return cls.from_dict(data)
 
     def _check_protocol_type(self) -> None:
         """Check if the view types satisfy the specified Protocols."""

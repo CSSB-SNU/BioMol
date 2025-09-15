@@ -6,9 +6,9 @@ from typing import TYPE_CHECKING, Any, ClassVar, Protocol, runtime_checkable
 import numpy as np
 from typing_extensions import Self, TypeVar, override
 
+from .enums import StructureLevel
 from .exceptions import IndexInvalidError, IndexOutOfBoundsError, ViewOperationError
 from .feature import EdgeFeature
-from .types import StructureLevel
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
