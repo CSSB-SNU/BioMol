@@ -6,7 +6,9 @@ workflows by offering standardized data representations (e.g., arrays) and utili
 scientific computing.
 """
 
-from .core.biomol import BioMol
+from __future__ import annotations
+
+from .core import BioMol
 
 __all__ = [
     "BioMol",

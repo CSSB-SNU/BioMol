@@ -6,12 +6,13 @@ readme = "README.md"
 requires-python = ">=3.10"
 authors = [{ name = "Sanggeun Park", email = "psk6950@snu.ac.kr" }]
 dependencies = [
-    "torch>=2.6.0,<3",
     "biopython>=1.85,<2",
     "click>=8.1.8,<9",
-    "matplotlib>=3.10.1,<4",
     "joblib >=1.4.2,<2",
     "lmdb>=1.6.2,<2",
+    "zstandard>=0.24.0,<0.25",
+    "typing_extensions>=4.15.0,<5",
+    "numpy>=2.2.6,<3",
 ]
 
 [build-system]
@@ -44,5 +45,4 @@ biomol = { path = ".", editable = true }
 python = "~=3.10"
 ruff = ">=0.11.6,<0.12"
 pytest = ">=8.4.1,<9"
-jaxtyping = ">=0.3.2,<0.4"
-beartype = ">=0.21.0,<0.22"
+ipykernel = ">=6.30.1,<7"
