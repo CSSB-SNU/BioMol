@@ -1,28 +1,27 @@
-from typing import List, Type
 import numpy as np
-import re
 
-from biomol.io.registry import MapperRegistry
-from biomol.core.feature import NodeFeature, EdgeFeature
-from biomol.io.schema import FeatureSpec
+from biomol.core.feature import EdgeFeature, NodeFeature
 from biomol.io.context import ParsingContext
+from biomol.io.isa import InstructionSet
+from biomol.io.schema import FeatureSpec
 
 
-@MapperRegistry.register("identity")
-def identity_mapper(record: dict, specs: List[FeatureSpec]) -> List[NodeFeature]:
+@InstructionSet.register("identity")
+def identity_instruction(record: dict, specs: list[FeatureSpec]) -> list[NodeFeature]:
     """
     Map fields to node features directly.
 
     the order of fields in the record should match the order of specs.
     """
     if len(record) != len([0 for spec in specs if "mask" not in spec.name]):
-        raise ValueError("Number of fields and specs must match.")
+        msg = "Number of fields and specs must match."
+        raise ValueError(msg)
 
     features = []
     for i, field_name in enumerate(record.keys()):
         spec = specs[i]
         description = spec.description or field_name
-        dtype: Type = spec.dtype
+        dtype = spec.dtype
         unk_char = spec.on_missing
         field_data = record[field_name]
         field_data = [
@@ -41,8 +40,8 @@ def identity_mapper(record: dict, specs: List[FeatureSpec]) -> List[NodeFeature]
     return features
 
 
-@MapperRegistry.register("stack")
-def stack_mapper(record: dict, specs: List[FeatureSpec]) -> List[NodeFeature]:
+@InstructionSet.register("stack")
+def stack_instruction(record: dict, specs: list[FeatureSpec]) -> list[NodeFeature]:
     """
     Stacking mapper for stacking multiple fields into one feature and one mask feature.
 
@@ -58,10 +57,11 @@ def stack_mapper(record: dict, specs: List[FeatureSpec]) -> List[NodeFeature]:
         mask: [True, True, True, True, False]
     """
     if len([0 for spec in specs if "mask" not in spec.name]) != 1:
-        raise ValueError("Stack mapper supports less than 2 specs.")
+        msg = "Stack mapper supports less than 2 specs."
+        raise ValueError(msg)
 
     data_spec = specs[0]
-    dtype: Type = data_spec.dtype
+    dtype = data_spec.dtype
     description = data_spec.description
 
     unk_char = data_spec.on_missing
@@ -71,11 +71,14 @@ def stack_mapper(record: dict, specs: List[FeatureSpec]) -> List[NodeFeature]:
     mask = []
     for data in record.values():
         if len(data) != len(next(iter(record.values()))):
-            raise ValueError("All fields must have the same length.")
+            msg = "All fields must have the same length."
+            raise ValueError(msg)
 
         mask.append([d not in unk_char for d in data])
-        data = [dtype(x) if x not in unk_char else dtype(unk_char[x]) for x in data]
-        result_data.append(np.array(data, dtype=dtype))
+        formatted_data = [
+            dtype(x) if x not in unk_char else dtype(unk_char[x]) for x in data
+        ]
+        result_data.append(np.array(formatted_data, dtype=dtype))
 
     stacked = np.stack(result_data, axis=-1)
     stacked_mask = np.all(np.stack(mask, axis=-1), axis=-1).astype(bool)
@@ -86,13 +89,13 @@ def stack_mapper(record: dict, specs: List[FeatureSpec]) -> List[NodeFeature]:
     ]
 
 
-@MapperRegistry.register("bond")
-def bond_mapper(
+@InstructionSet.register("bond")
+def bond_instruction(
     record: dict,
-    specs: List[FeatureSpec],
+    specs: list[FeatureSpec],
     context: ParsingContext,
-    context_key: List[str] = [],
-) -> List[EdgeFeature]:
+    context_key: tuple[str, ...] = (),
+) -> list[EdgeFeature]:
     """
     Map source node id, target node id, bond feature to edge features.
 
@@ -103,30 +106,32 @@ def bond_mapper(
     record: source ids, target ids, bond features
 
     """
-    source_node_id = record.pop(next(iter(record.keys())))
-    target_node_id = record.pop(next(iter(record.keys())))
+    record_iter = iter(record.values())
+    source_node_id = next(record_iter)
+    target_node_id = next(record_iter)
     if len(source_node_id) != len(target_node_id):
-        raise ValueError("Source and target node ids must have the same length.")
+        msg = "Source and target node ids must have the same length."
+        raise ValueError(msg)
 
     id_mapping = context.get_lookup_dict(context_key[0])
     source_node_idx = np.array([id_mapping[sid] for sid in source_node_id])
     target_node_idx = np.array([id_mapping[tid] for tid in target_node_id])
 
     features = []
-    for i, field_name in enumerate(record.keys()):
-        data = record[field_name]
+    data_specs = [spec for spec in specs if "mask" not in spec.name]
+    for spec, data in zip(data_specs, record_iter):
         if len(data) != len(source_node_id):
-            raise ValueError(
-                f"All fields must have the same length. Field {field_name} has length {len(data)}."
-            )
+            msg = "All fields must have the same length."
+            raise ValueError(msg)
 
-        spec = specs[i]
         on_missing = spec.on_missing
-        data = [spec.dtype(d) if d not in on_missing else on_missing[d] for d in data]
-        description = spec.description or field_name
+        formatted_data = [
+            spec.dtype(d) if d not in on_missing else on_missing[d] for d in data
+        ]
+        description = spec.description or spec.name
         features.append(
             EdgeFeature(
-                value=np.array(data, dtype=spec.dtype),
+                value=np.array(formatted_data, dtype=spec.dtype),
                 src_indices=source_node_idx,
                 dst_indices=target_node_idx,
                 description=description,
@@ -135,7 +140,7 @@ def bond_mapper(
 
         if on_missing:
             mask = np.array([d not in on_missing for d in data], dtype=bool)
-            mask_description = f"{spec.description}_mask"
+            mask_description = f"{description}_mask"
             features.append(
                 EdgeFeature(
                     value=mask,
