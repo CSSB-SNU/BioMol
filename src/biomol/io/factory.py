@@ -1,5 +1,9 @@
+import importlib.util
 import multiprocessing
+from pathlib import Path
+
 import numpy as np
+
 
 from biomol.io.processor import Processor
 from biomol.io.schema import MappingSpec, FeatureSpec, FeatureKind, FeatureLevel
@@ -22,15 +26,36 @@ class BioMolFactory:
     ***NOTE***: This factory currently supports only single chain small-molecule.
     """
 
-    def __init__(self, num_workers: int = 1) -> None:
-        self.plan = None
+    def __init__(self, blueprint: str, num_workers: int = 1) -> None:
+        self.plan = self._load_plan(blueprint)
         self.num_workers = (
             num_workers if num_workers > 0 else multiprocessing.cpu_count()
         )
 
-    def load_plan(self, plan: list[MappingSpec]) -> "BioMolFactory":
-        self.plan = plan
-        return self
+    def _load_plan(self, blueprint_path: str) -> list[MappingSpec]:
+        """
+        Dynamically load a processing plan from the plans module.
+
+        This method assumes that the plan is already defined
+        """
+        blueprint = Path(blueprint_path).resolve()
+        if not blueprint.is_file():
+            msg = f"Plan file '{blueprint_path}' does not exist."
+            raise FileNotFoundError(msg)
+
+        module_name = blueprint.stem
+        spec = importlib.util.spec_from_file_location(module_name, blueprint)
+        if spec is None or spec.loader is None:
+            msg = f"Cannot load module from '{blueprint_path}'"
+            raise ImportError(msg)
+        blueprint_module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(blueprint_module)
+        plan = getattr(blueprint_module, "PLAN", None)
+        if plan is None:
+            msg = f"The plan file '{blueprint_path}' must define a 'PLAN' variable."
+            raise AttributeError(msg)
+
+        return plan
 
     def _produce_module(self, raw_material: dict) -> BioMol:
         if not self.plan:
