@@ -19,11 +19,10 @@ def main():
     cooker.prep(cif_data, fields=list(cif_data.keys()))
     cooker.cook()
 
-    targets = cooker.recipebook.targets()
-    result = cooker.serve(targets)
-    print("Parsed targets:", result.keys())
-    print(result)
+    target_id = cooker.recipebook["id"]
+    print(target_id)
 
 
 if __name__ == "__main__":
     main()
+
