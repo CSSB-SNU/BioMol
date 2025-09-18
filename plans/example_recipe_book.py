@@ -7,6 +7,9 @@ def add(b: list[int], c: list[int], d: list[int]) -> list[int]:
     """Add three lists element-wise."""
     return [x + y + z for x, y, z in zip(b, c, d, strict=True)]
 
+def add2(*args: list[int]) -> list[int]:
+    """Add lists element-wise."""
+    return [sum(x) for x in zip(*args, strict=True)]
 
 data_dict = {
     "B": [1, 2, 3],
@@ -18,7 +21,7 @@ parse_cache = ParsingCache()
 my_recipe = RecipeBook()
 my_recipe.add(
     target={"final": list[int]},
-    instruction=add,
+    instruction=add2,
     b="A",
     c="C",
     d="D",
