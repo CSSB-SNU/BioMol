@@ -1,6 +1,6 @@
+from biomol.io.cache import ParsingCache
+from biomol.io.cooker import Cooker
 from biomol.io.recipe import RecipeBook
-from biomol.io.context import ParsingCache
-from biomol.io.cookbook import Cooker
 
 
 def add(b: list[int], c: list[int], d: list[int]) -> list[int]:
@@ -31,7 +31,7 @@ my_recipe.add(
     d="D",
 )
 my_recipe.add(
-    target={"B": list[int]},
+    target={"D": list[int]},
     instruction=lambda b: b,
     b="B",
 )  # if the instruction is super simple, you can use a lambda function

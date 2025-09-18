@@ -1,6 +1,8 @@
-from typing import Any
+import importlib.util
+from pathlib import Path
+from typing import Any, overload
 
-from biomol.io.context import ParsingCache
+from biomol.io.cache import ParsingCache
 from biomol.io.recipe import RecipeBook
 
 
@@ -13,9 +15,38 @@ class Cooker:
     recipebook: An instance of RecipeBook containing the recipes to execute.
     """
 
-    def __init__(self, parse_cache: ParsingCache, recipebook: RecipeBook):
+    @overload
+    def __init__(self, parse_cache: ParsingCache, recipebook: RecipeBook) -> None: ...
+    @overload
+    def __init__(self, parse_cache: ParsingCache, recipebook: str) -> None: ...
+
+    def __init__(self, parse_cache: ParsingCache, recipebook: RecipeBook | str) -> None:
         self.parse_cache = parse_cache
-        self.recipebook = recipebook
+        if isinstance(recipebook, str):
+            self.recipebook = self._load_recipe(recipebook)
+        else:
+            self.recipebook = recipebook
+
+    def _load_recipe(self, recipebook_strpath: str) -> RecipeBook:
+        """Dynamically load a RecipeBook from a given path."""
+        recipebook_path = Path(recipebook_strpath).resolve()
+        if not recipebook_path.exists():
+            msg = f"RecipeBook file '{recipebook_path}' does not exist."
+            raise FileNotFoundError(msg)
+
+        module_name = recipebook_path.stem
+        spec = importlib.util.spec_from_file_location(module_name, recipebook_path)
+        if spec is None or spec.loader is None:
+            msg = f"Could not load module from '{recipebook_path}'."
+            raise ImportError(msg)
+        recipe_module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(recipe_module)
+        recipebook = getattr(recipe_module, "RECIPE", None)
+        if recipebook is None or not isinstance(recipebook, RecipeBook):
+            msg = f"'RECIPE' not found or invalid in '{recipebook_path}'."
+            raise AttributeError(msg)
+
+        return recipebook
 
     def prep(self, data_dict: dict, fields: list[str]) -> None:
         """Prepare the context with initial data."""
@@ -46,7 +77,8 @@ class Cooker:
                 inputs[arg_name] = resolve(input)  # recursively resolve
 
             result = recipe.instruction(**inputs)
-            self.parse_cache.add_data(output, result)
+            target_type = recipe.target[output]
+            self.parse_cache.add_data(output, (target_type)(result))
             return result
 
         # Try to compute all declared outputs
