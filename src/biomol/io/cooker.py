@@ -1,9 +1,10 @@
 import importlib.util
+import inspect
 from pathlib import Path
 from typing import Any, overload
 
 from biomol.io.cache import ParsingCache
-from biomol.io.recipe import RecipeBook
+from biomol.io.recipe import Constant, RecipeBook
 
 
 class Cooker:
@@ -48,8 +49,10 @@ class Cooker:
 
         return recipebook
 
-    def prep(self, data_dict: dict, fields: list[str]) -> None:
+    def prep(self, data_dict: dict, fields: list[str] | None = None) -> None:
         """Prepare the context with initial data."""
+        if fields is None:
+            fields = list(data_dict.keys())
         for field in fields:
             if field in data_dict:
                 self.parse_cache.add_data(field, data_dict[field])
@@ -61,37 +64,70 @@ class Cooker:
         """Execute all recipes in dependency order."""
         visited = set()
 
-        def resolve(output: str):
+        def resolve(target: str | Constant | type) -> object:
+            """Recursively resolve dependencies and compute the target."""
             # Already computed
-            if output in self.parse_cache:
-                return self.parse_cache[output]
+            if isinstance(target, Constant):
+                return target.value
+            if isinstance(target, type):
+                return target
+            if target in self.parse_cache:
+                return self.parse_cache[target]
             # Prevent infinite recursion
-            if output in visited:
-                msg = f"Cyclic dependency detected at '{output}'"
+            if target in visited:
+                msg = f"Cyclic dependency detected at '{target}'"
                 raise RuntimeError(msg)
-            visited.add(output)
+            visited.add(target)
 
-            recipe = self.recipebook[output]
-            inputs = {}
-            for arg_name, input in recipe.inputs.items():
-                inputs[arg_name] = resolve(input)  # recursively resolve
+            recipe, target_list = self.recipebook[target]
+            resolved_inputs = {k: resolve(v) for k, v in recipe.inputs.items()}
 
-            result = recipe.instruction(**inputs)
-            target_type = recipe.target[output]
-            self.parse_cache.add_data(output, (target_type)(result))
-            return result
+            sig = inspect.signature(recipe.instruction)
+            params = list(sig.parameters.values())
+            has_varpos = any(p.kind == p.VAR_POSITIONAL for p in params)
 
-        # Try to compute all declared outputs
-        for output in self.recipebook.targets():
-            resolve(output)
+            if has_varpos:
+                after_varpos = False
+                kwonly_names: set[str] = set()
+                for p in params:
+                    if p.kind == p.VAR_POSITIONAL:
+                        after_varpos = True
+                        continue
+                    if after_varpos:
+                        kwonly_names.add(p.name)
 
-    def serve(self, output: list[str]) -> dict[str, Any]:
-        """Retrieve computed outputs."""
+                kwargs = {k: v for k, v in resolved_inputs.items() if k in kwonly_names}
+                args = [v for k, v in resolved_inputs.items() if k not in kwonly_names]
+                result = recipe.instruction(*args, **kwargs)
+            else:
+                result = recipe.instruction(**resolved_inputs)
+            if isinstance(result, tuple) and len(result) != len(target_list):
+                msg = (
+                    f"Instruction for target '{target}' returned {len(result)} values, "
+                    f"but {len(target_list)} were expected."
+                )
+                raise ValueError(msg)
+            if not isinstance(result, tuple):
+                self.parse_cache.add_data(target, result)
+                return result
+            output = None
+            for tgt, res in zip(target_list, result, strict=True):
+                if tgt == target:
+                    output = res
+                self.parse_cache.add_data(tgt, res)
+            return output
+
+        # Try to compute all declared targets
+        for target in self.recipebook.targets():
+            resolve(target)
+
+    def serve(self, targets: list[str]) -> dict[str, Any]:
+        """Retrieve computed targets."""
         results = {}
-        for out in output:
+        for out in targets:
             if out in self.parse_cache:
                 results[out] = self.parse_cache[out]
             else:
-                msg = f"Output '{out}' not found in context."
+                msg = f"targets '{out}' not found in context."
                 raise KeyError(msg)
         return results
