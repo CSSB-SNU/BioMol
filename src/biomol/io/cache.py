@@ -1,14 +1,5 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, overload
-
-from biomol.io.schema import FeatureSpec
-
-if TYPE_CHECKING:
-    from collections.abc import Mapping
-
-    from biomol.core.feature import Feature
-
 
 class ParsingCache:
     """
