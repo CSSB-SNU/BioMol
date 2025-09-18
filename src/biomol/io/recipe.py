@@ -1,23 +1,40 @@
 from collections.abc import Callable, Mapping
-from dataclasses import dataclass
-from typing import Any
-
-Target = Mapping[str, type[Any]]  # (name, type)
+from dataclasses import dataclass, field
+from types import MappingProxyType
+from typing import Any, NamedTuple, overload, TypeAlias
 
 
 @dataclass(frozen=True)
-class Constant:
-    """A node in the recipe input/output graph."""
+class Variable:
+    """Represents a target variable in a recipe step."""
 
-    value: object
+    name: str
+    type: type[Any]
+
+
+VariableSet: TypeAlias = tuple[Variable, ...]
+VariableMap: TypeAlias = Mapping[str, Variable]
+
+RawVariableSet: TypeAlias = tuple[tuple[str, type[Any]], ...]
+RawVariableMap: TypeAlias = Mapping[str, tuple[str, type]]
+
+
+@dataclass(frozen=True, slots=True)
+class Inputs:
+    """Represents input variables for a recipe step."""
+
+    args: VariableSet = field(default_factory=tuple)
+    kwargs: VariableMap = field(default_factory=dict)
+    params: Mapping[str, Any] = field(default_factory=dict)
+
 
 @dataclass(frozen=True)
 class Recipe:
     """A single step in a data processing recipe."""
 
-    target: Target
-    instruction: Callable  # old name: insturction or mapper
-    inputs: dict[str, Any]
+    targets: VariableSet
+    instruction: Callable
+    inputs: Inputs
 
 
 class RecipeBook:
@@ -26,58 +43,91 @@ class RecipeBook:
     def __init__(self) -> None:
         self.steps: list[Recipe] = []
 
-    def _check_duplicate_targets(self, target: Target) -> None:
-        for name in target:
-            if name in self:
-                msg = f"Target '{name}' is already defined in the recipe."
+    def _check_duplicate_targets(self, targets: VariableSet) -> None:
+        for target in targets:
+            if target.name in self:
+                msg = f"Target '{target.name}' is already defined in the recipe."
                 raise ValueError(msg)
+
+    def _coerce_to_variable_set(self, varset: RawVariableSet | None) -> VariableSet:
+        if not varset:
+            return ()
+        return tuple(Variable(*t) for t in varset)
+
+    def _coerce_to_variable_map(self, varset: RawVariableMap | None) -> VariableMap:
+        if not varset:
+            return {}
+        return {key: Variable(*t) for key, t in varset.items()}
+
+    def _single_add(
+        self,
+        targetset: RawVariableSet,
+        instruction: Callable,
+        inputs: dict[str, Any],
+    ) -> None:
+        arg_vars = self._coerce_to_variable_set(inputs.get("args"))
+        kwarg_vars = self._coerce_to_variable_map(inputs.get("kwargs"))
+        params_dict = inputs.get("params", {})
+        final_inputs = Inputs(args=arg_vars, kwargs=kwarg_vars, params=params_dict)
+        final_targetset = self._coerce_to_variable_set(targetset)
+
+        self._check_duplicate_targets(final_targetset)
+        step = Recipe(
+            targets=final_targetset, instruction=instruction, inputs=final_inputs
+        )
+        self.steps.append(step)
+
+    @overload
+    def add(
+        self,
+        targets: RawVariableSet,
+        instruction: Callable,
+        inputs: dict[str, Any],
+    ) -> "RecipeBook": ...
+    @overload
+    def add(
+        self,
+        targets: list[RawVariableSet],
+        instruction: Callable,
+        inputs: list[dict[str, Any]],
+    ) -> "RecipeBook": ...
 
     def add(
         self,
-        target: Target | list[Target],
+        targets: Any,
         instruction: Callable,
-        *,
-        group: bool = False,
-        **inputs: object,
+        inputs: Any,
     ) -> "RecipeBook":
         """Add a new step to the recipe."""
-        if group and isinstance(target, list):
-            for _input in inputs.values():
-                if not isinstance(_input, list) or len(_input) != len(target):
-                    msg = (
-                        "When 'group' is True, all inputs must be lists of the same "
-                        "length as target."
-                    )
-                    raise ValueError(msg)
-            for i, single_target in enumerate(target):
-                single_inputs = {
-                    k: v[i] if isinstance(v, list) else v for k, v in inputs.items()
-                }
-                self._check_duplicate_targets(single_target)
-                step = Recipe(
-                    target=single_target,
-                    instruction=instruction,
-                    inputs=single_inputs,
-                )
-                self.steps.append(step)
-            return self
-        self._check_duplicate_targets(target)
-        step = Recipe(target=target, instruction=instruction, inputs=inputs)
-        self.steps.append(step)
+        if isinstance(targets, list) and isinstance(inputs, list):
+            if len(targets) != len(inputs):
+                msg = "When providing lists of targets and inputs, they must be of equal length."
+                raise ValueError(msg)
+            for targetset, input_bundle in zip(targets, inputs, strict=True):
+                self._single_add(targetset, instruction, input_bundle)
+
+        else:
+            self._single_add(targets, instruction, inputs)
+
         return self
 
-    def targets(self) -> list[str]:
-        """List all target names defined in the recipe."""
-        return [target_name for step in self.steps for target_name in step.target]
-
     def __contains__(self, target_name: str) -> bool:
-        """Check if a target is already defined in the recipe."""
-        return any(target_name in step.target for step in self.steps)
+        """Check if any step contains a target with this name."""
+        return any(t.name == target_name for step in self.steps for t in step.targets)
 
     def __getitem__(self, target_name: str) -> Recipe:
         """Retrieve a recipe step by target name."""
         for step in self.steps:
-            if target_name in step.target:
-                return step, step.target.keys()
+            for t in step.targets:
+                if t.name == target_name:
+                    return step
         msg = f"Recipe for target '{target_name}' not found."
         raise KeyError(msg)
+
+    def targets(self) -> list[str]:
+        """Return a list of all target names defined in the recipe book."""
+        all_targets = []
+        for step in self.steps:
+            for target in step.targets:
+                all_targets.append(target.name)
+        return all_targets

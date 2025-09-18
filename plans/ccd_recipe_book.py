@@ -7,7 +7,7 @@ from biomol.io.instructions.ccd_instructions import (
     identity_instruction,
     stack_instruction,
 )
-from biomol.io.recipe import Constant, RecipeBook
+from biomol.io.recipe import RecipeBook
 
 """Build a CCD-specific Cooker.
 
@@ -18,53 +18,71 @@ parse_cache = ParsingCache()
 ccd_recipe = RecipeBook()
 
 ccd_recipe.add(
-    target=[{"id": NodeFeature}, {"name": NodeFeature}, {"formula": NodeFeature}],
-    instruction=identity_instruction,
-    data=["_chem_comp.id", "_chem_comp.name", "_chem_comp.formula"],
-    dtype=[str, str, str],
-    description=[
-        Constant("chem comp id."),
-        Constant("chem comp name."),
-        Constant("chem comp formula."),
+    targets=[
+        (("id", NodeFeature),),
+        (("name", NodeFeature),),
+        (("formula", NodeFeature),),
     ],
-    group=True,
-)
-
-ccd_recipe.add(
-    target=[
-        {"atom_id": NodeFeature, "atom_id_mask": NodeFeature},
-        {"atom_symbol": NodeFeature, "atom_symbol_mask": NodeFeature},
+    instruction=identity_instruction(dtype=str),
+    inputs=[
+        {"args": (("_chem_comp.id", str),), "params": {"description": "chem comp id"}},
+        {
+            "args": (("_chem_comp.name", str),),
+            "params": {"description": "chem comp name"},
+        },
+        {
+            "args": (("_chem_comp.formula", str),),
+            "params": {"description": "chem comp formula"},
+        },
     ],
-    instruction=identity_instruction,
-    data=["_chem_comp_atom.atom_id", "_chem_comp_atom.type_symbol"],
-    dtype=[str, str],
-    on_missing=[Constant({"?": "X"}), Constant({"?": "X"})],
-    description=[Constant("atom id"), Constant("atom symbol")],
-    group=True,
 )
 
 ccd_recipe.add(
-    target={"bonds": EdgeFeature},
-    instruction=bond_instruction,
-    value1="_chem_comp_bond.value_order",
-    src="_chem_comp_bond.atom_id_1",
-    dst="_chem_comp_bond.atom_id_2",
-    atom_id="atom_id",
-    dtype=str,
-    description=Constant("bond_type"),
+    targets=[
+        (("atom_id", NodeFeature), ("atom_id_mask", NodeFeature)),
+        (("atom_symbol", NodeFeature), ("atom_symbol_mask", NodeFeature)),
+    ],
+    instruction=identity_instruction(dtype=str),
+    inputs=[
+        {
+            "args": (("_chem_comp_atom.atom_id", str),),
+            "params": {"description": "atom id", "on_missing": {"?": "X"}},
+        },
+        {
+            "args": (("_chem_comp_atom.type_symbol", str),),
+            "params": {"description": "atom symbol", "on_missing": {"?": "X"}},
+        },
+    ],
 )
 
 ccd_recipe.add(
-    target={"ideal_coords": NodeFeature, "ideal_coords_mask": NodeFeature},
-    instruction=stack_instruction,
-    value_1="_chem_comp_atom.pdbx_model_Cartn_x_ideal",
-    value_2="_chem_comp_atom.pdbx_model_Cartn_y_ideal",
-    value_3="_chem_comp_atom.pdbx_model_Cartn_z_ideal",
-    dtype=float,
-    on_missing=Constant({"?": np.nan}),
-    description=Constant(
-        "Ideal_coords recorded in CCD. Missing values are set to nan"
-    ),
+    targets=(("bonds", EdgeFeature),),
+    instruction=bond_instruction(dtype=str),
+    inputs={
+        "kwargs": {
+            "src": ("_chem_comp_bond.atom_id_1", str),
+            "dst": ("_chem_comp_bond.atom_id_2", str),
+            "atom_id": ("atom_id", str),
+        },
+        "args": (("_chem_comp_bond.value_order", str),),
+        "params": {"description": "bond_type"},
+    },
+)
+
+ccd_recipe.add(
+    targets=(("ideal_coords", NodeFeature), ("ideal_coords_mask", NodeFeature)),
+    instruction=stack_instruction(dtype=float),
+    inputs={
+        "args": (
+            ("_chem_comp_atom.pdbx_model_Cartn_x_ideal", float),
+            ("_chem_comp_atom.pdbx_model_Cartn_y_ideal", float),
+            ("_chem_comp_atom.pdbx_model_Cartn_z_ideal", float),
+        ),
+        "params": {
+            "description": "Ideal_coords recorded in CCD. Missing values are set to nan",
+            "on_missing": {"?": np.nan},
+        },
+    },
 )
 
 RECIPE = ccd_recipe
