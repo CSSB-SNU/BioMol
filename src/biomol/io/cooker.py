@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Any, overload
 
 from biomol.io.cache import ParsingCache
-from biomol.io.recipe import Constant, RecipeBook
+from biomol.io.recipe import RecipeBook
 
 
 class Cooker:
@@ -64,62 +64,50 @@ class Cooker:
         """Execute all recipes in dependency order."""
         visited = set()
 
-        def resolve(target: str | Constant | type) -> object:
+        def resolve(target_name: str) -> object:
             """Recursively resolve dependencies and compute the target."""
             # Already computed
-            if isinstance(target, Constant):
-                return target.value
-            if isinstance(target, type):
-                return target
-            if target in self.parse_cache:
-                return self.parse_cache[target]
+            if target_name in self.parse_cache:
+                return self.parse_cache[target_name]
             # Prevent infinite recursion
-            if target in visited:
+            if target_name in visited:
                 msg = f"Cyclic dependency detected at '{target}'"
                 raise RuntimeError(msg)
-            visited.add(target)
+            visited.add(target_name)
 
-            recipe, target_list = self.recipebook[target]
-            resolved_inputs = {k: resolve(v) for k, v in recipe.inputs.items()}
+            recipe = self.recipebook[target_name]
+            resolved_args = [resolve(var.name) for var in recipe.inputs.args]
+            resolved_kwargs = {
+                key: resolve(var.name) for key, var in recipe.inputs.kwargs.items()
+            }
+            final_kwargs = {**recipe.inputs.params, **resolved_kwargs}
+            result = recipe.instruction(*resolved_args, **final_kwargs)
 
-            sig = inspect.signature(recipe.instruction)
-            params = list(sig.parameters.values())
-            has_varpos = any(p.kind == p.VAR_POSITIONAL for p in params)
+            visited.remove(target_name)
+            target_names = [t.name for t in recipe.targets]
 
-            if has_varpos:
-                after_varpos = False
-                kwonly_names: set[str] = set()
-                for p in params:
-                    if p.kind == p.VAR_POSITIONAL:
-                        after_varpos = True
-                        continue
-                    if after_varpos:
-                        kwonly_names.add(p.name)
-
-                kwargs = {k: v for k, v in resolved_inputs.items() if k in kwonly_names}
-                args = [v for k, v in resolved_inputs.items() if k not in kwonly_names]
-                result = recipe.instruction(*args, **kwargs)
-            else:
-                result = recipe.instruction(**resolved_inputs)
-            if isinstance(result, tuple) and len(result) != len(target_list):
+            if len(target_names) == 1:
+                self.parse_cache.add_data(target_names[0], result)
+                return result
+            if not isinstance(result, tuple) or len(result) != len(target_names):
                 msg = (
-                    f"Instruction for target '{target}' returned {len(result)} values, "
-                    f"but {len(target_list)} were expected."
+                    f"Instruction for targets {target_names} returned {type(result)}, "
+                    f"but a tuple of length {len(target_names)} was expected."
                 )
                 raise ValueError(msg)
-            if not isinstance(result, tuple):
-                self.parse_cache.add_data(target, result)
-                return result
+
             output = None
-            for tgt, res in zip(target_list, result, strict=True):
-                if tgt == target:
-                    output = res
-                self.parse_cache.add_data(tgt, res)
+            for name, value in zip(target_names, result, strict=True):
+                self.parse_cache.add_data(name, value)
+                if name == target_name:
+                    output = value
+
             return output
 
         # Try to compute all declared targets
         for target in self.recipebook.targets():
-            resolve(target)
+            if target not in self.parse_cache:
+                resolve(target)
 
     def serve(self, targets: list[str]) -> dict[str, Any]:
         """Retrieve computed targets."""

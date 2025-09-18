@@ -1,121 +1,173 @@
+"""
+Instruction Factories for BioMol Recipe Processing
+
+This module provides a set of "instruction factories" used by the RecipeBook and
+Cooker systems. The functions defined here follow a functional programming paradigm,
+specifically the "function factory" and "closure" patterns.
+
+--------------------------------------------------------------------------------
+How to Define a Custom Instruction
+--------------------------------------------------------------------------------
+
+Instead of defining a single function that takes all possible arguments (including
+type information like `dtype`), you define a **higher-order function** (a factory)
+that takes configuration parameters (like `dtype`) and returns a new, specialized
+"worker" function.
+
+### 📝 Template for a New Instruction Factory
+
+Here is a simple, commented template for creating a new instruction factory.
+
+# --- 1. Import necessary types ---
+from typing import Callable, Type, TypeVar
+import numpy as np
+from biomol.core.feature import NodeFeature # or EdgeFeature
+
+# --- 2. Define your TypeVars if needed ---
+NumericType = TypeVar("NumericType", bound=np.generic)
+
+# --- 3. Define the Factory Function ---
+# The factory takes configuration (like dtype) and returns a callable.
+def your_new_instruction(
+    *, dtype: Type[NumericType], some_config_value: float
+) -> Callable[..., NodeFeature]:
+    \"\"\"This is the factory's docstring, explaining what it configures.\"\"\"
+
+    # --- 4. Define the Inner "Worker" Function ---
+    # This is the actual instruction that the Cooker will execute.
+    # Note that it does NOT take `dtype` or `some_config_value` as arguments.
+    # Its signature should match the inputs your recipe will provide.
+
+    def _worker(
+        data: list,
+        *,
+        description: str | None = None
+    ) -> NodeFeature:
+        \"\"\"This is the worker's docstring, explaining the core logic.\"\"\"
+
+        # --- 5. Implement the Logic ---
+        # The worker uses the variables `dtype` and `some_config_value` from
+        # the outer scope (this is called a "closure").
+        processed_data = [dtype(x * some_config_value) for x in data]
+        value = np.array(processed_data, dtype=dtype)
+
+        return NodeFeature(value=value, description=description)
+
+    # --- 6. Return the configured worker function ---
+    return _worker
+
+# --- 7. Call the factory to get the configured worker function ---
+    instruction=your_new_instruction(dtype=np.float32, some_config_value=10.0),
+
+"""
+
+from collections.abc import Callable
+from typing import Any, Type, TypeVar
+
 import numpy as np
 from numpy.typing import NDArray
 
 from biomol.core.feature import EdgeFeature, NodeFeature
 
+InputType = TypeVar("InputType", str, int, float)
+FeatureType = TypeVar("FeatureType")
+NumericType = TypeVar("NumericType", int, float)
+
 
 def identity_instruction(
-    data: list[str | int] | NDArray,
-    on_missing: dict[str, float] | None = None,
-    dtype: type = float,
-    description: str | None = None,
-) -> tuple[NodeFeature, NodeFeature] | NodeFeature:
+    *, dtype: Type[InputType]
+) -> Callable[..., tuple[NodeFeature, NodeFeature] | NodeFeature]:
     """
-    Map fields to node features directly.
-
-    the order of fields in the record should match the order of specs.
+    Returns a configured instruction function that maps fields to node features.
+    The returned function 'remembers' the dtype via closure.
     """
-    if on_missing:
-        formatted_data = [
-            dtype(datum) if datum not in on_missing else dtype(on_missing[datum])
-            for datum in data
-        ]
-    else:
-        formatted_data = [dtype(datum) for datum in data]
-    formatted_data = np.array(formatted_data, dtype=dtype)
-    data_feature = NodeFeature(value=formatted_data, description=description)
-    if on_missing:
-        mask = np.array(
-            [datum not in on_missing for datum in formatted_data],
-            dtype=bool,
-        )
-        mask_description = f"{description}_mask"
-        mask_feature = NodeFeature(value=mask, description=mask_description)
 
-        return data_feature, mask_feature
-    return data_feature
+    def _worker(
+        data: list[InputType] | NDArray,
+        on_missing: dict[str, NumericType] | None = None,
+        *,
+        description: str | None = None,
+    ) -> tuple[NodeFeature, NodeFeature] | NodeFeature:
+        if on_missing:
+            formatted_data = [
+                dtype(datum) if datum not in on_missing else on_missing[datum]
+                for datum in data
+            ]
+            mask = np.array([d not in on_missing for d in data], dtype=bool)
+            mask_description = f"{description}_mask" if description else "mask"
+            mask_feature = NodeFeature(value=mask, description=mask_description)
+        else:
+            formatted_data = [dtype(datum) for datum in data]
+
+        value = np.array(formatted_data, dtype=dtype)
+        data_feature = NodeFeature(value=value, description=description)
+
+        return (data_feature, mask_feature) if on_missing else data_feature
+
+    return _worker
 
 
 def stack_instruction(
-    *args: list[str | int] | NDArray,
-    on_missing: dict[str, float],
-    dtype: type = float,
-    description: str | None = None,
-) -> NodeFeature:
-    """
-    Stacking mapper for stacking multiple fields into one feature and one mask feature.
+    *, dtype: Type[NumericType]
+) -> Callable[..., tuple[NodeFeature, NodeFeature]]:
+    """Returns a configured instruction that stacks multiple fields."""
 
-    each field should have the same length and type.
-    the order of fields in the record should match the order of specs.
-    the resulting feature will have shape (N, M) where N is the length of each field.
-    the mask feature will have shape (N,) indicating valid entries.
+    def _worker(
+        *args: list[InputType] | NDArray,
+        on_missing: dict[str, NumericType],
+        description: str | None = None,
+    ) -> tuple[NodeFeature, NodeFeature]:
+        result_data, mask_data = [], []
+        if not args:
+            raise ValueError("At least one field must be provided to stack.")
+        first_len = len(args[0])
+        if not all(len(arg) == first_len for arg in args):
+            raise ValueError("All fields must have the same length.")
 
-    Example:
-        field1: [0,1,2,3,4]
-        field2: [7,8,9,10,'?']
-        result: [[0,7], [1,8], [2,9], [3,10], [4,0]]
-        mask: [True, True, True, True, False]
-    """
-    mask_description = f"{description}_mask"
+        for data in args:
+            formatted = [
+                dtype(x) if x not in on_missing else on_missing[x] for x in data
+            ]
+            result_data.append(np.array(formatted, dtype=dtype))
+            mask_data.append([x not in on_missing for x in data])
 
-    result_data = []
-    mask = []
-    for data in args:
-        if len(data) != len(next(iter(args))):
-            msg = "All fields must have the same length."
-            raise ValueError(msg)
+        stacked_value = np.stack(result_data, axis=-1)
+        stacked_mask = np.all(np.array(mask_data, dtype=bool).T, axis=-1)
+        mask_desc = f"{description}_mask" if description else "mask"
 
-        mask.append([d not in on_missing for d in data])
-        formatted_data = [
-            dtype(x) if x not in on_missing else dtype(on_missing[x]) for x in data
-        ]
-        result_data.append(np.array(formatted_data, dtype=dtype))
+        return (
+            NodeFeature(value=stacked_value, description=description),
+            NodeFeature(value=stacked_mask, description=mask_desc),
+        )
 
-    stacked = np.stack(result_data, axis=-1)
-    stacked_mask = np.all(np.stack(mask, axis=-1), axis=-1).astype(bool)
-
-    return (
-        NodeFeature(value=stacked, description=description),
-        NodeFeature(value=stacked_mask, description=mask_description),
-    )
+    return _worker
 
 
-def bond_instruction(
-    *args: list[str | int] | NDArray,
-    src: list[str | int] | NDArray,
-    dst: list[str | int] | NDArray,
-    atom_id: NodeFeature,
-    dtype: type = str,
-    description: str = "",
-) -> EdgeFeature:
-    """
-    Map source node id, target node id, bond feature to edge features.
+def bond_instruction(*, dtype: Type[FeatureType]) -> Callable[..., EdgeFeature]:
+    """Returns a configured instruction that creates edge features."""
 
-    the length of all fields should match.
-    when parsing any edge feature, the source and target node ids are required.
-    the node id -> index mapping is retrieved from the context using the context_key.
+    def _worker(
+        *args: list[InputType] | NDArray,
+        src: list[InputType] | NDArray,
+        dst: list[InputType] | NDArray,
+        atom_id: NodeFeature,
+        description: str = "",
+    ) -> EdgeFeature:
+        order = np.argsort(atom_id.value)
+        src_indices = order[np.searchsorted(atom_id.value, np.array(src), sorter=order)]
+        dst_indices = order[np.searchsorted(atom_id.value, np.array(dst), sorter=order)]
 
-    record: source ids, target ids, bond features
+        values = [np.array([dtype(x) for x in data]) for data in args]
+        if not values:
+            raise ValueError("At least one feature field (*args) must be provided.")
 
-    """
-    values = []
-    src = np.array(src)
-    dst = np.array(dst)
-    order = np.argsort(atom_id.value)
-    src_indices = order[np.searchsorted(atom_id.value, src, sorter=order)]
-    dst_indices = order[np.searchsorted(atom_id.value, dst, sorter=order)]
-    for data in args:
-        if len(data) != len(next(iter(args))):
-            msg = "All fields must have the same length."
-            raise ValueError(msg)
-        formatted_data = [dtype(x) for x in data]
-        values.append(np.array(formatted_data, dtype=dtype))
-    value = np.stack(values, axis=-1) if len(values) > 1 else values[0]
-    value = value.astype(dtype)
+        final_value = np.stack(values, axis=-1) if len(values) > 1 else values[0]
 
-    return EdgeFeature(
-        value=value,
-        src_indices=np.array(src_indices, dtype=int),
-        dst_indices=np.array(dst_indices, dtype=int),
-        description=description,
-    )
+        return EdgeFeature(
+            value=final_value,
+            src_indices=src_indices.astype(int),
+            dst_indices=dst_indices.astype(int),
+            description=description,
+        )
+
+    return _worker
