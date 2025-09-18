@@ -4,7 +4,6 @@ from Bio.PDB.MMCIF2Dict import MMCIF2Dict as mmcif2dict
 
 from biomol.io.cooker import Cooker
 from biomol.io.cache import ParsingCache
-from biomol.io.recipe import RecipeBook
 
 
 def main():
