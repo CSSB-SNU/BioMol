@@ -79,7 +79,8 @@ ccd_recipe.add(
             ("_chem_comp_atom.pdbx_model_Cartn_z_ideal", float),
         ),
         "params": {
-            "description": "Ideal_coords recorded in CCD. Missing values are set to nan",
+            "description": "Ideal_coords recorded in CCD. "
+            "Missing values are set to nan",
             "on_missing": {"?": np.nan},
         },
     },

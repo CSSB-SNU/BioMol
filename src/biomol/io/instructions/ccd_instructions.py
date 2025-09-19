@@ -1,5 +1,5 @@
 """
-Instruction Factories for BioMol Recipe Processing
+Instruction Factories for BioMol Recipe Processing.
 
 This module provides a set of "instruction factories" used by the RecipeBook and
 Cooker systems. The functions defined here follow a functional programming paradigm,
@@ -19,7 +19,7 @@ that takes configuration parameters (like `dtype`) and returns a new, specialize
 Here is a simple, commented template for creating a new instruction factory.
 
 # --- 1. Import necessary types ---
-from typing import Callable, Type, TypeVar
+from typing import Callable, type, TypeVar
 import numpy as np
 from biomol.core.feature import NodeFeature # or EdgeFeature
 
@@ -29,7 +29,7 @@ NumericType = TypeVar("NumericType", bound=np.generic)
 # --- 3. Define the Factory Function ---
 # The factory takes configuration (like dtype) and returns a callable.
 def your_new_instruction(
-    *, dtype: Type[NumericType], some_config_value: float
+    *, dtype: type[NumericType], some_config_value: float
 ) -> Callable[..., NodeFeature]:
     \"\"\"This is the factory's docstring, explaining what it configures.\"\"\"
 
@@ -62,7 +62,7 @@ def your_new_instruction(
 """
 
 from collections.abc import Callable
-from typing import Any, Type, TypeVar
+from typing import TypeVar
 
 import numpy as np
 from numpy.typing import NDArray
@@ -75,10 +75,11 @@ NumericType = TypeVar("NumericType", int, float)
 
 
 def identity_instruction(
-    *, dtype: Type[InputType]
+    *, dtype: type[InputType],
 ) -> Callable[..., tuple[NodeFeature, NodeFeature] | NodeFeature]:
     """
-    Returns a configured instruction function that maps fields to node features.
+    Return a configured instruction function that maps fields to node features.
+
     The returned function 'remembers' the dtype via closure.
     """
 
@@ -108,9 +109,9 @@ def identity_instruction(
 
 
 def stack_instruction(
-    *, dtype: Type[NumericType]
+    *, dtype: type[NumericType],
 ) -> Callable[..., tuple[NodeFeature, NodeFeature]]:
-    """Returns a configured instruction that stacks multiple fields."""
+    """Return a configured instruction that stacks multiple fields."""
 
     def _worker(
         *args: list[InputType] | NDArray,
@@ -119,10 +120,12 @@ def stack_instruction(
     ) -> tuple[NodeFeature, NodeFeature]:
         result_data, mask_data = [], []
         if not args:
-            raise ValueError("At least one field must be provided to stack.")
+            msg = "At least one field must be provided to stack."
+            raise ValueError(msg)
         first_len = len(args[0])
         if not all(len(arg) == first_len for arg in args):
-            raise ValueError("All fields must have the same length.")
+            msg = "All fields must have the same length."
+            raise ValueError(msg)
 
         for data in args:
             formatted = [
@@ -143,8 +146,8 @@ def stack_instruction(
     return _worker
 
 
-def bond_instruction(*, dtype: Type[FeatureType]) -> Callable[..., EdgeFeature]:
-    """Returns a configured instruction that creates edge features."""
+def bond_instruction(*, dtype: type[FeatureType]) -> Callable[..., EdgeFeature]:
+    """Return a configured instruction that creates edge features."""
 
     def _worker(
         *args: list[InputType] | NDArray,
@@ -159,7 +162,8 @@ def bond_instruction(*, dtype: Type[FeatureType]) -> Callable[..., EdgeFeature]:
 
         values = [np.array([dtype(x) for x in data]) for data in args]
         if not values:
-            raise ValueError("At least one feature field (*args) must be provided.")
+            msg = "At least one feature field (*args) must be provided."
+            raise ValueError(msg)
 
         final_value = np.stack(values, axis=-1) if len(values) > 1 else values[0]
 
