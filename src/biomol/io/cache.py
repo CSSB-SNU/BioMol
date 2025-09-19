@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 
 class ParsingCache:
     """
@@ -12,7 +14,7 @@ class ParsingCache:
     def __init__(self) -> None:
         self._storage: dict[str, Any] = {}
 
-    def add_data(self, name: str, data: Any):
+    def add_data(self, name: str, data: object) -> None:
         """Store Data with a given name."""
         if name in self._storage:
             msg = f"Data with name '{name}' already exists in context."
@@ -23,7 +25,7 @@ class ParsingCache:
         """Return True if name exists in context."""
         return name in self._storage
 
-    def __getitem__(self, name: str) -> Any | None:
+    def __getitem__(self, name: str) -> object | None:
         """Get data by name."""
         if name not in self._storage:
             msg = f"Data with name '{name}' not found in context."

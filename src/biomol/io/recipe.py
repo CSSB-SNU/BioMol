@@ -1,7 +1,6 @@
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
-from types import MappingProxyType
-from typing import Any, NamedTuple, overload, TypeAlias
+from typing import Any, TypeAlias, overload
 
 
 @dataclass(frozen=True)
@@ -73,7 +72,7 @@ class RecipeBook:
 
         self._check_duplicate_targets(final_targetset)
         step = Recipe(
-            targets=final_targetset, instruction=instruction, inputs=final_inputs
+            targets=final_targetset, instruction=instruction, inputs=final_inputs,
         )
         self.steps.append(step)
 
@@ -101,7 +100,10 @@ class RecipeBook:
         """Add a new step to the recipe."""
         if isinstance(targets, list) and isinstance(inputs, list):
             if len(targets) != len(inputs):
-                msg = "When providing lists of targets and inputs, they must be of equal length."
+                msg = (
+                    "When providing lists of targets and inputs, "
+                    "they must be of equal length."
+                )
                 raise ValueError(msg)
             for targetset, input_bundle in zip(targets, inputs, strict=True):
                 self._single_add(targetset, instruction, input_bundle)
@@ -128,6 +130,5 @@ class RecipeBook:
         """Return a list of all target names defined in the recipe book."""
         all_targets = []
         for step in self.steps:
-            for target in step.targets:
-                all_targets.append(target.name)
+            all_targets.extend(t.name for t in step.targets)
         return all_targets

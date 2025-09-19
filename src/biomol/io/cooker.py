@@ -1,5 +1,4 @@
 import importlib.util
-import inspect
 from pathlib import Path
 from typing import Any, overload
 
