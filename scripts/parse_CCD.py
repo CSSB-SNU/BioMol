@@ -15,6 +15,7 @@ def main():
     cif_path = sys.argv[2].strip()
 
     cif_data = mmcif2dict(cif_path)
+    breakpoint()
     cooker = Cooker(parse_cache=ParsingCache(), recipebook=recipe_path)
     cooker.prep(cif_data, fields=list(cif_data.keys()))
     cooker.cook()

@@ -36,6 +36,10 @@ class Recipe:
     inputs: Inputs
 
 
+class RecipeError(KeyError):
+    """Custom error for missing recipe targets."""
+
+
 class RecipeBook:
     """Recipe Builder for defining data processing workflows."""
 
@@ -51,6 +55,7 @@ class RecipeBook:
     def _coerce_to_variable_set(self, varset: RawVariableSet | None) -> VariableSet:
         if not varset:
             return ()
+        tuple(Variable(*t) for t in varset)
         return tuple(Variable(*t) for t in varset)
 
     def _coerce_to_variable_map(self, varset: RawVariableMap | None) -> VariableMap:
@@ -72,7 +77,9 @@ class RecipeBook:
 
         self._check_duplicate_targets(final_targetset)
         step = Recipe(
-            targets=final_targetset, instruction=instruction, inputs=final_inputs,
+            targets=final_targetset,
+            instruction=instruction,
+            inputs=final_inputs,
         )
         self.steps.append(step)
 
@@ -124,11 +131,11 @@ class RecipeBook:
                 if t.name == target_name:
                     return step
         msg = f"Recipe for target '{target_name}' not found."
-        raise KeyError(msg)
+        raise RecipeError(msg)
 
-    def targets(self) -> list[str]:
+    def targets(self) -> list[Variable]:
         """Return a list of all target names defined in the recipe book."""
         all_targets = []
         for step in self.steps:
-            all_targets.extend(t.name for t in step.targets)
+            all_targets.extend(list(step.targets))
         return all_targets

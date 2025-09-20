@@ -1,9 +1,10 @@
+import fnmatch
 import importlib.util
 from pathlib import Path
-from typing import Any, overload
+from typing import Any, get_args, overload
 
 from biomol.io.cache import ParsingCache
-from biomol.io.recipe import RecipeBook
+from biomol.io.recipe import Recipe, RecipeBook
 
 
 class Cooker:
@@ -59,25 +60,64 @@ class Cooker:
                 msg = f"Field {field} not found in data_dict."
                 raise ValueError(msg)
 
+    def _is_missing_and_allowed(self, var_name: str, recipe: Recipe) -> bool:
+        return (
+            var_name not in self.parse_cache
+            and var_name not in self.recipebook
+            and recipe.none_if_missing
+        )
+
+    def _expand_wildcard_args(self, pattern: str) -> list[tuple[str, Any]]:
+        """
+        Expand wildcard-based arguments by matching keys from the cache.
+
+        Notes
+        -----
+        - This method applies *only* to args, not kwargs.
+        - Wildcard matching uses fnmatch (glob-style, e.g. "input*").
+        - Importantly, the search is performed **only on keys already present
+          in the parse_cache**, not on the recipebook targets.
+        """
+        matches: list[tuple[str, Any]] = []
+        for key in self.parse_cache.keys():
+            if fnmatch.fnmatch(key, pattern):
+                matches.append((key, self.parse_cache[key]))
+        return matches
+
     def cook(self) -> None:
         """Execute all recipes in dependency order."""
         visited = set()
 
-        def resolve(target_name: str) -> object:
+        def resolve(target_name: str, target_type: type) -> object:
             """Recursively resolve dependencies and compute the target."""
             # Already computed
             if target_name in self.parse_cache:
                 return self.parse_cache[target_name]
             # Prevent infinite recursion
             if target_name in visited:
-                msg = f"Cyclic dependency detected at '{target}'"
+                msg = f"Cyclic dependency detected at '{target_name}'"
                 raise RuntimeError(msg)
+            if target_name not in self.recipebook and type(None) in get_args(
+                target_type
+            ):
+                return None
             visited.add(target_name)
+            try:
+                recipe = self.recipebook[target_name]
+            except KeyError:
+                breakpoint()
+            resolved_args: list[Any] = []
+            for var in recipe.inputs.args:
+                if any(ch in var.name for ch in ["*", "?", "["]):  # detect glob pattern
+                    wildcard_matches = self._expand_wildcard_args(var.name)
+                    for match_name, match_value in wildcard_matches:
+                        resolved_args.append(match_value)
+                else:
+                    resolved_args.append(resolve(var.name, var.type))
 
-            recipe = self.recipebook[target_name]
-            resolved_args = [resolve(var.name) for var in recipe.inputs.args]
             resolved_kwargs = {
-                key: resolve(var.name) for key, var in recipe.inputs.kwargs.items()
+                key: resolve(var.name, var.type)
+                for key, var in recipe.inputs.kwargs.items()
             }
             final_kwargs = {**recipe.inputs.params, **resolved_kwargs}
             result = recipe.instruction(*resolved_args, **final_kwargs)
@@ -105,8 +145,8 @@ class Cooker:
 
         # Try to compute all declared targets
         for target in self.recipebook.targets():
-            if target not in self.parse_cache:
-                resolve(target)
+            if target.name not in self.parse_cache:
+                resolve(target.name, target.type)
 
     def serve(self, targets: list[str]) -> dict[str, Any]:
         """Retrieve computed targets."""

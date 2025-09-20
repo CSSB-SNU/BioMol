@@ -25,7 +25,7 @@ ccd_recipe.add(
     ],
     instruction=identity_instruction(dtype=str),
     inputs=[
-        {"args": (("_chem_comp.id", str),), "params": {"description": "chem comp id"}},
+        {"args": (("_chem_comp.id", str|None),), "params": {"description": "chem comp id"}},
         {
             "args": (("_chem_comp.name", str),),
             "params": {"description": "chem comp name"},
