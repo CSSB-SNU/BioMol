@@ -6,3 +6,4 @@ BioMol/configs/datapath.json
 .pixi
 *.egg-info
 log/
+*.cif
