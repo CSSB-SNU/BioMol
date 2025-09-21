@@ -8,8 +8,11 @@ scientific computing.
 
 from __future__ import annotations
 
+from . import enums, exceptions
 from .core import BioMol
 
 __all__ = [
     "BioMol",
+    "enums",
+    "exceptions",
 ]

@@ -1,0 +1,73 @@
+# Configuration file for the Sphinx documentation builder.
+#
+# For the full list of built-in configuration values, see the documentation:
+# https://www.sphinx-doc.org/en/master/usage/configuration.html
+
+# -- Project information -----------------------------------------------------
+# https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
+
+import os, sys
+
+sys.path.insert(0, os.path.abspath("../src"))
+
+
+project = "BioMol"
+copyright = "2025, Lee Howon"
+author = "Lee Howon"
+release = "0.2.0"
+
+# -- General configuration ---------------------------------------------------
+# https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
+
+extensions = [
+    "sphinx.ext.autodoc",
+    "sphinx.ext.autosummary",
+    "sphinx.ext.intersphinx",
+    "sphinx.ext.viewcode",
+    "sphinx.ext.napoleon",
+    "sphinx_copybutton",
+    "sphinx_design",
+    "numpydoc",
+]
+
+
+# autosummary / autodoc
+autosummary_generate = True
+autoclass_content = "class"
+autodoc_typehints = "description"
+autodoc_member_order = "bysource"
+autodoc_typehints_format = "short"
+add_module_names = False
+
+
+# numpydoc
+numpydoc_show_class_members = False
+numpydoc_show_inherited_class_members = False
+
+
+intersphinx_mapping = {
+    "python": ("https://docs.python.org/3/", None),
+    "numpy": ("https://numpy.org/doc/stable/", None),
+}
+
+
+templates_path = ["_templates"]
+exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]
+
+
+# -- Options for HTML output -------------------------------------------------
+# https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
+
+html_theme = "pydata_sphinx_theme"
+html_title = "BioMol"
+html_favicon = "_static/favicon-32x32.png"
+html_static_path = ["_static"]
+
+html_theme_options = {
+    "show_nav_level": 1,
+    "navigation_depth": 2,
+    "logo": {
+        "image_light": "_static/logo-light.svg",
+        "image_dark": "_static/logo-dark.svg",
+    },
+}

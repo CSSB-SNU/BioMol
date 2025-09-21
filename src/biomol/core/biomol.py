@@ -22,7 +22,21 @@ from .view import A_co, AtomView, C_co, ChainView, R_co, ResidueView, ViewProtoc
 
 
 class BioMol(Generic[A_co, R_co, C_co]):
-    """A class representing a biomolecular structure."""
+    """A class representing a biomolecular structure.
+
+    Parameters
+    ----------
+    atom_container: AtomContainer
+        The container holding atom-level features.
+    residue_container: ResidueContainer
+        The container holding residue-level features.
+    chain_container: ChainContainer
+        The container holding chain-level features.
+    index_table: IndexTable
+        The index table mapping atoms, residues, and chains.
+    metadata: dict[str, Any] | None, optional
+        Additional metadata associated with the biomolecular structure.
+    """
 
     def __init__(
         self,
@@ -37,7 +51,9 @@ class BioMol(Generic[A_co, R_co, C_co]):
         self._chain_container = chain_container
         self._index = index_table
         self._metadata = metadata or {}
-        self._check_protocol_type()
+        # self._check_protocol_type()
+        # Protocol checks are disabled because python 3.12+ doesn't support
+        # runtime_checkable between properties and attributes.
         self._check_lengths()
 
     @property

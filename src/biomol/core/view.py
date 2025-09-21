@@ -117,35 +117,51 @@ class ViewProtocol(Protocol[A_co, R_co, C_co, M_co]):
         This method allows filtering based on both node and edge features.
         Each keyword argument corresponds to a feature name and its desired value(s).
 
-        Node Feature Selection
-        ----------------------
-        When filtering by a node feature, the selection is performed on the elements
-        **within the current view**. Only elements that match the criteria are kept.
+        Parameters
+        ----------
+        **kwargs : Any
+            Feature names and values to filter by.
 
-        Edge Feature Selection
-        ----------------------
-        When filtering by an edge feature, the selection considers all edges in the
-        **entire molecule**, not just those within the current view. It then returns
-        the elements from the current view that participate in any of the matching
-        edges. This allows for selecting nodes based on their interactions with
-        elements outside the current view.
+        Notes
+        -----
+        **Node Feature Selection**
+            - Filtering is applied **only to the elements within the current view**.
+            - Only elements that match the criteria are retained.
 
-        Value Matching
-        --------------
-        If the provided value is a single item, the feature must match it exactly.
-        If the value is a sequence (list, tuple, set, or ndarray), the feature
-        can match any of the values in the sequence.
+        **Edge Feature Selection**
+            - Filtering is applied to **edges within the current view**.
+            - However, **all edges in the entire molecule** are considered during
+              matching.
+            - It then returns the elements from the current view that participate in any
+              matching edges.
+            - This allows selecting nodes based on their interactions with elements
+              outside the current view.
 
-        Example
-        -------
-        Select atoms with name 'CA' and residue id 10 from an atom_view
-        >>> selected_atoms = atom_view.select(name='CA', id=10)
+        **Value Matching**
+            - **Single value** → the feature must **match exactly**.
+            - **Sequence** (list, tuple, set, or ndarray) → the feature can **match any
+              value** in the sequence.
 
-        Select residues with name 'ALA' or 'GLY' from a residue_view
-        >>> selected_residues = residue_view.select(name=['ALA', 'GLY'])
+        Examples
+        --------
+        Select atoms with name ``CA`` and residue id ``10`` from an ``atom_view``
 
-        Select atoms from chain_view that form disulfide bonds.
-        >>> selected_atoms = chain_view.select(bond="disulfide")
+        .. code-block:: python
+
+            selected_atoms = atom_view.select(name='CA', id=10)
+
+        Select residues with name ``ALA`` or ``GLY`` from a ``residue_view``
+
+        .. code-block:: python
+
+            selected_residues = residue_view.select(name=['ALA', 'GLY'])
+
+        Select atoms from ``chain_view`` that form disulfide bonds.
+
+        .. code-block:: python
+
+            selected_atoms = chain_view.select(bond="disulfide")
+
         """
 
     def __repr__(self) -> str:
