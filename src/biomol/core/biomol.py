@@ -1,24 +1,19 @@
 import json
 from dataclasses import asdict
 from io import BytesIO
-from typing import Any, Generic, get_args, get_origin
+from typing import Any, Generic
 
 import numpy as np
 from typing_extensions import Self
 from zstandard import ZstdCompressor, ZstdDecompressor
 
 from biomol.enums import StructureLevel
-from biomol.exceptions import (
-    FeatureKeyError,
-    IndexMismatchError,
-    StructureLevelError,
-    ViewProtocolError,
-)
+from biomol.exceptions import IndexMismatchError, StructureLevelError
 
-from .container import AtomContainer, ChainContainer, FeatureContainer, ResidueContainer
+from .container import FeatureContainer
 from .index import IndexTable
 from .types import BioMolDict
-from .view import A_co, AtomView, C_co, ChainView, R_co, ResidueView, ViewProtocol
+from .view import A_co, AtomView, C_co, ChainView, R_co, ResidueView
 
 
 class BioMol(Generic[A_co, R_co, C_co]):
@@ -26,11 +21,11 @@ class BioMol(Generic[A_co, R_co, C_co]):
 
     Parameters
     ----------
-    atom_container: AtomContainer
+    atom_container: FeatureContainer
         The container holding atom-level features.
-    residue_container: ResidueContainer
+    residue_container: FeatureContainer
         The container holding residue-level features.
-    chain_container: ChainContainer
+    chain_container: FeatureContainer
         The container holding chain-level features.
     index_table: IndexTable
         The index table mapping atoms, residues, and chains.
@@ -40,9 +35,9 @@ class BioMol(Generic[A_co, R_co, C_co]):
 
     def __init__(
         self,
-        atom_container: AtomContainer,
-        residue_container: ResidueContainer,
-        chain_container: ChainContainer,
+        atom_container: FeatureContainer,
+        residue_container: FeatureContainer,
+        chain_container: FeatureContainer,
         index_table: IndexTable,
         metadata: dict[str, Any] | None = None,
     ) -> None:
@@ -51,9 +46,6 @@ class BioMol(Generic[A_co, R_co, C_co]):
         self._chain_container = chain_container
         self._index = index_table
         self._metadata = metadata or {}
-        # self._check_protocol_type()
-        # Protocol checks are disabled because python 3.12+ doesn't support
-        # runtime_checkable between properties and attributes.
         self._check_lengths()
 
     @property
@@ -130,9 +122,9 @@ class BioMol(Generic[A_co, R_co, C_co]):
             The created BioMol object.
         """
         return cls(
-            AtomContainer.from_dict(data["atoms"]),
-            ResidueContainer.from_dict(data["residues"]),
-            ChainContainer.from_dict(data["chains"]),
+            FeatureContainer.from_dict(data["atoms"]),
+            FeatureContainer.from_dict(data["residues"]),
+            FeatureContainer.from_dict(data["chains"]),
             IndexTable(**data["index_table"]),
             data["metadata"],
         )
@@ -209,41 +201,6 @@ class BioMol(Generic[A_co, R_co, C_co]):
         template_dict = header["template"]
         data = _reconstruct_data(template_dict, flatten_data)
         return cls.from_dict(data)
-
-    def _check_protocol_type(self) -> None:
-        """Check if the view types satisfy the specified Protocols."""
-        _orig_class = [
-            c for c in self.__class__.__orig_bases__ if get_origin(c) is BioMol
-        ]
-        if len(_orig_class) == 0:
-            return
-
-        args = get_args(_orig_class[0])
-        for i, proto in enumerate(args):
-            bases = getattr(proto, "__mro__", ()) or getattr(proto, "__bases__", ())
-            if not any(b is ViewProtocol for b in bases):
-                msg = f"{proto.__name__} must inherit from ViewProtocol."
-                raise ViewProtocolError(msg)
-            if not getattr(proto, "_is_protocol", False):
-                msg = f"{proto.__name__} is not a Protocol."
-                raise ViewProtocolError(msg)
-
-            name = ["atoms", "residues", "chains"][i]
-            view = getattr(self, name)
-            try:
-                _is_satisfied = isinstance(view, proto)
-            except TypeError as e:
-                msg = (
-                    f"{proto.__name__} must be marked with @runtime_checkable "
-                    "to allow runtime Protocol checks."
-                )
-                raise ViewProtocolError(msg) from e
-            except FeatureKeyError as e:
-                msg = f"Feature key '{e.args[0]}' not found on {name} view."
-                raise ViewProtocolError(msg) from e
-            if not _is_satisfied:
-                msg = f"{name} view must satisfy {proto.__name__}."
-                raise ViewProtocolError(msg)
 
     def _check_lengths(self) -> None:
         """Check if the lengths of the containers and index table are consistent."""

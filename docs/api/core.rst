@@ -22,9 +22,7 @@ Container
     :toctree: ./generated
     :nosignatures:
 
-    AtomContainer
-    ResidueContainer
-    ChainContainer
+    FeatureContainer
 
 
 IndexTable
