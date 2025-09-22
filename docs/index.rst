@@ -6,27 +6,75 @@
 BioMol documentation
 ====================
    
-   An ML-friendly molecular data engine that brings the intuitiveness of PyMol to Python scripting.
-
-`BioMol <https://github.com/CSSB-SNU/BioMol>`_ is a next-generation molecular data engine that allows you to handle PDB/mmCIF structural data in a truly Pythonic way. 
+`BioMol <https://github.com/CSSB-SNU/BioMol>`_ is a molecular data engine that provides PyMOL-like selections and NumPy-style operations, designed for machine learning and large-scale molecular analysis.
 
 .. grid:: 1 2 2 2
-    :gutter: 4
-    :class-container: sd-text-center
+   :gutter: 4
+   :class-container: sd-text-center
 
-    .. grid-item-card:: API Reference
-        :class-card: intro-card
-        :shadow: md
+   .. grid-item-card:: Getting Started
+      :class-card: intro-card
+      :shadow: md
 
-        +++
+      Explore the library overview, installation guide, and introductory tutorials.
 
-        .. button-ref:: api/index
-            :ref-type: doc
-            :click-parent:
-            :color: secondary
-            :expand:
+      +++
 
-            To the API Reference
+      .. button-ref:: getting_started/index
+         :ref-type: doc
+         :click-parent:
+         :color: secondary
+         :expand:
+
+         To the Getting Started Guide
+
+   .. grid-item-card:: Concepts 
+      :class-card: intro-card
+      :shadow: md
+
+      Understand the core concepts and data structures behind BioMol.
+
+      +++
+
+      .. button-ref:: concepts/index
+         :ref-type: doc
+         :click-parent:
+         :color: secondary
+         :expand:
+
+         To the Concepts Guide
+
+   .. grid-item-card:: Examples 
+      :class-card: intro-card
+      :shadow: md
+
+      Explore focused examples demonstrating common workflows and analysis tasks.
+
+      +++
+
+      .. button-ref:: examples
+         :ref-type: doc
+         :click-parent:
+         :color: secondary
+         :expand:
+
+         To the Examples Gallery
+
+   .. grid-item-card:: API Reference
+      :class-card: intro-card
+      :shadow: md
+
+      Browse detailed documentation of all public classes and functions.
+
+      +++
+
+      .. button-ref:: api/index
+         :ref-type: doc
+         :click-parent:
+         :color: secondary
+         :expand:
+
+         To the API Reference
 
 
 .. toctree::
@@ -34,4 +82,7 @@ BioMol documentation
    :hidden:
    :titlesonly:
 
+   getting_started/index
+   concepts/index
+   examples
    api/index

@@ -11,6 +11,7 @@ Feature
     :toctree: ./generated
     :nosignatures:
 
+    Feature
     NodeFeature
     EdgeFeature
 
