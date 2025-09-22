@@ -40,7 +40,9 @@ ccd_recipe.add(
 ccd_recipe.add(
     targets=[
         (("atom_id", NodeFeature), ("atom_id_mask", NodeFeature)),
-        (("atom_symbol", NodeFeature), ("atom_symbol_mask", NodeFeature)),
+        (("type", NodeFeature), ("type_mask", NodeFeature)),
+        (("chiral", NodeFeature),),
+        (("charge", NodeFeature),),
     ],
     instruction=identity_instruction(dtype=str),
     inputs=[
@@ -52,21 +54,50 @@ ccd_recipe.add(
             "args": (("_chem_comp_atom.type_symbol", str),),
             "params": {"description": "atom symbol", "on_missing": {"?": "X"}},
         },
+        {
+            "args": (("_chem_comp_atom.pdbx_stereo_config", str),),
+            "params": {
+                "description": "atom symbol",
+            },
+        },
+        {
+            "args": (("_chem_comp_atom.charge", int),),
+            "params": {
+                "description": "atom symbol",
+            },
+        },
     ],
 )
 
+bond_kwargs = {
+    "src": ("_chem_comp_bond.atom_id_1", str),
+    "dst": ("_chem_comp_bond.atom_id_2", str),
+    "atom_id": ("atom_id", str),
+}
 ccd_recipe.add(
-    targets=(("bonds", EdgeFeature),),
+    targets=[
+        (("bond_order", EdgeFeature),),
+        (("bond_aromacity", EdgeFeature),),
+        (("bond_stereo", EdgeFeature),),
+    ],
     instruction=bond_instruction(dtype=str),
-    inputs={
-        "kwargs": {
-            "src": ("_chem_comp_bond.atom_id_1", str),
-            "dst": ("_chem_comp_bond.atom_id_2", str),
-            "atom_id": ("atom_id", str),
+    inputs=[
+        {
+            "kwargs": bond_kwargs,
+            "args": (("_chem_comp_bond.value_order", str),),
+            "params": {"description": "bond_type"},
         },
-        "args": (("_chem_comp_bond.value_order", str),),
-        "params": {"description": "bond_type"},
-    },
+        {
+            "kwargs": bond_kwargs,
+            "args": (("_chem_comp_bond.pdbx_aromatic_flag", str),),
+            "params": {"description": "bond_aromacity"},
+        },
+        {
+            "kwargs": bond_kwargs,
+            "args": (("_chem_comp_bond.pdbx_stereo_config", str),),
+            "params": {"description": "bond_stereo"},
+        },
+    ],
 )
 
 ccd_recipe.add(

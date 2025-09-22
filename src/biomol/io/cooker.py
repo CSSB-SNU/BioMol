@@ -1,7 +1,7 @@
 import importlib.util
 import inspect
 from pathlib import Path
-from typing import Any, overload
+from typing import overload
 
 from biomol.io.cache import ParsingCache
 from biomol.io.recipe import RecipeBook
@@ -108,14 +108,3 @@ class Cooker:
         for target in self.recipebook.targets():
             if target not in self.parse_cache:
                 resolve(target)
-
-    def serve(self, targets: list[str]) -> dict[str, Any]:
-        """Retrieve computed targets."""
-        results = {}
-        for out in targets:
-            if out in self.parse_cache:
-                results[out] = self.parse_cache[out]
-            else:
-                msg = f"targets '{out}' not found in context."
-                raise KeyError(msg)
-        return results
