@@ -13,10 +13,21 @@ from .types import FeatureContainerDict
 
 @dataclass(frozen=True, slots=True)
 class FeatureContainer:
-    """Container for holding either node or edge features."""
+    """Container for holding either node or edge features.
+
+    Parameters
+    ----------
+    node_features: Mapping[str, NodeFeature]
+        A mapping of feature names to node features.
+    edge_features: Mapping[str, EdgeFeature]
+        A mapping of feature names to edge features.
+    """
 
     node_features: Mapping[str, NodeFeature]
+    """A mapping of feature names to node features."""
+
     edge_features: Mapping[str, EdgeFeature]
+    """A mapping of feature names to node features."""
 
     def __post_init__(self) -> None:  # noqa: D105
         self._check_node_lengths()

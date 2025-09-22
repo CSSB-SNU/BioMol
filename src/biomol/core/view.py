@@ -33,7 +33,19 @@ M_co = TypeVar("M_co", bound="BioMol", default="BioMol", covariant=True)
 
 @runtime_checkable
 class ViewProtocol(Protocol[A_co, R_co, C_co, M_co]):
-    """Protocol for all views."""
+    """Protocol for all views.
+
+    This protocol defines the common interface for all views, including methods for
+    converting between different structural levels, accessing features, and performing
+    set operations. User can also implement this protocol to create custom views.
+
+    Parameters
+    ----------
+    mol : BioMol
+        The parent molecule.
+    indices : NDArray[np.integer]
+        The indices of the elements in the view.
+    """
 
     def __init__(
         self,

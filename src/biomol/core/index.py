@@ -75,11 +75,22 @@ class IndexTable:
     """
 
     atom_to_res: NDArray[np.integer]
+    """1D array mapping each atom index to its parent residue index."""
+
     res_to_chain: NDArray[np.integer]
+    """1D array mapping each residue index to its parent chain index."""
+
     res_atom_indptr: NDArray[np.integer]
+    """CSR index pointer array for residues to atoms mapping."""
+
     res_atom_indices: NDArray[np.integer]
+    """CSR indices array for residues to atoms mapping."""
+
     chain_res_indptr: NDArray[np.integer]
+    """CSR index pointer array for chains to residues mapping."""
+
     chain_res_indices: NDArray[np.integer]
+    """CSR indices array for chains to residues mapping."""
 
     _converter_table: ClassVar[dict[tuple[StructureLevel, StructureLevel], str]] = {
         (StructureLevel.ATOM, StructureLevel.RESIDUE): "atoms_to_residues",
