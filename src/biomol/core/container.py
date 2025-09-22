@@ -1,5 +1,5 @@
 from collections.abc import Mapping
-from dataclasses import asdict, dataclass, replace
+from dataclasses import asdict, dataclass, field, replace
 
 import numpy as np
 from numpy.typing import NDArray
@@ -18,16 +18,16 @@ class FeatureContainer:
     Parameters
     ----------
     node_features: Mapping[str, NodeFeature]
-        A mapping of feature names to node features.
-    edge_features: Mapping[str, EdgeFeature]
-        A mapping of feature names to edge features.
+        A mapping of feature names to node features. Must contain at least one feature.
+    edge_features: Mapping[str, EdgeFeature], optional
+        A mapping of feature names to edge features. Default is an empty dictionary.
     """
 
     node_features: Mapping[str, NodeFeature]
     """A mapping of feature names to node features."""
 
-    edge_features: Mapping[str, EdgeFeature]
-    """A mapping of feature names to node features."""
+    edge_features: Mapping[str, EdgeFeature] = field(default_factory=dict)
+    """A mapping of feature names to edge features."""
 
     def __post_init__(self) -> None:  # noqa: D105
         self._check_node_lengths()
