@@ -8,11 +8,19 @@ scientific computing.
 
 from __future__ import annotations
 
+from importlib.metadata import PackageNotFoundError, version
+
+try:
+    __version__ = version(__name__)
+except PackageNotFoundError:
+    __version__ = "unknown"
+
 from . import enums, exceptions
 from .core import BioMol
 
 __all__ = [
     "BioMol",
+    "__version__",
     "enums",
     "exceptions",
 ]

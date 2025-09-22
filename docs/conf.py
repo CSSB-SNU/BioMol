@@ -7,6 +7,7 @@
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
 import os, sys
+import biomol
 
 sys.path.insert(0, os.path.abspath("../src"))
 
@@ -14,7 +15,7 @@ sys.path.insert(0, os.path.abspath("../src"))
 project = "BioMol"
 copyright = "2025, Lee Howon"
 author = "Lee Howon"
-release = "0.2.0"
+release = biomol.__version__
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
@@ -28,6 +29,7 @@ extensions = [
     "sphinx_copybutton",
     "sphinx_design",
     "numpydoc",
+    "myst_nb",
 ]
 
 
