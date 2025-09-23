@@ -28,6 +28,7 @@ extensions = [
     "sphinx.ext.napoleon",
     "sphinx_copybutton",
     "sphinx_design",
+    "sphinx_favicon",
     "numpydoc",
     "myst_nb",
 ]
@@ -73,3 +74,16 @@ html_theme_options = {
         "image_dark": "_static/logo-dark.svg",
     },
 }
+
+# favicons
+# reference: https://github.com/pydata/pydata-sphinx-theme/blob/main/docs/conf.py
+favicons = [
+    # generic icons compatible with most browsers
+    "favicon-32x32.png",
+    "favicon-16x16.png",
+    # chrome specific
+    "android-chrome-192x192.png",
+    "android-chrome-512x512.png",
+    # apple icons
+    {"rel": "apple-touch-icon", "href": "apple-touch-icon.png"},
+]

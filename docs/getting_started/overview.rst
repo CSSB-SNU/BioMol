@@ -44,3 +44,8 @@ Also, BioMol supports NumPy-style operations for efficient data manipulation.
    chain_a_ca = chain_a_carbons[chain_a_carbons.name == "CA"]
    first_five_ca = chain_a_ca[:5]
 
+
+.. seealso::
+
+   :doc:`../concepts/biomol/index`
+      Dive deeper into the core concepts of BioMol, including Views and Features.
