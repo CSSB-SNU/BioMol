@@ -7,6 +7,17 @@ from biomol.io.instructions.cif_instructions import (
     single_value_instruction,
     get_smaller_dict,
     merge_dict,
+    parse_chem_comp,
+    parse_scheme_dict,
+    parse_entity_dict,
+    remove_unknown_chain,
+    remove_unknown_from_struct_conn,
+    attach_entity,
+    rearrange_atom_site_dict,
+    build_full_length_asym_dict,
+    parse_assembly_dict,
+    get_struct_oper,
+    build_assembly_dict,
 )
 
 """Build a CIF-specific Cooker.
@@ -63,6 +74,7 @@ cif_recipe.add(
 )
 
 # 2. Merge Instructions
+
 cif_recipe.add(
     targets=[
         (("_chem_comp_dict", dict),),
@@ -72,6 +84,16 @@ cif_recipe.add(
         (("_pdbx_nonpoly_scheme_dict", dict | None),),
         (("_pdbx_branch_scheme_dict", dict | None),),
         (("_atom_site_dict", dict),),
+        (("_entity_dict", dict),),
+        (("_entity_poly_dict", dict | None),),
+        (("_entity_poly_seq_dict", dict | None),),
+        (("_entity_nonpoly_dict", dict | None),),
+        (("_entity_branch_descriptor_dict", dict | None),),
+        (("_entity_branch_link_dict", dict | None),),
+        (("_entity_branch_list_dict", dict | None),),
+        (("_struct_oper_dict", dict | None),),
+        (("_struct_assembly_gen_dict", dict | None),),
+        (("_struct_conn_dict", dict | None),),
     ],
     instruction=get_smaller_dict(dtype=str),
     inputs=[
@@ -90,6 +112,8 @@ cif_recipe.add(
                     "atom_id",
                     "type_symbol",
                     "charge",
+                    "pdbx_aromatic_flag",
+                    "pdbx_stereo_config",
                 ],
             },
         },
@@ -114,7 +138,8 @@ cif_recipe.add(
                     "entity_id",
                     "seq_id",
                     "mon_id",
-                    "pdb_seq_numpdb_ins_code",
+                    "pdb_seq_num",
+                    "pdb_ins_code",
                     "hetero",
                 ],
             },
@@ -151,38 +176,331 @@ cif_recipe.add(
                     "label_atom_id",
                     "type_symbol",
                     "label_comp_id",
-                    "label_entity_id",
                     "auth_asym_id",
+                ],
+            },
+        },
+        {
+            "kwargs": {"cif_raw_dict": ("_entity", str | None)},
+            "params": {
+                "tied_to": "id",
+                "columns": ["type"],
+            },
+        },
+        {
+            "kwargs": {"cif_raw_dict": ("_entity_poly", str | None)},
+            "params": {
+                "tied_to": "entity_id",
+                "columns": [
+                    "type",
+                    "pdbx_seq_one_letter_code_can",
+                    "pdbx_seq_one_letter_code",
+                ],
+            },
+        },
+        {
+            "kwargs": {"cif_raw_dict": ("_entity_poly_seq", str | None)},
+            "params": {
+                "tied_to": "entity_id",
+                "columns": ["num", "mon_id", "hetero"],
+            },
+        },
+        {
+            "kwargs": {"cif_raw_dict": ("_pdbx_entity_nonpoly", str | None)},
+            "params": {
+                "tied_to": "entity_id",
+                "columns": ["comp_id"],
+            },
+        },
+        {
+            "kwargs": {"cif_raw_dict": ("_pdbx_entity_branch_descriptor", str | None)},
+            "params": {
+                "tied_to": "entity_id",
+                "columns": ["descriptor"],
+            },
+        },
+        {
+            "kwargs": {"cif_raw_dict": ("_pdbx_entity_branch_link", str | None)},
+            "params": {
+                "tied_to": "entity_id",
+                "columns": [
+                    "comp_id_1",
+                    "comp_id_2",
+                    "atom_id_1",
+                    "atom_id_2",
+                    "leaving_atom_id_1",
+                    "leaving_atom_id_2",
+                    "value_order",
+                    "entity_branch_list_num_1",
+                    "entity_branch_list_num_2",
+                ],
+            },
+        },
+        {
+            "kwargs": {"cif_raw_dict": ("_pdbx_entity_branch_list", str | None)},
+            "params": {
+                "tied_to": "entity_id",
+                "columns": ["num", "comp_id", "hetero"],
+            },
+        },
+        {
+            "kwargs": {"cif_raw_dict": ("_pdbx_struct_oper_list", str | None)},
+            "params": {
+                "tied_to": "id",
+                "columns": [
+                    "matrix[1][1]",
+                    "matrix[1][2]",
+                    "matrix[1][3]",
+                    "matrix[2][1]",
+                    "matrix[2][2]",
+                    "matrix[2][3]",
+                    "matrix[3][1]",
+                    "matrix[3][2]",
+                    "matrix[3][3]",
+                    "vector[1]",
+                    "vector[2]",
+                    "vector[3]",
+                ],
+            },
+        },
+        {
+            "kwargs": {"cif_raw_dict": ("_pdbx_struct_assembly_gen", str | None)},
+            "params": {
+                "tied_to": "assembly_id",
+                "columns": [
+                    "oper_expression",
+                    "asym_id_list",
+                ],
+            },
+        },
+        {
+            "kwargs": {"cif_raw_dict": ("_struct_conn", str | None)},
+            "params": {
+                "tied_to": ("ptnr1_label_asym_id", "ptnr2_label_asym_id"),
+                "columns": [
+                    "conn_type_id",
+                    "pdbx_ptnr1_label_alt_id",
+                    "pdbx_ptnr2_label_alt_id",
+                    "ptnr1_label_comp_id",
+                    "ptnr2_label_comp_id",
+                    "ptnr1_auth_seq_id",
+                    "ptnr2_auth_seq_id",
+                    "pdbx_ptnr1_PDB_ins_code",
+                    "pdbx_ptnr2_PDB_ins_code",
+                    "ptnr1_label_atom_id",
+                    "ptnr2_label_atom_id",
+                    "pdbx_value_order",
                 ],
             },
         },
     ],
 )
 
-# remove unl from atom site dict
 
 cif_recipe.add(
     targets=(("chem_comp_dict", dict),),
+    instruction=parse_chem_comp(),
+    inputs={
+        "kwargs": {
+            "chem_comp_dict": ("_chem_comp_dict", dict | None),
+            "chem_comp_atom_dict": ("_chem_comp_atom_dict", dict | None),
+            "chem_comp_bond_dict": ("_chem_comp_bond_dict", dict | None),
+        },
+        "params": {
+            "remove_hydrogen": True,
+        },
+    },
+)
+
+
+cif_recipe.add(
+    targets=(("_entity_polymer", dict),),
     instruction=merge_dict(),
     inputs={
         "args": (
-            ("_chem_comp_dict", dict),
-            ("_chem_comp_atom_dict", dict),
-            ("_chem_comp_bond_dict", dict),
+            ("_entity_poly_dict", dict | None),
+            ("_entity_poly_seq_dict", dict | None),
+        ),
+    },
+)
+cif_recipe.add(
+    targets=(("_entity_branched", dict | None),),
+    instruction=merge_dict(),
+    inputs={
+        "args": (
+            ("_entity_branch_descriptor_dict", dict | None),
+            ("_entity_branch_link_dict", dict | None),
+            ("_entity_branch_list_dict", dict | None),
         ),
     },
 )
 
+
 cif_recipe.add(
-    targets=(("asym_dict", dict),),
+    targets=[
+        (("entity_polymer", dict | None),),
+        (("entity_nonpolymer", dict | None),),
+        (("entity_branched", dict | None),),
+    ],
+    instruction=parse_entity_dict(),
+    inputs=[
+        {
+            "kwargs": {"entity_dict": ("_entity_polymer", dict | None)},
+        },
+        {
+            "kwargs": {"entity_dict": ("_entity_nonpoly_dict", dict | None)},
+        },
+        {
+            "kwargs": {"entity_dict": ("_entity_branched", dict | None)},
+        },
+    ],
+)
+
+cif_recipe.add(
+    targets=(("entity_dict", dict),),
     instruction=merge_dict(),
     inputs={
         "args": (
-            ("_pdbx_poly_seq_scheme_dict", dict | None),
-            ("_pdbx_nonpoly_scheme_dict", dict | None),
-            ("_pdbx_branch_scheme_dict", dict | None),
-            ("_atom_site_dict", dict | None),
+            ("_entity_dict", dict),
+            ("entity_polymer", dict | None),
+            ("entity_nonpolymer", dict | None),
+            ("entity_branched", dict | None),
         ),
+    },
+)
+
+
+cif_recipe.add(
+    targets=[
+        (("_poly_seq_scheme", dict | None),),
+        (("_nonpoly_scheme", dict | None),),
+        (("_branch_scheme", dict | None),),
+    ],
+    instruction=parse_scheme_dict(),
+    inputs=[
+        {
+            "kwargs": {"asym_scheme_dict": ("_pdbx_poly_seq_scheme_dict", dict | None)},
+        },
+        {
+            "kwargs": {"asym_scheme_dict": ("_pdbx_nonpoly_scheme_dict", dict | None)},
+        },
+        {
+            "kwargs": {"asym_scheme_dict": ("_pdbx_branch_scheme_dict", dict | None)},
+        },
+    ],
+)
+
+
+cif_recipe.add(
+    targets=(("_asym_scheme_dict", dict),),
+    instruction=merge_dict(),
+    inputs={
+        "args": (
+            ("_poly_seq_scheme", dict | None),
+            ("_nonpoly_scheme", dict | None),
+            ("_branch_scheme", dict | None),
+        ),
+    },
+)
+
+
+cif_recipe.add(
+    targets=(("_atom_site_wo_unknown_dict", dict | None),),
+    instruction=remove_unknown_chain(),
+    inputs={
+        "args": (("_atom_site_dict", dict | None),),
+    },
+)
+
+cif_recipe.add(
+    targets=(("_struct_conn_wo_unknown_dict", dict | None),),
+    instruction=remove_unknown_from_struct_conn(),
+    inputs={
+        "args": (("_struct_conn_dict", dict | None),),
+    },
+)
+
+cif_recipe.add(
+    targets=(("model_alt_atom_site_dict", dict | None),),
+    instruction=rearrange_atom_site_dict(),
+    inputs={
+        "kwargs": {
+            "atom_site_dict": ("_atom_site_wo_unknown_dict", dict | None),
+        },
+    },
+)
+
+# TODOs
+# 3. attach chem comp to atom site dict
+# 4. build biomol
+
+
+cif_recipe.add(
+    targets=(("_asym_scheme_entity_dict", dict | None),),
+    instruction=attach_entity(),
+    inputs={
+        "kwargs": {
+            "asym_dict": ("_asym_scheme_dict", dict | None),
+            "entity_dict": ("entity_dict", dict | None),
+        },
+    },
+)
+
+
+cif_recipe.add(
+    targets=(("_asym_dict", dict),),
+    instruction=merge_dict(),
+    inputs={
+        "args": (
+            ("_asym_scheme_entity_dict", dict | None),
+            ("model_alt_atom_site_dict", dict | None),
+        ),
+    },
+)
+
+
+cif_recipe.add(
+    targets=(("asym_dict", dict),),
+    instruction=build_full_length_asym_dict(),
+    inputs={
+        "kwargs": {
+            "asym_dict": ("_asym_dict", dict | None),
+            "chem_comp_dict": ("chem_comp_dict", dict | None),
+        },
+    },
+)
+
+
+cif_recipe.add(
+    targets=(("struct_assembly_dict", dict | None),),
+    instruction=parse_assembly_dict(),
+    inputs={
+        "kwargs": {
+            "struct_assembly_gen_dict": ("_struct_assembly_gen_dict", dict | None)
+        },
+    },
+)
+
+cif_recipe.add(
+    targets=(("struct_oper_dict", dict | None),),
+    instruction=get_struct_oper(),
+    inputs={
+        "kwargs": {
+            "struct_oper_dict": ("_struct_oper_dict", dict),
+        },
+    },
+)
+
+cif_recipe.add(
+    targets=(("assembly_dict", dict | None),),
+    instruction=build_assembly_dict(),
+    inputs={
+        "kwargs": {
+            "asym_dict": ("asym_dict", dict),
+            "struct_assembly_dict": ("struct_assembly_dict", dict | None),
+            "struct_oper_dict": ("struct_oper_dict", dict),
+            "struct_conn_dict": ("_struct_conn_wo_unknown_dict", dict | None),
+        },
     },
 )
 
