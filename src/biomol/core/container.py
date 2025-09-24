@@ -1,12 +1,10 @@
 from collections.abc import Mapping
-from dataclasses import asdict, dataclass, replace
-from typing import ClassVar
+from dataclasses import asdict, dataclass, field, replace
 
 import numpy as np
 from numpy.typing import NDArray
 from typing_extensions import Self
 
-from biomol.enums import StructureLevel
 from biomol.exceptions import FeatureKeyError, IndexMismatchError, IndexOutOfBoundsError
 
 from .feature import EdgeFeature, Feature, NodeFeature
@@ -15,12 +13,21 @@ from .types import FeatureContainerDict
 
 @dataclass(frozen=True, slots=True)
 class FeatureContainer:
-    """Container for holding either node or edge features."""
+    """Container for holding either node or edge features.
+
+    Parameters
+    ----------
+    node_features: Mapping[str, NodeFeature]
+        A mapping of feature names to node features. Must contain at least one feature.
+    edge_features: Mapping[str, EdgeFeature], optional
+        A mapping of feature names to edge features. Default is an empty dictionary.
+    """
 
     node_features: Mapping[str, NodeFeature]
-    edge_features: Mapping[str, EdgeFeature]
+    """A mapping of feature names to node features."""
 
-    level: ClassVar[StructureLevel]
+    edge_features: Mapping[str, EdgeFeature] = field(default_factory=dict)
+    """A mapping of feature names to edge features."""
 
     def __post_init__(self) -> None:  # noqa: D105
         self._check_node_lengths()
@@ -114,24 +121,3 @@ class FeatureContainer:
             duplicate_keys = {key for key in self.keys if self.keys.count(key) > 1}
             msg = f"Duplicate feature keys found in features: {duplicate_keys}"
             raise FeatureKeyError(msg)
-
-
-@dataclass(frozen=True, slots=True)
-class AtomContainer(FeatureContainer):
-    """Container for atom-level features."""
-
-    level: ClassVar[StructureLevel] = StructureLevel.ATOM
-
-
-@dataclass(frozen=True, slots=True)
-class ResidueContainer(FeatureContainer):
-    """Container for residue-level features."""
-
-    level: ClassVar[StructureLevel] = StructureLevel.RESIDUE
-
-
-@dataclass(frozen=True, slots=True)
-class ChainContainer(FeatureContainer):
-    """Container for chain-level features."""
-
-    level: ClassVar[StructureLevel] = StructureLevel.CHAIN

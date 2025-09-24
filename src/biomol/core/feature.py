@@ -43,7 +43,10 @@ class Feature(ABC, NDArrayOperatorsMixin):
     """
 
     value: np.ndarray
+    """The underlying numpy array representing the feature data."""
+
     description: str | None = None
+    """An optional description of the feature."""
 
     __array_priority__ = 1000
 
@@ -163,7 +166,15 @@ class Feature(ABC, NDArrayOperatorsMixin):
 
 @dataclass(frozen=True, slots=True, kw_only=True, eq=False)
 class NodeFeature(Feature):
-    """A feature associated with nodes in a structure."""
+    """A feature associated with nodes in a structure.
+
+    Parameters
+    ----------
+    value: np.ndarray
+        A numpy array where the first dimension corresponds to the nodes.
+    description: str | None
+        An optional description of the feature.
+    """
 
     @override
     def crop(self, indices: NDArray[np.integer]) -> Self:
@@ -176,10 +187,25 @@ class NodeFeature(Feature):
 
 @dataclass(frozen=True, slots=True, kw_only=True, eq=False)
 class EdgeFeature(Feature):
-    """A feature associated with edges (pairs of nodes) in a structure."""
+    """A feature associated with edges (pairs of nodes) in a structure.
+
+    Parameters
+    ----------
+    value: np.ndarray
+        A numpy array where the first dimension corresponds to the edges.
+    description: str | None
+        An optional description of the feature.
+    src_indices: NDArray[np.integer]
+        A 1D numpy array of source node indices for each edge.
+    dst_indices: NDArray[np.integer]
+        A 1D numpy array of destination node indices for each edge.
+    """
 
     src_indices: NDArray[np.integer]
+    """Source node indices of the edges."""
+
     dst_indices: NDArray[np.integer]
+    """Destination node indices of the edges."""
 
     def __post_init__(self) -> None:  # noqa: D105
         if not (self.src_indices.ndim == 1 and self.dst_indices.ndim == 1):

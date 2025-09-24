@@ -3,28 +3,17 @@
 from __future__ import annotations
 
 from .biomol import BioMol
-from .container import (
-    AtomContainer,
-    ChainContainer,
-    FeatureContainer,
-    ResidueContainer,
-)
+from .container import FeatureContainer
 from .feature import EdgeFeature, Feature, NodeFeature
 from .index import IndexTable
-from .view import AtomView, ChainView, ResidueView, ViewProtocol
+from .view import ViewProtocol
 
 __all__ = [
-    "AtomContainer",
-    "AtomView",
     "BioMol",
-    "ChainContainer",
-    "ChainView",
     "EdgeFeature",
     "Feature",
     "FeatureContainer",
     "IndexTable",
     "NodeFeature",
-    "ResidueContainer",
-    "ResidueView",
     "ViewProtocol",
 ]

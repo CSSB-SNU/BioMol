@@ -1,105 +1,37 @@
-## **⚠️ Warning: This library is in **beta** version. Use at your own risk.**
+# BioMol
 
-## Introduction
+<p align="center">
+  <img src="docs/_static/logo-light.svg" alt="BioMol Logo" width="80%">
+</p>
 
-`BioMol` is a library for loading structural data in mmCIF (from RCSB) or PDB formats (predicted structures).
+BioMol is a molecular data engine that provides PyMOL-like selections and NumPy-style operations, designed for machine learning and large-scale molecular analysis.
 
-- Based on Chemical Component Dictionary (CCD)
-- CIF files must be obtained from the RCSB server
-- Loading raw CIF can be slow (e.g., viral capsids); use precomputed LMDB for faster access
-- MSA loading implemented
-- Template loading not yet implemented (straightforward, but templates are not pre-fetched)
-- Custom data loaders are in development (often users will implement their own loader)
+For more details, see the [documentation](https://biomol.readthedocs.io/en/latest/index.html).
 
-## Clustering
+> [!WARNING]
+> BioMol is under active development. The API may change without notice.
 
-### Structure-based Clustering
+## Installation
 
-- Construct protein graphs based on contact maps
-- Contact definition: min(Cα–Cα) ≤ 8.0 Å
-- Two graphs are in the same split if they share at least one node
+BioMol supports Python 3.10 and above.
 
-### Sequence-based Clustering
+### Install from GitHub
 
-- MMseqs2 settings: sequence identity ≥ 30%, coverage ≥ 80% (`covmode 0`, `clustmode 1`)
-- For antibodies (based on SAbDab):
-  - If antigen present and H3 loop exists: cluster by H3 loop sequence identity ≥ 90%
-  - If no H3 loop: cluster by L3 loop sequence identity ≥ 90% 
-
-## Usage
-
-Install via pip:
+BioMol can be installed directly from GitHub using pip:
 
 ```bash
 pip install git+https://github.com/CSSB-SNU/BioMol.git
 ```
 
-`BioMol` is designed for machine learning training efficiency, not just data parsing. It relies on precomputed databases for speed.
+> [!Note]
+> Currently, BioMol does not support PyPI installations because it's under active development. We plan to release it on PyPI once the API stabilizes.
 
-Configure paths before use:
+### Install from Source
+
+BioMol can be installed from source using [pixi](https://pixi.sh/latest/), a modern Python package manager.
 
 ```bash
-biomol configure --config-file datapath.json
+git clone https://github.com/CSSB-SNU/BioMol
+cd BioMol
+pixi install
 ```
-
-- `datapath.json` should specify `DB_path` and `CCD_path`
-- A tutorial for database construction will be provided separately
-
-## Implemented Functions
-
-- `biomol.choose(assembly_id, model_id, alt_id)`: select specific assembly, model, and alternate location
-- `biomol.crop_and_load_msa(...)`: implements AF-Multimer cropping method and loads MSA (future versions will split this into separate functions)
-- `biomol.structure.to_mmcif(path)`: save current structure to mmCIF
-- `print(biomol.structure)`: display key information in a human-readable format
-
-## Planned Features
-
-- `biomol.help`: interactive help for BioMol
-- enhanced `print(biomol)`
-- `biomol.visualize`: visualize MSA and cropped regions
-- `biomol.load_templates`
-- loading from FASTA
-- `TMscore(b1, b2)` or `b1.TMscore(b2)` for structural similarity
-- `lddt(b1, b2)` or `b1.lddt(b2)` + additional comparison metrics
-- `run_colabfold(b1)`, `run_ESMFold(b1)`, `run_AF3(b1)`
-- all-atom clustering
-- ligand tokenizer based redefinition
-
-...and more!
-
-## Example Code
-
-```python
-from BioMol.BioMol import BioMol
-
-if __name__ == "__main__":
-    # Automatically generate all biological assemblies
-    biomol = BioMol(
-        pdb_ID="9dw6",       # lowercase
-        mol_types=["protein"],   # only protein
-    )
-    # Alternative initialization:
-    # biomol = BioMol(
-    #     cif="9dw6.cif",    # must be downloaded from PDB
-    #     mol_types=["protein","nucleic_acid","ligand"],
-    #     remove_signal_peptide=True,
-    #     use_lmdb=False,      # required for NA or ligand loading
-    # )
-
-    # Select assembly, model, and alt_id
-    biomol.choose("1", "1", ".")
-
-    # Save loaded structure to mmCIF
-    biomol.structure.to_mmcif("loaded_9dw6.cif")
-
-    # Crop and load MSA
-    biomol.crop_and_load_msa(
-        chain_bias=('A_1',),
-        interaction_bias=('A_1','C_1'),
-        params={
-            "method_prob": [0.0, 0.0, 1.0],  # contiguous, spatial, interface
-            "crop_size": 384,
-        }
-    )
-```
-

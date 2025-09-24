@@ -39,14 +39,58 @@ class IndexTable:
 
     This class stores forward parent mappings and reverse CSR mappings to
     efficiently move between atoms, residues, and chains.
+
+    Parameters
+    ----------
+    atom_to_res : NDArray[np.integer]
+        1D array mapping each atom index to its parent residue index.
+    res_to_chain : NDArray[np.integer]
+        1D array mapping each residue index to its parent chain index.
+    res_atom_indptr : NDArray[np.integer]
+        CSR index pointer array for residues to atoms mapping.
+    res_atom_indices : NDArray[np.integer]
+        CSR indices array for residues to atoms mapping.
+    chain_res_indptr : NDArray[np.integer]
+        CSR index pointer array for chains to residues mapping.
+    chain_res_indices : NDArray[np.integer]
+        CSR indices array for chains to residues mapping.
+
+    Examples
+    --------
+    .. code-block:: python
+
+        >>> table = IndexTable.from_parents(
+        ...     atom_to_res=np.array([0, 0, 1, 1, 2]),
+        ...     res_to_chain=np.array([0, 0, 1]),
+        ... )
+
+        >>> table.atoms_to_residues(np.array([0, 2, 4]))
+        array([0, 1, 2])
+
+        >>> table.residues_to_chains(np.array([0, 2]))
+        array([0, 1])
+
+        >>> table.chains_to_residues(np.array([0, 1]))
+        array([0, 1, 2])
     """
 
     atom_to_res: NDArray[np.integer]
+    """1D array mapping each atom index to its parent residue index."""
+
     res_to_chain: NDArray[np.integer]
+    """1D array mapping each residue index to its parent chain index."""
+
     res_atom_indptr: NDArray[np.integer]
+    """CSR index pointer array for residues to atoms mapping."""
+
     res_atom_indices: NDArray[np.integer]
+    """CSR indices array for residues to atoms mapping."""
+
     chain_res_indptr: NDArray[np.integer]
+    """CSR index pointer array for chains to residues mapping."""
+
     chain_res_indices: NDArray[np.integer]
+    """CSR indices array for chains to residues mapping."""
 
     _converter_table: ClassVar[dict[tuple[StructureLevel, StructureLevel], str]] = {
         (StructureLevel.ATOM, StructureLevel.RESIDUE): "atoms_to_residues",

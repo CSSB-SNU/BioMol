@@ -5,3 +5,7 @@ BioMol/configs/datapath.json
 # pixi environments
 .pixi
 *.egg-info
+
+
+docs/_build/
+docs/api/generated/
