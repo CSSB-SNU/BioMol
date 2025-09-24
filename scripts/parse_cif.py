@@ -50,6 +50,8 @@ def main() -> None:
     cooker = Cooker(parse_cache=parse_cache, recipebook=recipe_path)
     cooker.prep(cif_data, fields=list(cif_data.keys()))
     cooker.cook()
+    assembly_dict = cooker.serve(targets="assembly_dict")
+    # cooker.parse_cache._storage['_pdbx_poly_seq_scheme_dict']['A'].keys()
     breakpoint()
 
 

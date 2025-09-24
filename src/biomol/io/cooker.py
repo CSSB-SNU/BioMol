@@ -138,9 +138,11 @@ class Cooker:
             if target.name not in self.parse_cache:
                 resolve(target.name, target.type)
 
-    def serve(self, targets: list[str]) -> dict[str, Any]:
+    def serve(self, targets: list[str] | str) -> dict[str, Any]:
         """Retrieve computed targets."""
         results = {}
+        if isinstance(targets, str):
+            return self.parse_cache[targets]
         for out in targets:
             if out in self.parse_cache:
                 results[out] = self.parse_cache[out]
