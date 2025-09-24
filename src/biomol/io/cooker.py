@@ -60,13 +60,6 @@ class Cooker:
                 msg = f"Field {field} not found in data_dict."
                 raise ValueError(msg)
 
-    def _is_missing_and_allowed(self, var_name: str, recipe: Recipe) -> bool:
-        return (
-            var_name not in self.parse_cache
-            and var_name not in self.recipebook
-            and recipe.none_if_missing
-        )
-
     def _expand_wildcard_args(self, pattern: str) -> list[tuple[str, Any]]:
         """
         Expand wildcard-based arguments by matching keys from the cache.
@@ -102,10 +95,7 @@ class Cooker:
             ):
                 return None
             visited.add(target_name)
-            try:
-                recipe = self.recipebook[target_name]
-            except KeyError:
-                breakpoint()
+            recipe = self.recipebook[target_name]
             resolved_args: list[Any] = []
             for var in recipe.inputs.args:
                 if any(ch in var.name for ch in ["*", "?", "["]):  # detect glob pattern
