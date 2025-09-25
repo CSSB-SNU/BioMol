@@ -40,7 +40,7 @@ def dot_transform(key: str) -> list[str]:
 
 
 def parse(
-    ccd_db_path: Path,
+    ccd_db_path: Path | None,
     recipe_path: Path,
     cif_path: Path,
     targets: list[str] | None = None,
@@ -53,30 +53,3 @@ def parse(
     cooker.prep(cif_data, fields=list(cif_data.keys()))
     cooker.cook()
     return cooker.serve(targets=targets)
-
-
-def main() -> None:
-    if len(sys.argv) < 4:
-        print(
-            "Usage: python parse_cif.py <CCD_DB> <recipe_path> <path_to_cif> <target1> <target2> ..."
-        )
-        sys.exit(1)
-
-    ccd_db_path = Path(sys.argv[1].strip())
-    recipe_path = Path(sys.argv[2].strip())
-    cif_path = Path(sys.argv[3].strip())
-    targets = [arg.strip() for arg in sys.argv[4:]]
-    if len(targets) == 0:
-        targets = None
-    if not recipe_path.is_file():
-        print(f"Error: Recipe file '{recipe_path}' does not exist.")
-        sys.exit(1)
-    if not cif_path.is_file():
-        print(f"Error: CIF file '{cif_path}' does not exist.")
-        sys.exit(1)
-    result = parse(ccd_db_path, recipe_path, cif_path, targets=targets)
-    breakpoint()
-
-
-if __name__ == "__main__":
-    main()

@@ -4,6 +4,7 @@ from typing import TypeVar
 
 import numpy as np
 from numpy.typing import NDArray
+from pathlib import Path
 
 from biomol.core.container import (
     AtomContainer,
@@ -11,6 +12,7 @@ from biomol.core.container import (
     FeatureContainer,
     ResidueContainer,
 )
+from biomol.db.lmdb_handler import read_lmdb
 from biomol.core.feature import EdgeFeature, NodeFeature
 from biomol.core.index import IndexTable
 from biomol.core.utils import concat_containers
@@ -38,6 +40,33 @@ def single_value_instruction(
             msg = f"Expected single value, got {len(formatted_data)}"
             raise ValueError(msg)
         return formatted_data[0]
+
+    return _worker
+
+
+def extract_single(*args: str | None) -> float:
+    """Extract a single non-None value from the inputs."""
+    none_mask = [a is None for a in args]
+    none_mask = np.array(none_mask)
+    if np.all(none_mask):
+        msg = "All inputs are None"
+        raise ValueError(msg)
+    if np.sum(none_mask) > 1:
+        msg = "More than one input is not None"
+        raise ValueError(msg)
+    valid_idx = np.where(~none_mask)[0].item()
+    return args[valid_idx][0]
+
+
+def key_stack() -> Callable[..., type[InputType]]:
+    """
+    Return a configured instruction function that maps fields to node features.
+    """
+
+    def _worker(
+        **kwargs: list[InputType] | NDArray,
+    ) -> type[InputType]:
+        return kwargs
 
     return _worker
 
@@ -164,9 +193,14 @@ def parse_chem_comp() -> Callable[..., dict[str, FeatureContainer]]:
 
         atom_id = chem_comp_atom_dict["atom_id"][atom_mask].astype(str)
         element = elements[atom_mask].astype(str)
-        # charge TODO
         atom_aromatic = chem_comp_atom_dict["pdbx_aromatic_flag"][atom_mask].astype(str)
         atom_stereo = chem_comp_atom_dict["pdbx_stereo_config"][atom_mask].astype(str)
+
+        charge = chem_comp_atom_dict.get("charge", None)
+        model_x = chem_comp_atom_dict.get("model_Cartn_x", None)
+        model_y = chem_comp_atom_dict.get("model_Cartn_y", None)
+        model_z = chem_comp_atom_dict.get("model_Cartn_z", None)
+
         atom_id = NodeFeature(
             value=atom_id,
             description="atom id of the chemical component",
@@ -184,33 +218,86 @@ def parse_chem_comp() -> Callable[..., dict[str, FeatureContainer]]:
             description="stereochemistry flag of the atom",
         )
 
+        atom_node_features = {
+            "atom_id": atom_id,
+            "element": element,
+            "atom_aromatic": atom_aromatic,
+            "atom_stereo": atom_stereo,
+        }
+
+        if charge is not None:
+            charge = NodeFeature(
+                value=charge[atom_mask].astype(str),
+                description="formal charge of the atom",
+            )
+            atom_node_features["charge"] = charge
+        if model_x is not None:
+            xyz = np.stack(
+                [
+                    model_x[atom_mask].astype(str),
+                    model_y[atom_mask].astype(str),
+                    model_z[atom_mask].astype(str),
+                ],
+                axis=-1,
+            )
+            model_xyz = NodeFeature(
+                value=xyz,
+                description="Cartesian coordinates of the atom",
+            )
+            atom_node_features["model_xyz"] = model_xyz
+
         # handle edge features
-        src, dst = chem_comp_bond_dict["atom_id_1"], chem_comp_bond_dict["atom_id_2"]
-        order = np.argsort(atom_id.value)
+        if chem_comp_bond_dict is not None:
+            src, dst = (
+                chem_comp_bond_dict["atom_id_1"],
+                chem_comp_bond_dict["atom_id_2"],
+            )
+            bond_type = chem_comp_bond_dict["value_order"].astype(str)
+            bond_stereo = chem_comp_bond_dict["pdbx_stereo_config"].astype(str)
+            bond_aromatic = chem_comp_bond_dict["pdbx_aromatic_flag"].astype(str)
 
-        src_indices = order[np.searchsorted(atom_id.value, src, sorter=order)]
-        dst_indices = order[np.searchsorted(atom_id.value, dst, sorter=order)]
+            order = np.argsort(atom_id.value)
 
-        bond_type = EdgeFeature(
-            value=chem_comp_bond_dict["value_order"].astype(str),
-            src_indices=src_indices,
-            dst_indices=dst_indices,
-            description="bond type of the chemical component",
-        )
+            # mask out src, dst that are not in atom_id (e.g. hydrogen if removed)
+            valid_src_mask = np.isin(src, atom_id.value)
+            valid_dst_mask = np.isin(dst, atom_id.value)
+            valid_mask = valid_src_mask & valid_dst_mask
+            src = src[valid_mask]
+            dst = dst[valid_mask]
+            bond_type = bond_type[valid_mask]
+            bond_stereo = bond_stereo[valid_mask]
+            bond_aromatic = bond_aromatic[valid_mask]
 
-        bond_aromatic = EdgeFeature(
-            value=chem_comp_bond_dict["pdbx_aromatic_flag"].astype(str),
-            src_indices=src_indices,
-            dst_indices=dst_indices,
-            description="aromatic flag of the bond",
-        )
+            src_indices = order[np.searchsorted(atom_id.value, src, sorter=order)]
+            dst_indices = order[np.searchsorted(atom_id.value, dst, sorter=order)]
 
-        bond_stereo = EdgeFeature(
-            value=chem_comp_bond_dict["pdbx_stereo_config"].astype(str),
-            src_indices=src_indices,
-            dst_indices=dst_indices,
-            description="stereochemistry flag of the bond",
-        )
+            bond_type = EdgeFeature(
+                value=bond_type,
+                src_indices=src_indices,
+                dst_indices=dst_indices,
+                description="bond type of the chemical component",
+            )
+
+            bond_aromatic = EdgeFeature(
+                value=bond_aromatic,
+                src_indices=src_indices,
+                dst_indices=dst_indices,
+                description="aromatic flag of the bond",
+            )
+
+            bond_stereo = EdgeFeature(
+                value=bond_stereo,
+                src_indices=src_indices,
+                dst_indices=dst_indices,
+                description="stereochemistry flag of the bond",
+            )
+            edge_features = {
+                "bond_type": bond_type,
+                "bond_aromatic": bond_aromatic,
+                "bond_stereo": bond_stereo,
+            }
+        else:
+            edge_features = {}
 
         residue_container = ResidueContainer(
             node_features={
@@ -221,17 +308,8 @@ def parse_chem_comp() -> Callable[..., dict[str, FeatureContainer]]:
         )
 
         atom_container = AtomContainer(
-            node_features={
-                "atom_id": atom_id,
-                "element": element,
-                "atom_aromatic": atom_aromatic,
-                "atom_stereo": atom_stereo,
-            },
-            edge_features={
-                "bond_type": bond_type,
-                "bond_aromatic": bond_aromatic,
-                "bond_stereo": bond_stereo,
-            },
+            node_features=atom_node_features,
+            edge_features=edge_features,
         )
 
         return {
@@ -244,18 +322,81 @@ def parse_chem_comp() -> Callable[..., dict[str, FeatureContainer]]:
         chem_comp_atom_dict: dict[str, dict[str, NDArray]] | None,
         chem_comp_bond_dict: dict[str, dict[str, NDArray]] | None,
         remove_hydrogen: bool = True,
+        unwrap: bool = False,
     ) -> dict[str, dict[str, NDArray]]:
         output = {}
         for chem_comp_id in chem_comp_dict:
+            if chem_comp_id == "UNL":
+                output[chem_comp_id] = None
+                continue
             _chem_comp_dict = chem_comp_dict[chem_comp_id]
             _chem_comp_atom_dict = chem_comp_atom_dict[chem_comp_id]
-            _chem_comp_bond_dict = chem_comp_bond_dict[chem_comp_id]
+            _chem_comp_bond_dict = chem_comp_bond_dict.get(chem_comp_id, None)
             parsed = _parse_each_chem_comp(
                 _chem_comp_dict,
                 _chem_comp_atom_dict,
                 _chem_comp_bond_dict,
                 remove_hydrogen,
             )
+            output[chem_comp_id] = parsed
+        if unwrap:
+            assert len(output) == 1, (
+                "unwrap is only valid when there is a single chem_comp_id"
+            )
+            return next(iter(output.values()))
+        return output
+
+    return _worker
+
+
+def compare_chem_comp() -> Callable[..., dict[str, FeatureContainer]]:
+    """Compare and merge cif_chem_comp with ideal_chem_comp from CCD database."""
+
+    def _compare_each_chem_comp(
+        cif_chem_comp: dict[str, FeatureContainer],
+        ideal_chem_comp: dict[str, FeatureContainer],
+    ) -> dict[str, NDArray]:
+        output = {}
+        # for residue, just follow cif_chem_comp if exists
+        if len(cif_chem_comp["residue"]) != 0:
+            output["residue"] = cif_chem_comp["residue"]
+        else:
+            output["residue"] = ideal_chem_comp["residue"]
+        ideal_atom_dict = ideal_chem_comp["atom"].to_dict()
+        ideal_node_key_list = list(ideal_atom_dict["nodes"].keys())
+        ideal_edge_key_list = list(ideal_atom_dict["edges"].keys())
+        atom_node_features = {}
+        atom_edge_features = {}
+        for key in ideal_node_key_list:
+            if key in cif_chem_comp["atom"].node_features:
+                # follow cif_chem_comp if exists
+                atom_node_features[key] = cif_chem_comp["atom"].node_features[key]
+            else:
+                atom_node_features[key] = ideal_chem_comp["atom"].node_features[key]
+        for key in ideal_edge_key_list:
+            if key in cif_chem_comp["atom"].edge_features:
+                atom_edge_features[key] = cif_chem_comp["atom"].edge_features[key]
+            else:
+                atom_edge_features[key] = ideal_chem_comp["atom"].edge_features[key]
+        output["atom"] = AtomContainer(
+            node_features=atom_node_features,
+            edge_features=atom_edge_features,
+        )
+        return output
+
+    def _worker(
+        chem_comp_dict: dict[str, dict[str, NDArray]] | None,
+        ccd_db_path: Path | None,
+    ) -> dict[str, dict[str, NDArray]]:
+        output = {}
+        for chem_comp_id in chem_comp_dict:
+            ideal_chem_comp = read_lmdb(ccd_db_path, chem_comp_id)
+            ideal_chem_comp = {
+                "atom": AtomContainer.from_dict(ideal_chem_comp["atom"]),
+                "residue": ResidueContainer.from_dict(ideal_chem_comp["residue"]),
+            }
+            cif_chem_comp = chem_comp_dict[chem_comp_id]
+            parsed = _compare_each_chem_comp(cif_chem_comp, ideal_chem_comp)
             output[chem_comp_id] = parsed
         return output
 
@@ -478,18 +619,23 @@ def parse_entity_dict() -> Callable[..., dict[str, dict[str, NDArray]] | None]:
     return _worker
 
 
-def remove_unknown_chain() -> Callable[..., type[InputType]]:
-    """Remove chains where all residues are UNL."""
+def remove_unknown_atom_site() -> Callable[..., type[InputType]]:
+    """Remove UNL residues from atom_site_dict."""
 
     def _worker(
-        asym_dict: dict[str, dict[str, NDArray]] | None,
+        atom_site_dict: dict[str, dict[str, NDArray]] | None,
     ) -> dict[str, dict[str, NDArray]] | None:
         new_dict = {}
-        for asym_id in asym_dict:
-            label_comp_id_list = asym_dict[asym_id]["label_comp_id"]
-            unknown_mask = [cc != "UNL" for cc in label_comp_id_list]
-            if any(unknown_mask):
-                new_dict[asym_id] = asym_dict[asym_id]
+        for asym_id in atom_site_dict:
+            label_comp_id_list = atom_site_dict[asym_id]["label_comp_id"]
+            unknown_mask = [cc == "UNL" for cc in label_comp_id_list]
+            if all(unknown_mask):
+                continue
+            for key in atom_site_dict[asym_id]:
+                values = atom_site_dict[asym_id][key]
+                values = np.array(values)[~np.array(unknown_mask)]
+                atom_site_dict[asym_id][key] = values
+            new_dict[asym_id] = atom_site_dict[asym_id]
 
         return new_dict
 
@@ -1119,7 +1265,7 @@ def parse_expression(expr: str) -> list[str] | None:
 
 
 def parse_assembly_dict() -> Callable[..., dict[str, dict[str, NDArray]] | None]:
-    """Remove chains where all residues are UNL."""
+    """Parse struct_assembly_gen oper_expression into a list of oper_id."""
 
     def _worker(
         struct_assembly_gen_dict: dict[str, dict[str, NDArray]] | None,
@@ -1143,7 +1289,7 @@ def parse_assembly_dict() -> Callable[..., dict[str, dict[str, NDArray]] | None]
 
 
 def get_struct_oper() -> Callable[..., dict[str, dict[str, NDArray]] | None]:
-    """Remove chains where all residues are UNL."""
+    """Parse struct_oper to get rotation matrix and translation vector."""
 
     def _worker(
         struct_oper_dict: dict[str, dict[str, NDArray]] | None,
@@ -1154,15 +1300,11 @@ def get_struct_oper() -> Callable[..., dict[str, dict[str, NDArray]] | None]:
             output_dict[struct_oper_id] = {}
             matrix = []
             for ii in range(1, 4):
-                row = []
-                for jj in range(1, 4):
-                    row.append(float(raw_dict[f"matrix[{ii}][{jj}]"]))
+                row = [float(raw_dict[f"matrix[{ii}][{jj}]"]) for jj in range(1, 4)]
                 matrix.append(row)
             matrix = np.array(matrix, dtype=float)
             output_dict[struct_oper_id]["matrix"] = matrix
-            vector = []
-            for ii in range(1, 4):
-                vector.append(float(raw_dict[f"vector[{ii}]"]))
+            vector = [float(raw_dict[f"vector[{ii}]"]) for ii in range(1, 4)]
             vector = np.array(vector, dtype=float)
             output_dict[struct_oper_id]["vector"] = vector
         return output_dict

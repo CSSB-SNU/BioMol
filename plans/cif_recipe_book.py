@@ -1,24 +1,25 @@
-import numpy as np
+from pathlib import Path
 
-from typing import Any
-from biomol.io.cache import ParsingCache
-from biomol.io.recipe import RecipeBook
 from biomol.io.instructions.cif_instructions import (
-    single_value_instruction,
-    get_smaller_dict,
-    merge_dict,
-    parse_chem_comp,
-    parse_scheme_dict,
-    parse_entity_dict,
-    remove_unknown_chain,
-    remove_unknown_from_struct_conn,
     attach_entity,
-    rearrange_atom_site_dict,
-    build_full_length_asym_dict,
-    parse_assembly_dict,
-    get_struct_oper,
     build_assembly_dict,
+    build_full_length_asym_dict,
+    compare_chem_comp,
+    extract_single,
+    get_smaller_dict,
+    get_struct_oper,
+    key_stack,
+    merge_dict,
+    parse_assembly_dict,
+    parse_chem_comp,
+    parse_entity_dict,
+    parse_scheme_dict,
+    rearrange_atom_site_dict,
+    remove_unknown_atom_site,
+    remove_unknown_from_struct_conn,
+    single_value_instruction,
 )
+from biomol.io.recipe import RecipeBook
 
 """Build a CIF-specific Cooker.
 
@@ -36,19 +37,6 @@ cif_recipe = RecipeBook()
 3. Calculate chain num, length, etc.
 
 """
-
-
-def extract_single(*args: str | None) -> float:
-    none_mask = [a is None for a in args]
-    none_mask = np.array(none_mask)
-    if np.all(none_mask):
-        msg = "All inputs are None"
-        raise ValueError(msg)
-    if np.sum(none_mask) > 1:
-        msg = "More than one input is not None"
-        raise ValueError(msg)
-    valid_idx = np.where(~none_mask)[0].item()
-    return args[valid_idx][0]
 
 
 # 1. Metadata Extraction
@@ -70,6 +58,19 @@ cif_recipe.add(
             ("_refine.ls_d_res_high", str | None),
             ("_em_3d_reconstruction.resolution", str | None),
         ),
+    },
+)
+
+
+cif_recipe.add(
+    targets=(("metadata_dict", dict | None),),
+    instruction=key_stack(),
+    inputs={
+        "kwargs": {
+            "id": ("_entry.id", list),
+            "deposition_date": ("deposition_date", str),
+            "resolution": ("resolution", float | None),
+        },
     },
 )
 
@@ -314,6 +315,17 @@ cif_recipe.add(
 
 
 cif_recipe.add(
+    targets=(("chem_comp_full_dict", dict),),
+    instruction=compare_chem_comp(),
+    inputs={
+        "kwargs": {
+            "chem_comp_dict": ("chem_comp_dict", dict | None),
+            "ccd_db_path": ("ccd_db_path", Path | None),
+        },
+    },
+)
+
+cif_recipe.add(
     targets=(("_entity_polymer", dict),),
     instruction=merge_dict(),
     inputs={
@@ -406,7 +418,7 @@ cif_recipe.add(
 
 cif_recipe.add(
     targets=(("_atom_site_wo_unknown_dict", dict | None),),
-    instruction=remove_unknown_chain(),
+    instruction=remove_unknown_atom_site(),
     inputs={
         "args": (("_atom_site_dict", dict | None),),
     },
@@ -465,7 +477,7 @@ cif_recipe.add(
     inputs={
         "kwargs": {
             "asym_dict": ("_asym_dict", dict | None),
-            "chem_comp_dict": ("chem_comp_dict", dict | None),
+            "chem_comp_dict": ("chem_comp_full_dict", dict | None),
         },
     },
 )
@@ -476,7 +488,7 @@ cif_recipe.add(
     instruction=parse_assembly_dict(),
     inputs={
         "kwargs": {
-            "struct_assembly_gen_dict": ("_struct_assembly_gen_dict", dict | None)
+            "struct_assembly_gen_dict": ("_struct_assembly_gen_dict", dict | None),
         },
     },
 )
@@ -504,4 +516,6 @@ cif_recipe.add(
     },
 )
 
+
 RECIPE = cif_recipe
+TARGETS = ["assembly_dict", "metadata_dict"]

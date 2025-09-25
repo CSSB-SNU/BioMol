@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Any, get_args, overload
 
 from biomol.io.cache import ParsingCache
-from biomol.io.recipe import Recipe, RecipeBook
+from biomol.io.recipe import RecipeBook
 
 
 class Cooker:
@@ -24,11 +24,13 @@ class Cooker:
     def __init__(self, parse_cache: ParsingCache, recipebook: RecipeBook | str) -> None:
         self.parse_cache = parse_cache
         if isinstance(recipebook, str):
-            self.recipebook = self._load_recipe(recipebook)
+            self.recipebook, self.targets = self._load_recipe(recipebook)
         else:
-            self.recipebook = recipebook
+            self.recipebook, self.targets = recipebook
 
-    def _load_recipe(self, recipebook_strpath: str) -> RecipeBook:
+    def _load_recipe(
+        self, recipebook_strpath: str
+    ) -> tuple[RecipeBook, list[str] | str | None]:
         """Dynamically load a RecipeBook from a given path."""
         recipebook_path = Path(recipebook_strpath).resolve()
         if not recipebook_path.exists():
@@ -43,11 +45,12 @@ class Cooker:
         recipe_module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(recipe_module)
         recipebook = getattr(recipe_module, "RECIPE", None)
+        targets = getattr(recipe_module, "TARGETS", None)
         if recipebook is None or not isinstance(recipebook, RecipeBook):
             msg = f"'RECIPE' not found or invalid in '{recipebook_path}'."
             raise AttributeError(msg)
 
-        return recipebook
+        return recipebook, targets
 
     def prep(self, data_dict: dict, fields: list[str] | None = None) -> None:
         """Prepare the context with initial data."""
@@ -72,7 +75,7 @@ class Cooker:
           in the parse_cache**, not on the recipebook targets.
         """
         matches: list[tuple[str, Any]] = []
-        for key in self.parse_cache.keys():
+        for key in self.parse_cache:
             if fnmatch.fnmatch(key, pattern):
                 matches.append((key, self.parse_cache[key]))
         return matches
@@ -91,7 +94,7 @@ class Cooker:
                 msg = f"Cyclic dependency detected at '{target_name}'"
                 raise RuntimeError(msg)
             if target_name not in self.recipebook and type(None) in get_args(
-                target_type
+                target_type,
             ):
                 return None
             visited.add(target_name)
@@ -100,7 +103,7 @@ class Cooker:
             for var in recipe.inputs.args:
                 if any(ch in var.name for ch in ["*", "?", "["]):  # detect glob pattern
                     wildcard_matches = self._expand_wildcard_args(var.name)
-                    for match_name, match_value in wildcard_matches:
+                    for _match_name, match_value in wildcard_matches:
                         resolved_args.append(match_value)
                 else:
                     resolved_args.append(resolve(var.name, var.type))
@@ -138,9 +141,11 @@ class Cooker:
             if target.name not in self.parse_cache:
                 resolve(target.name, target.type)
 
-    def serve(self, targets: list[str] | str) -> dict[str, Any]:
+    def serve(self, targets: list[str] | str | None = None) -> dict[str, Any]:
         """Retrieve computed targets."""
         results = {}
+        if targets is None:
+            targets = self.targets
         if isinstance(targets, str):
             return self.parse_cache[targets]
         for out in targets:
