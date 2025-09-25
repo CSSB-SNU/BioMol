@@ -1,89 +1,82 @@
-import numpy as np
-
-from biomol.core.feature import EdgeFeature, NodeFeature
-from biomol.io.cache import ParsingCache
-from biomol.io.instructions.ccd_instructions import (
-    bond_instruction,
-    identity_instruction,
-    stack_instruction,
+from biomol.io.instructions.cif_instructions import (
+    get_smaller_dict,
+    parse_chem_comp,
 )
 from biomol.io.recipe import RecipeBook
 
-"""Build a CCD-specific Cooker.
+"""Build a CIF-specific Cooker.
 
 This factory function constructs and returns a Cooker preconfigured
-with CCD parsing recipes and instructions.
+with CIF parsing recipes and instructions.
 """
-parse_cache = ParsingCache()
+
 ccd_recipe = RecipeBook()
 
+
 ccd_recipe.add(
     targets=[
-        (("id", NodeFeature),),
-        (("name", NodeFeature),),
-        (("formula", NodeFeature),),
+        (("_chem_comp_dict", dict),),
+        (("_chem_comp_atom_dict", dict),),
+        (("_chem_comp_bond_dict", dict),),
     ],
-    instruction=identity_instruction(dtype=str),
+    instruction=get_smaller_dict(dtype=str),
     inputs=[
-        {"args": (("_chem_comp.id", str|None),), "params": {"description": "chem comp id"}},
         {
-            "args": (("_chem_comp.name", str),),
-            "params": {"description": "chem comp name"},
+            "kwargs": {"cif_raw_dict": ("_chem_comp", str | None)},
+            "params": {
+                "tied_to": "id",
+                "columns": ["name", "formula"],
+            },
         },
         {
-            "args": (("_chem_comp.formula", str),),
-            "params": {"description": "chem comp formula"},
+            "kwargs": {"cif_raw_dict": ("_chem_comp_atom", str | None)},
+            "params": {
+                "tied_to": "comp_id",
+                "columns": [
+                    "atom_id",
+                    "type_symbol",
+                    "charge",
+                    "model_Cartn_x",
+                    "model_Cartn_y",
+                    "model_Cartn_z",
+                    "pdbx_aromatic_flag",
+                    "pdbx_stereo_config",
+                ],
+            },
+        },
+        {
+            "kwargs": {"cif_raw_dict": ("_chem_comp_bond", str | None)},
+            "params": {
+                "tied_to": "comp_id",
+                "columns": [
+                    "atom_id_1",
+                    "atom_id_2",
+                    "value_order",
+                    "pdbx_aromatic_flag",
+                    "pdbx_stereo_config",
+                ],
+            },
         },
     ],
 )
 
-ccd_recipe.add(
-    targets=[
-        (("atom_id", NodeFeature), ("atom_id_mask", NodeFeature)),
-        (("atom_symbol", NodeFeature), ("atom_symbol_mask", NodeFeature)),
-    ],
-    instruction=identity_instruction(dtype=str),
-    inputs=[
-        {
-            "args": (("_chem_comp_atom.atom_id", str),),
-            "params": {"description": "atom id", "on_missing": {"?": "X"}},
-        },
-        {
-            "args": (("_chem_comp_atom.type_symbol", str),),
-            "params": {"description": "atom symbol", "on_missing": {"?": "X"}},
-        },
-    ],
-)
 
 ccd_recipe.add(
-    targets=(("bonds", EdgeFeature),),
-    instruction=bond_instruction(dtype=str),
+    targets=(("chem_comp_dict", dict),),
+    instruction=parse_chem_comp(),
     inputs={
         "kwargs": {
-            "src": ("_chem_comp_bond.atom_id_1", str),
-            "dst": ("_chem_comp_bond.atom_id_2", str),
-            "atom_id": ("atom_id", str),
+            "chem_comp_dict": ("_chem_comp_dict", dict | None),
+            "chem_comp_atom_dict": ("_chem_comp_atom_dict", dict | None),
+            "chem_comp_bond_dict": ("_chem_comp_bond_dict", dict | None),
         },
-        "args": (("_chem_comp_bond.value_order", str),),
-        "params": {"description": "bond_type"},
+        "params": {
+            "remove_hydrogen": True,
+            "unwrap": True,
+        },
     },
 )
 
-ccd_recipe.add(
-    targets=(("ideal_coords", NodeFeature), ("ideal_coords_mask", NodeFeature)),
-    instruction=stack_instruction(dtype=float),
-    inputs={
-        "args": (
-            ("_chem_comp_atom.pdbx_model_Cartn_x_ideal", float),
-            ("_chem_comp_atom.pdbx_model_Cartn_y_ideal", float),
-            ("_chem_comp_atom.pdbx_model_Cartn_z_ideal", float),
-        ),
-        "params": {
-            "description": "Ideal_coords recorded in CCD. "
-            "Missing values are set to nan",
-            "on_missing": {"?": np.nan},
-        },
-    },
-)
 
 RECIPE = ccd_recipe
+TARGETS = "chem_comp_dict"
