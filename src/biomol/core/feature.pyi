@@ -9,6 +9,7 @@ from typing_extensions import Self, override
 class Feature(ABC, NDArrayOperatorsMixin):
     value: np.ndarray
     description: str | None
+    def __init__(self, value: np.ndarray, description: str | None = None) -> None: ...
     __array_priority__: int
     @property
     def shape(self) -> tuple[int, ...]: ...
@@ -84,6 +85,13 @@ class NodeFeature(Feature):
 class EdgeFeature(Feature):
     src_indices: NDArray[np.integer]
     dst_indices: NDArray[np.integer]
+    def __init__(
+        self,
+        value: np.ndarray,
+        description: str | None = None,
+        src_indices: NDArray[np.integer] = ...,
+        dst_indices: NDArray[np.integer] = ...,
+    ) -> None: ...
     def __post_init__(self) -> None: ...
     @property
     def src(self) -> NDArray[np.integer]: ...
