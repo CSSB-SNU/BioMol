@@ -1,11 +1,12 @@
 #!/bin/bash
-#SBATCH -J biomol_old_np
+#SBATCH -J biomol_old
 #SBATCH --ntasks-per-node=1         
-#SBATCH -c 100                        
+#SBATCH -c 80                        
 #SBATCH --mem=480g
-#SBATCH -p cpu-farm
+#SBATCH -p cpu
+#SBATCH -w node02
 #SBATCH -o ./log/biomol_old_np_%a.out
 #SBATCH -e ./log/biomol_old_np_%a.err
-#SBATCH --array=0-4                 
+#SBATCH --array=0                
 
-torchrun --nproc_per_node=4 --nnodes=2 --node_rank=$RANK save_np.py
+srun python -u save_np.py
