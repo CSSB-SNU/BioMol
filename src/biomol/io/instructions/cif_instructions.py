@@ -1,21 +1,16 @@
 import re
 from collections.abc import Callable
+from pathlib import Path
 from typing import TypeVar
 
 import numpy as np
 from numpy.typing import NDArray
-from pathlib import Path
 
-from biomol.core.container import (
-    AtomContainer,
-    ChainContainer,
-    FeatureContainer,
-    ResidueContainer,
-)
-from biomol.db.lmdb_handler import read_lmdb
+from biomol.core.container import FeatureContainer
 from biomol.core.feature import EdgeFeature, NodeFeature
 from biomol.core.index import IndexTable
 from biomol.core.utils import concat_containers
+from biomol.db.lmdb_handler import read_lmdb
 
 InputType = TypeVar("InputType", str, int, float)
 FeatureType = TypeVar("FeatureType")
@@ -59,9 +54,7 @@ def extract_single(*args: str | None) -> float:
 
 
 def key_stack() -> Callable[..., type[InputType]]:
-    """
-    Return a configured instruction function that maps fields to node features.
-    """
+    """Return a configured instruction function that maps fields to node features."""
 
     def _worker(
         **kwargs: list[InputType] | NDArray,
@@ -299,7 +292,7 @@ def parse_chem_comp() -> Callable[..., dict[str, FeatureContainer]]:
         else:
             edge_features = {}
 
-        residue_container = ResidueContainer(
+        residue_container = FeatureContainer(
             node_features={
                 "name": name,
                 "formula": formula,
@@ -307,7 +300,7 @@ def parse_chem_comp() -> Callable[..., dict[str, FeatureContainer]]:
             edge_features={},
         )
 
-        atom_container = AtomContainer(
+        atom_container = FeatureContainer(
             node_features=atom_node_features,
             edge_features=edge_features,
         )
@@ -378,7 +371,7 @@ def compare_chem_comp() -> Callable[..., dict[str, FeatureContainer]]:
                 atom_edge_features[key] = cif_chem_comp["atom"].edge_features[key]
             else:
                 atom_edge_features[key] = ideal_chem_comp["atom"].edge_features[key]
-        output["atom"] = AtomContainer(
+        output["atom"] = FeatureContainer(
             node_features=atom_node_features,
             edge_features=atom_edge_features,
         )
@@ -392,8 +385,8 @@ def compare_chem_comp() -> Callable[..., dict[str, FeatureContainer]]:
         for chem_comp_id in chem_comp_dict:
             ideal_chem_comp = read_lmdb(ccd_db_path, chem_comp_id)
             ideal_chem_comp = {
-                "atom": AtomContainer.from_dict(ideal_chem_comp["atom"]),
-                "residue": ResidueContainer.from_dict(ideal_chem_comp["residue"]),
+                "atom": FeatureContainer.from_dict(ideal_chem_comp["atom"]),
+                "residue": FeatureContainer.from_dict(ideal_chem_comp["residue"]),
             }
             cif_chem_comp = chem_comp_dict[chem_comp_id]
             parsed = _compare_each_chem_comp(cif_chem_comp, ideal_chem_comp)
@@ -545,12 +538,14 @@ def parse_entity_dict() -> Callable[..., dict[str, dict[str, NDArray]] | None]:
             one_letter_code = one_letter_code_can
 
         if len(one_letter_code) != len(one_letter_code_can):
+            one_letter_code = "".join(one_letter_code)
             sequence_split = re.findall(r"\(.*?\)|.", one_letter_code)
+            one_letter_code = np.array(sequence_split)
             if len(sequence_split) != len(one_letter_code_can):
                 sequence_split = [
                     seq if "(" not in seq else "X" for seq in sequence_split
                 ]
-                one_letter_code_can = "".join(sequence_split)
+                one_letter_code_can = np.array(sequence_split)
 
         one_letter_code_can = np.array(one_letter_code_can)
         one_letter_code = np.array(one_letter_code)
@@ -1068,7 +1063,7 @@ def build_full_length_asym_dict() -> Callable[..., dict | None]:
                     description=atom_edge_features["bond_stereo"].description,
                 )
 
-        atom_container = AtomContainer(
+        atom_container = FeatureContainer(
             node_features=atom_node_features,
             edge_features=atom_edge_features,
         )
@@ -1102,7 +1097,7 @@ def build_full_length_asym_dict() -> Callable[..., dict | None]:
             },
         )
         residue_edge_features = {} if residue_bond is None else {"bond": residue_bond}
-        residue_container = ResidueContainer(
+        residue_container = FeatureContainer(
             node_features=residue_node_features,
             edge_features=residue_edge_features,
         )
@@ -1111,7 +1106,7 @@ def build_full_length_asym_dict() -> Callable[..., dict | None]:
             value=np.array(asym_dict["entity_id"][0:1], dtype=str),
             description="Entity ID of the chain",
         )
-        chain_container = ChainContainer(
+        chain_container = FeatureContainer(
             node_features={"entity_id": chain_node_feature},
             edge_features={},
         )
@@ -1329,12 +1324,26 @@ def build_assembly_dict() -> Callable[..., dict[str, dict[str, NDArray]] | None]
             value=new_xyz,
             description=atom_node_features["xyz"].description,
         )
-        new_atom_container = AtomContainer(
+        new_atom_container = FeatureContainer(
             node_features=atom_node_features,
             edge_features=atom_edge_features,
         )
         asym_container["atom"] = new_atom_container
         return asym_container
+
+    def _get_atom_indices(
+        residue_indices: np.ndarray,
+        atom_id_list: np.ndarray,
+        index_table: IndexTable,
+        atom_id_in_container: NodeFeature,
+    ) -> np.ndarray:
+        atom_indices = []
+        for residue_idx, atom_id in zip(residue_indices, atom_id_list, strict=True):
+            _atom_indices = index_table.residues_to_atoms(np.array([residue_idx]))
+
+            _atom_indices = np.where(atom_id_in_container[_atom_indices] == atom_id)[0]
+            atom_indices.append(_atom_indices)
+        return np.concatenate(atom_indices)
 
     def _worker(
         asym_dict: dict[str, dict[str, FeatureContainer]] | None,
@@ -1482,26 +1491,30 @@ def build_assembly_dict() -> Callable[..., dict[str, dict[str, NDArray]] | None]
                         auth_indices1 = auth_idx_in_container[residue_indices1]
                         auth_indices2 = auth_idx_in_container[residue_indices2]
 
-                        residue_indices1 = (
-                            residue_indices1[0]
-                            + np.where(np.isin(auth_indices1, auth_idx1))[0]
+                        mapping1 = {val: i for i, val in enumerate(auth_indices1.value)}
+                        mapping2 = {val: i for i, val in enumerate(auth_indices2.value)}
+                        residue_indices1 = residue_indices1[0] + np.array(
+                            [mapping1[val] for val in auth_idx1]
                         )
-                        residue_indices2 = (
-                            residue_indices2[0]
-                            + np.where(np.isin(auth_indices2, auth_idx2))[0]
+                        residue_indices2 = residue_indices2[0] + np.array(
+                            [mapping2[val] for val in auth_idx2]
                         )
                         residue_src.append(residue_indices1)
                         residue_dst.append(residue_indices2)
 
-                        atom_indices1 = index_table.residues_to_atoms(residue_indices1)
-                        atom_indices2 = index_table.residues_to_atoms(residue_indices2)
+                        atom_indices1 = _get_atom_indices(
+                            residue_indices1,
+                            atom_id1,
+                            index_table,
+                            atom_id_in_container,
+                        )
+                        atom_indices2 = _get_atom_indices(
+                            residue_indices2,
+                            atom_id2,
+                            index_table,
+                            atom_id_in_container,
+                        )
 
-                        atom_indices1 = atom_indices1[
-                            np.isin(atom_id_in_container[atom_indices1], atom_id1)
-                        ]
-                        atom_indices2 = atom_indices2[
-                            np.isin(atom_id_in_container[atom_indices2], atom_id2)
-                        ]
                         atom_src.append(atom_indices1)
                         atom_dst.append(atom_indices2)
                         atom_value.append(edge_value)
@@ -1523,12 +1536,15 @@ def build_assembly_dict() -> Callable[..., dict[str, dict[str, NDArray]] | None]
                         dst_indices=residue_dst,
                         description="struct_conn between residues. boolean.",
                     )
-                    atom_struct_conn = EdgeFeature(
-                        value=atom_value,
-                        src_indices=atom_src,
-                        dst_indices=atom_dst,
-                        description="struct_conn between atoms. (conn_type_id, pdbx_value_order)",
-                    )
+                    try:
+                        atom_struct_conn = EdgeFeature(
+                            value=atom_value,
+                            src_indices=atom_src,
+                            dst_indices=atom_dst,
+                            description="struct_conn between atoms. (conn_type_id, pdbx_value_order)",
+                        )
+                    except:
+                        breakpoint()
                     residue_container.edge_features["struct_conn"] = residue_struct_conn
                     atom_container.edge_features["struct_conn"] = atom_struct_conn
 
