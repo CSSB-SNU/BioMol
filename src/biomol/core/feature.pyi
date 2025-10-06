@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
 from typing import Any
 
 import numpy as np
@@ -6,10 +7,15 @@ from numpy.lib.mixins import NDArrayOperatorsMixin
 from numpy.typing import ArrayLike, DTypeLike, NDArray
 from typing_extensions import Self, override
 
+@dataclass(frozen=True, slots=True)
 class Feature(ABC, NDArrayOperatorsMixin):
-    value: np.ndarray
+    value: NDArray[np.generic]
     description: str | None
-    def __init__(self, value: np.ndarray, description: str | None = None) -> None: ...
+    def __init__(
+        self,
+        value: NDArray[np.generic],
+        description: str | None = None,
+    ) -> None: ...
     __array_priority__: int
     @property
     def shape(self) -> tuple[int, ...]: ...
@@ -19,10 +25,26 @@ class Feature(ABC, NDArrayOperatorsMixin):
     def dtype(self) -> DTypeLike: ...
     @property
     def size(self) -> int: ...
-    def mean(self, axis: int | None = None, **kwargs: dict) -> np.ndarray: ...
-    def sum(self, axis: int | None = None, **kwargs: dict) -> np.ndarray: ...
-    def min(self, axis: int | None = None, **kwargs: dict) -> np.ndarray: ...
-    def max(self, axis: int | None = None, **kwargs: dict) -> np.ndarray: ...
+    def mean(
+        self,
+        axis: int | None = None,
+        **kwargs: dict[str, Any],
+    ) -> NDArray[np.generic]: ...
+    def sum(
+        self,
+        axis: int | None = None,
+        **kwargs: dict[str, Any],
+    ) -> NDArray[np.generic]: ...
+    def min(
+        self,
+        axis: int | None = None,
+        **kwargs: dict[str, Any],
+    ) -> NDArray[np.generic]: ...
+    def max(
+        self,
+        axis: int | None = None,
+        **kwargs: dict[str, Any],
+    ) -> NDArray[np.generic]: ...
     @abstractmethod
     def crop(self, indices: NDArray[np.integer]) -> Self: ...
     @abstractmethod
@@ -74,7 +96,7 @@ class Feature(ABC, NDArrayOperatorsMixin):
     def __le__(self, other: ArrayLike) -> NDArray[np.bool_]: ...
     def __gt__(self, other: ArrayLike) -> NDArray[np.bool_]: ...
     def __ge__(self, other: ArrayLike) -> NDArray[np.bool_]: ...
-    def __eq__(self, other: ArrayLike) -> NDArray[np.bool_]: ...
+    def __eq__(self, other: ArrayLike) -> NDArray[np.bool_]: ...  # pyright: ignore[reportIncompatibleMethodOverride]
 
 class NodeFeature(Feature):
     @override
@@ -87,7 +109,7 @@ class EdgeFeature(Feature):
     dst_indices: NDArray[np.integer]
     def __init__(
         self,
-        value: np.ndarray,
+        value: NDArray[np.generic],
         description: str | None = None,
         src_indices: NDArray[np.integer] = ...,
         dst_indices: NDArray[np.integer] = ...,

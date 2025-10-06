@@ -42,7 +42,7 @@ class Feature(ABC, NDArrayOperatorsMixin):
     This class supports numpy operations and can be indexed and cropped.
     """
 
-    value: np.ndarray
+    value: NDArray[np.generic]
     """The underlying numpy array representing the feature data."""
 
     description: str | None = None
@@ -70,21 +70,37 @@ class Feature(ABC, NDArrayOperatorsMixin):
         """Return the total number of elements in the feature."""
         return self.value.size
 
-    def mean(self, axis: int | None = None, **kwargs: dict) -> np.ndarray:
+    def mean(
+        self,
+        axis: int | None = None,
+        **kwargs: dict[str, Any],
+    ) -> NDArray[np.generic]:
         """Return the mean of the feature along the specified axis."""
-        return self.value.mean(axis=axis, **kwargs)
+        return self.value.mean(axis=axis, **kwargs)  # pyright: ignore[reportArgumentType, reportCallIssue]
 
-    def sum(self, axis: int | None = None, **kwargs: dict) -> np.ndarray:
+    def sum(
+        self,
+        axis: int | None = None,
+        **kwargs: dict[str, Any],
+    ) -> NDArray[np.generic]:
         """Return the sum of the feature along the specified axis."""
-        return self.value.sum(axis=axis, **kwargs)
+        return self.value.sum(axis=axis, **kwargs)  # pyright: ignore[reportArgumentType, reportCallIssue]
 
-    def min(self, axis: int | None = None, **kwargs: dict) -> np.ndarray:
+    def min(
+        self,
+        axis: int | None = None,
+        **kwargs: dict[str, Any],
+    ) -> NDArray[np.generic]:
         """Return the minimum of the feature along the specified axis."""
-        return self.value.min(axis=axis, **kwargs)
+        return self.value.min(axis=axis, **kwargs)  # pyright: ignore[reportArgumentType, reportCallIssue]
 
-    def max(self, axis: int | None = None, **kwargs: dict) -> np.ndarray:
+    def max(
+        self,
+        axis: int | None = None,
+        **kwargs: dict[str, Any],
+    ) -> NDArray[np.generic]:
         """Return the maximum of the feature along the specified axis."""
-        return self.value.max(axis=axis, **kwargs)
+        return self.value.max(axis=axis, **kwargs)  # pyright: ignore[reportArgumentType, reportCallIssue]
 
     @abstractmethod
     def crop(self, indices: NDArray[np.integer]) -> Self:

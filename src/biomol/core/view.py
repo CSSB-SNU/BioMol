@@ -47,39 +47,40 @@ class ViewProtocol(Protocol[A_co, R_co, C_co, M_co]):
         The indices of the elements in the view.
     """
 
-    def __init__(
-        self,
-        mol: M_co,
-        indices: NDArray[np.integer],
-    ) -> None: ...
-
     @property
     def atoms(self) -> A_co:
         """View of the atoms in the selection."""
+        ...
 
     @property
     def residues(self) -> R_co:
         """View of the residues in the selection."""
+        ...
 
     @property
     def chains(self) -> C_co:
         """View of the chains in the selection."""
+        ...
 
     @property
     def level(self) -> StructureLevel:
         """The structural level of the view."""
+        ...
 
     @property
     def mol(self) -> M_co:
         """Return the parent molecule."""
+        ...
 
     @property
     def indices(self) -> NDArray[np.integer]:
         """Return the indices of the view."""
+        ...
 
     @cached_property
     def unique_indices(self) -> NDArray[np.integer]:
         """Return the unique indices of the view, preserving first-occurrence order."""
+        ...
 
     def to_atoms(self, *, unique: bool = False) -> A_co:
         """Return an AtomView of the atoms in the selection.
@@ -87,6 +88,7 @@ class ViewProtocol(Protocol[A_co, R_co, C_co, M_co]):
         If `unique` is True, the resulting view will contain only unique indices,
         preserving first-occurrence order. Default is False.
         """
+        ...
 
     def to_residues(self, *, unique: bool = False) -> R_co:
         """Return a ResidueView of the residues in the selection.
@@ -94,6 +96,7 @@ class ViewProtocol(Protocol[A_co, R_co, C_co, M_co]):
         If `unique` is True, the resulting view will contain only unique indices,
         preserving first-occurrence order. Default is False.
         """
+        ...
 
     def to_chains(self, *, unique: bool = False) -> C_co:
         """Return a ChainView of the chains in the selection.
@@ -101,27 +104,35 @@ class ViewProtocol(Protocol[A_co, R_co, C_co, M_co]):
         If `unique` is True, the resulting view will contain only unique indices,
         preserving first-occurrence order. Default is False.
         """
+        ...
 
     def get_feature(self, key: str) -> Feature:
         """Return the feature for the given key, cropped to the view's indices."""
+        ...
 
     def get_container(self) -> FeatureContainer:
         """Return the feature container cropped to the view's indices."""
+        ...
 
     def unique(self) -> Self:
         """Return a new view with unique indices, preserving first-occurrence order."""
+        ...
 
     def new(self, indices: NDArray[np.integer]) -> Self:
         """Return a new view with the specified indices."""
+        ...
 
     def sort(self) -> Self:
         """Return a new view with sorted indices."""
+        ...
 
     def is_empty(self) -> bool:
         """Return True if the view is empty (contains no elements)."""
+        ...
 
     def is_subset(self, other: Self) -> bool:
         """Return True if the view is a subset of another view."""
+        ...
 
     def select(self, **kwargs: Any) -> Self:  # noqa: ANN401
         """Return a new view filtered by feature values.
@@ -175,57 +186,69 @@ class ViewProtocol(Protocol[A_co, R_co, C_co, M_co]):
             selected_atoms = chain_view.select(bond="disulfide")
 
         """
+        ...
 
     def __repr__(self) -> str:
         """Return a string representation of the view."""
+        ...
 
     def __len__(self) -> int:
         """Return the number of elements in the view."""
+        ...
 
     def __getattr__(self, key: str) -> Feature:
         """Return the feature for the given key, cropped to the view's indices."""
+        ...
 
     def __getitem__(self, key: Any) -> Self:  # noqa: ANN401
         """Return a new view with the specified indices."""
+        ...
 
     def __iter__(self) -> Iterator[Self]:
         """Iterate over the elements in the view, yielding single-element views."""
+        ...
 
     def __add__(self, other: Self) -> Self:
         """Return a new view with concatenated indices.
 
         Note that the result may contain duplicate indices.
         """
+        ...
 
     def __sub__(self, other: Self) -> Self:
         """Return a new view with indices in self but not in other.
 
         Note that the result contains only unique indices.
         """
+        ...
 
     def __and__(self, other: Self) -> Self:
         """Return a new view with indices in both self and other.
 
         Note that the result contains only unique indices.
         """
+        ...
 
     def __or__(self, other: Self) -> Self:
         """Return a new view with indices in either self or other.
 
         Note that the result contains only unique indices.
         """
+        ...
 
     def __xor__(self, other: Self) -> Self:
         """Return a new view with indices in self or other but not both.
 
         Note that the result contains only unique indices.
         """
+        ...
 
     def __invert__(self) -> Self:
         """Return a new view with indices not in the current view.
 
         Note that the result contains only unique indices.
         """
+        ...
 
 
 class BaseView(ViewProtocol[A_co, R_co, C_co, M_co]):
@@ -293,7 +316,7 @@ class BaseView(ViewProtocol[A_co, R_co, C_co, M_co]):
         return uniq[order]
 
     @override
-    def to_atoms(self, *, unique: bool = False) -> AtomView:
+    def to_atoms(self, *, unique: bool = False) -> AtomView:  # pyright: ignore[reportIncompatibleMethodOverride]
         indices = self.mol.index_table.convert(
             self.indices,
             source=self.level,
@@ -303,7 +326,7 @@ class BaseView(ViewProtocol[A_co, R_co, C_co, M_co]):
         return view.unique() if unique else view
 
     @override
-    def to_residues(self, *, unique: bool = False) -> ResidueView:
+    def to_residues(self, *, unique: bool = False) -> ResidueView:  # pyright: ignore[reportIncompatibleMethodOverride]
         indices = self.mol.index_table.convert(
             self.indices,
             source=self.level,
@@ -313,7 +336,7 @@ class BaseView(ViewProtocol[A_co, R_co, C_co, M_co]):
         return view.unique() if unique else view
 
     @override
-    def to_chains(self, *, unique: bool = False) -> ChainView:
+    def to_chains(self, *, unique: bool = False) -> ChainView:  # pyright: ignore[reportIncompatibleMethodOverride]
         indices = self.mol.index_table.convert(
             self.indices,
             source=self.level,
