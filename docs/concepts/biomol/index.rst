@@ -16,7 +16,7 @@ It manages a separate :class:`FeatureContainer <core.FeatureContainer>` at each 
 
 You interact with this data through two powerful abstractions:
 
-- :class:`View <core.ViewProtocol>`: Accesses the data's *structure*, allowing you to select and navigate between atoms, residues, and chains.
+- :class:`View <core.View>`: Accesses the data's *structure*, allowing you to select and navigate between atoms, residues, and chains.
 - :class:`Feature <core.Feature>`: Accesses the *data itself* as NumPy-like arrays for efficient computation.
 
 

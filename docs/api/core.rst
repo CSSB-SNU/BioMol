@@ -43,4 +43,4 @@ View
     :toctree: ./generated
     :nosignatures:
 
-    ViewProtocol
+    View

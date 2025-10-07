@@ -27,7 +27,6 @@ Exceptions
     BioMolError
     FeatureKeyError
     FeatureOperationError
-    ViewProtocolError
     ViewOperationError
     StructureLevelError
     IndexInvalidError
