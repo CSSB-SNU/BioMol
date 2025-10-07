@@ -7,7 +7,7 @@ from numpy.typing import NDArray
 class NodeFeatureDict(TypedDict):
     """TypedDict for node features."""
 
-    value: NDArray[np.generic]
+    value: NDArray[Any]
     description: str | None
 
 
@@ -16,7 +16,7 @@ class EdgeFeatureDict(TypedDict):
 
     src_indices: NDArray[np.integer]
     dst_indices: NDArray[np.integer]
-    value: NDArray[np.generic]
+    value: NDArray[Any]
     description: str | None
 
 

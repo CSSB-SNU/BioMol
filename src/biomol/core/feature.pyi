@@ -9,11 +9,11 @@ from typing_extensions import Self, override
 
 @dataclass(frozen=True, slots=True)
 class Feature(ABC, NDArrayOperatorsMixin):
-    value: NDArray[np.generic]
+    value: NDArray[Any]
     description: str | None
     def __init__(
         self,
-        value: NDArray[np.generic],
+        value: NDArray[Any],
         description: str | None = None,
     ) -> None: ...
     __array_priority__: int
@@ -25,36 +25,17 @@ class Feature(ABC, NDArrayOperatorsMixin):
     def dtype(self) -> DTypeLike: ...
     @property
     def size(self) -> int: ...
-    def mean(
-        self,
-        axis: int | None = None,
-        **kwargs: dict[str, Any],
-    ) -> NDArray[np.generic]: ...
-    def sum(
-        self,
-        axis: int | None = None,
-        **kwargs: dict[str, Any],
-    ) -> NDArray[np.generic]: ...
-    def min(
-        self,
-        axis: int | None = None,
-        **kwargs: dict[str, Any],
-    ) -> NDArray[np.generic]: ...
-    def max(
-        self,
-        axis: int | None = None,
-        **kwargs: dict[str, Any],
-    ) -> NDArray[np.generic]: ...
+    def mean(self, axis: int | None = None, **kwargs: Any) -> Any: ...  # noqa: ANN401
+    def sum(self, axis: int | None = None, **kwargs: Any) -> Any: ...  # noqa: ANN401
+    def min(self, axis: int | None = None, **kwargs: Any) -> Any: ...  # noqa: ANN401
+    def max(self, axis: int | None = None, **kwargs: Any) -> Any: ...  # noqa: ANN401
     @abstractmethod
     def crop(self, indices: NDArray[np.integer]) -> Self: ...
     @abstractmethod
     def __getitem__(self, key: Any) -> Self: ...  # noqa: ANN401
     def __len__(self) -> int: ...
     def __bool__(self) -> bool: ...
-    def __array__(
-        self,
-        dtype: NDArray[np.generic] | None = ...,
-    ) -> NDArray[np.generic]: ...
+    def __array__(self, dtype: DTypeLike | None = None) -> NDArray[Any]: ...
     def __array_ufunc__(
         self,
         ufunc: np.ufunc,
@@ -109,7 +90,7 @@ class EdgeFeature(Feature):
     dst_indices: NDArray[np.integer]
     def __init__(
         self,
-        value: NDArray[np.generic],
+        value: NDArray[Any],
         description: str | None = None,
         src_indices: NDArray[np.integer] = ...,
         dst_indices: NDArray[np.integer] = ...,
