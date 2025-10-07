@@ -6,7 +6,7 @@ from .biomol import BioMol
 from .container import FeatureContainer
 from .feature import EdgeFeature, Feature, NodeFeature
 from .index import IndexTable
-from .view import ViewProtocol
+from .view import View
 
 __all__ = [
     "BioMol",
@@ -15,5 +15,5 @@ __all__ = [
     "FeatureContainer",
     "IndexTable",
     "NodeFeature",
-    "ViewProtocol",
+    "View",
 ]
