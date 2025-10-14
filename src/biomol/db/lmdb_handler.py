@@ -59,6 +59,50 @@ def build_lmdb(
     env.close()
 
 
+def merge_lmdb_shards(
+    shard_paths: list[Path],
+    merged_env_path: Path,
+    map_size: int = int(1e12),
+    overwrite: bool = False,
+) -> None:
+    """
+    Merge multiple LMDB shard databases into a single LMDB file.
+
+    Args:
+        shard_paths: List of LMDB shard directories to merge.
+        merged_env_path: Output LMDB path for the merged database.
+        map_size: Maximum size of the merged LMDB in bytes.
+        overwrite: Whether to overwrite existing merged file if it exists.
+    """
+    if merged_env_path.exists():
+        if not overwrite:
+            raise FileExistsError(
+                f"{merged_env_path} already exists. Use overwrite=True to replace it."
+            )
+
+    # --- Create a new LMDB environment for the merged database ---
+    merged_env = lmdb.open(str(merged_env_path), map_size=map_size)
+
+    total_keys = 0
+
+    # --- Iterate through each shard and copy all entries ---
+    for shard_path in shard_paths:
+        print(f"Merging shard: {shard_path}")
+        shard_env = lmdb.open(str(shard_path), readonly=True, lock=False)
+        with shard_env.begin() as shard_txn, merged_env.begin(write=True) as merged_txn:
+            cursor = shard_txn.cursor()
+            for key, value in cursor:
+                merged_txn.put(key, value)
+                total_keys += 1
+        shard_env.close()
+
+    merged_env.sync()
+    merged_env.close()
+
+    print(f"[Done] Merged {len(shard_paths)} shards into {merged_env_path}")
+    print(f"Total keys merged: {total_keys}")
+
+
 def read_lmdb(env_path: Path, key: str) -> bytes:
     """
     Read a value from the LMDB database by key.
