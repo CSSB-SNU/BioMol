@@ -1640,10 +1640,10 @@ def build_assembly_dict() -> Callable[..., dict[str, dict[str, NDArray]] | None]
                     atom_container.edge_features["struct_conn"] = atom_struct_conn
 
                 output[key] = {
-                    "atom": atom_container,
-                    "residue": residue_container,
-                    "chain": chain_container,
-                    # "index_table": index_table,
+                    "atoms": atom_container,
+                    "residues": residue_container,
+                    "chains": chain_container,
+                    "index_table": index_table,
                 }
         return output
 
