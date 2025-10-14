@@ -7,27 +7,11 @@ from zstandard import ZstdCompressor, ZstdDecompressor
 
 from biomol.core.container import FeatureContainer
 from biomol.core.feature import EdgeFeature, NodeFeature
+from biomol.core.index import IndexTable
 
 
 def concat_containers(*containers: FeatureContainer) -> FeatureContainer:
-    """Concatenate multiple FeatureContainer instances into one.
-
-    Parameters
-    ----------
-    *containers : FeatureContainer
-        Instances of FeatureContainer (or its subclasses) to concatenate.
-
-    Returns
-    -------
-    FeatureContainer
-        A new FeatureContainer instance containing concatenated features.
-
-    Raises
-    ------
-    ValueError
-        If the containers are of different types or have inconsistent node feature
-        lengths.
-    """
+    """Efficiently concatenate multiple FeatureContainer instances into one."""
     if not containers:
         msg = "No containers provided for concatenation."
         raise ValueError(msg)
@@ -37,48 +21,53 @@ def concat_containers(*containers: FeatureContainer) -> FeatureContainer:
         msg = "All containers must be of the same type."
         raise ValueError(msg)
 
-    concatenated_node_features = {}
-    concatenated_edge_features = {}
+    # --- Collect all feature values first ---
+    node_value_lists: dict[str, list[np.ndarray]] = {}
+    edge_src_lists: dict[str, list[np.ndarray]] = {}
+    edge_dst_lists: dict[str, list[np.ndarray]] = {}
+    edge_value_lists: dict[str, list[np.ndarray]] = {}
+    edge_desc: dict[str, str] = {}
+    node_desc: dict[str, str] = {}
 
+    offset = 0
     for container in containers:
-        if len(concatenated_node_features) == 0:
-            offset = 0
-        else:
-            offset = len(next(iter(concatenated_node_features.values())).value)
+        # Edge features
         for key, feature in container.edge_features.items():
-            if key in concatenated_edge_features:
-                new_src_indices = feature.src_indices + offset
-                new_dst_indices = feature.dst_indices + offset
-                concatenated_edge_features[key] = EdgeFeature(
-                    src_indices=np.concatenate(
-                        [
-                            concatenated_edge_features[key].src_indices,
-                            new_src_indices,
-                        ],
-                    ),
-                    dst_indices=np.concatenate(
-                        [
-                            concatenated_edge_features[key].dst_indices,
-                            new_dst_indices,
-                        ],
-                    ),
-                    value=np.concatenate(
-                        [concatenated_edge_features[key].value, feature.value],
-                    ),
-                    description=feature.description,
-                )
-            else:
-                concatenated_edge_features[key] = feature
+            edge_desc[key] = feature.description
+            src_shifted = feature.src_indices + offset
+            dst_shifted = feature.dst_indices + offset
+            edge_src_lists.setdefault(key, []).append(src_shifted)
+            edge_dst_lists.setdefault(key, []).append(dst_shifted)
+            edge_value_lists.setdefault(key, []).append(feature.value)
+
+        # Node features
         for key, feature in container.node_features.items():
-            if key in concatenated_node_features:
-                concatenated_node_features[key] = NodeFeature(
-                    value=np.concatenate(
-                        [concatenated_node_features[key].value, feature.value],
-                    ),
-                    description=feature.description,
-                )
-            else:
-                concatenated_node_features[key] = feature
+            node_desc[key] = feature.description
+            node_value_lists.setdefault(key, []).append(feature.value)
+
+        # Update offset based on current node count
+        if container.node_features:
+            offset += len(next(iter(container.node_features.values())).value)
+
+    # --- Perform concatenation once per key ---
+    concatenated_edge_features = {
+        key: EdgeFeature(
+            src_indices=np.concatenate(edge_src_lists[key]),
+            dst_indices=np.concatenate(edge_dst_lists[key]),
+            value=np.concatenate(edge_value_lists[key]),
+            description=edge_desc[key],
+        )
+        for key in edge_value_lists
+    }
+
+    concatenated_node_features = {
+        key: NodeFeature(
+            value=np.concatenate(node_value_lists[key]),
+            description=node_desc[key],
+        )
+        for key in node_value_lists
+    }
+
     return container_type(
         node_features=concatenated_node_features,
         edge_features=concatenated_edge_features,
@@ -100,7 +89,7 @@ def flatten_data(data: dict) -> tuple[dict, dict]:
             _template, _flatten = flatten_data(value)
             template[key] = _template
             flatten.update(_flatten)
-        elif isinstance(value, FeatureContainer):
+        elif isinstance(value, FeatureContainer | IndexTable):
             _template, _flatten = flatten_data(value.to_dict())
             template[key] = _template
             flatten.update(_flatten)

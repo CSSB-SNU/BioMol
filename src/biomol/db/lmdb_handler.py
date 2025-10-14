@@ -12,8 +12,9 @@ def build_lmdb(
     env_path: Path,
     recipe: Path,
     parser: Callable,
-    n_jobs: int = 1,
+    n_jobs: int = -1,
     map_size: int = 1e12,  # ~1TB
+    ccd_db_path: Path | None = None,
 ) -> None:
     """
     Build an LMDB database from parsed data.
@@ -27,20 +28,32 @@ def build_lmdb(
     """
     env = lmdb.open(str(env_path), map_size=int(map_size))
 
-    def _process_file(data_file: Path) -> tuple[bytes, bytes]:
+    def _process_file(data_file: Path) -> tuple[bytes, bytes, Exception | None]:
+        """Parse a single file and return (key, compressed_data, error)."""
         key = data_file.stem
-        data_dict = parser(recipe, data_file)
-        zcompressed_data = to_bytes(data_dict)
-        return key.encode(), zcompressed_data
+        key = key.split(".cif")[0]
+        try:
+            data_dict = parser(ccd_db_path, recipe, data_file)
+            zcompressed_data = to_bytes(data_dict)
+            return key.encode(), zcompressed_data, None
+        except Exception as error:
+            return key.encode(), to_bytes({}), error
 
     # remove UNL
     data_list = [data for data in data_list if data.stem != "UNL"]
 
+    # --- Parallel processing ---
+    results = Parallel(n_jobs=n_jobs, verbose=10, prefer="processes")(
+        delayed(_process_file)(data_file) for data_file in data_list
+    )
+
+    # --- Write results to LMDB ---
     with env.begin(write=True) as txn:
-        results = Parallel(n_jobs=n_jobs, verbose=10)(
-            delayed(_process_file)(data_file) for data_file in data_list
-        )
-        for key, zcompressed_data in results:
+        for key, zcompressed_data, error in results:
+            if error is not None:
+                # Print error message but continue
+                print(f"Error processing {key.decode()}: {error}")
+                continue
             txn.put(key, zcompressed_data)
 
     env.close()
