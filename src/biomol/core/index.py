@@ -243,3 +243,14 @@ class IndexTable:
         if np.any(indices < 0):
             msg = "Indices contain negative values"
             raise IndexInvalidError(msg)
+
+    def to_dict(self) -> dict:
+        """Convert IndexTable to a JSON-serializable dictionary."""
+        return {
+            "atom_to_res": self.atom_to_res.tolist(),
+            "res_to_chain": self.res_to_chain.tolist(),
+            "res_atom_indptr": self.res_atom_indptr.tolist(),
+            "res_atom_indices": self.res_atom_indices.tolist(),
+            "chain_res_indptr": self.chain_res_indptr.tolist(),
+            "chain_res_indices": self.chain_res_indices.tolist(),
+        }

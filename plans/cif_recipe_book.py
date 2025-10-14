@@ -5,7 +5,7 @@ from biomol.io.instructions.cif_instructions import (
     build_assembly_dict,
     build_full_length_asym_dict,
     compare_chem_comp,
-    extract_single,
+    extract_float_single,
     get_smaller_dict,
     get_struct_oper,
     key_stack,
@@ -52,7 +52,7 @@ cif_recipe.add(
 
 cif_recipe.add(
     targets=(("resolution", float),),
-    instruction=extract_single,
+    instruction=extract_float_single,
     inputs={
         "args": (
             ("_refine.ls_d_res_high", str | None),
@@ -438,6 +438,9 @@ cif_recipe.add(
     inputs={
         "kwargs": {
             "atom_site_dict": ("_atom_site_wo_unknown_dict", dict | None),
+        },
+        "params": {
+            "remove_hydrogen": True,
         },
     },
 )

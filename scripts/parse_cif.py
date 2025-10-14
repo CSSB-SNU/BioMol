@@ -75,8 +75,8 @@ def main() -> None:
         print(f"Error: CIF file '{cif_path}' does not exist.")
         sys.exit(1)
     result = parse(ccd_db_path, recipe_path, cif_path, targets=targets)
-    breakpoint()
 
 
 if __name__ == "__main__":
     main()
+    # python scripts/parse_cif.py /public_data/CCD/biomol_CCD.lmdb/ plans/cif_recipe_book.py /public_data/BioMolDB_2024Oct21/cif/cif_raw/d6/4d6d.cif.gz

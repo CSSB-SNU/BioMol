@@ -11,6 +11,7 @@ from biomol.core.feature import EdgeFeature, NodeFeature
 from biomol.core.index import IndexTable
 from biomol.core.utils import concat_containers
 from biomol.db.lmdb_handler import read_lmdb
+from biomol.exceptions import IndexMismatchError
 
 InputType = TypeVar("InputType", str, int, float)
 FeatureType = TypeVar("FeatureType")
@@ -39,18 +40,34 @@ def single_value_instruction(
     return _worker
 
 
-def extract_single(*args: str | None) -> float:
-    """Extract a single non-None value from the inputs."""
-    none_mask = [a is None for a in args]
-    none_mask = np.array(none_mask)
-    if np.all(none_mask):
-        msg = "All inputs are None"
+def extract_float_single(*args: str | None) -> float | None:
+    """Extract a single valid float from multiple string-like inputs."""
+    pattern = re.compile(r"^-?\d+(?:\.\d+)?$")
+
+    # Build mask: True if value is a valid float string
+    mask = []
+    for a in args:
+        if a is None:
+            mask.append(False)
+        elif isinstance(a, (int, float)):
+            mask.append(True)
+        elif isinstance(a, str):
+            mask.append(bool(pattern.match(a)))
+        else:
+            mask.append(False)
+    mask = np.array(mask)
+
+    # Check conditions
+    n_valid = np.sum(mask)
+    if n_valid == 0:
+        return None
+    if n_valid > 1:
+        msg = "More than one input is a valid float"
         raise ValueError(msg)
-    if np.sum(none_mask) > 1:
-        msg = "More than one input is not None"
-        raise ValueError(msg)
-    valid_idx = np.where(~none_mask)[0].item()
-    return args[valid_idx][0]
+
+    # Return the parsed float
+    valid_idx = np.where(mask)[0].item()
+    return float(args[valid_idx])
 
 
 def key_stack() -> Callable[..., type[InputType]]:
@@ -322,6 +339,10 @@ def parse_chem_comp() -> Callable[..., dict[str, FeatureContainer]]:
             if chem_comp_id == "UNL":
                 output[chem_comp_id] = None
                 continue
+            if chem_comp_id not in chem_comp_atom_dict:
+                # some cif files do not have chem_comp_atom.
+                output[chem_comp_id] = None
+                continue
             _chem_comp_dict = chem_comp_dict[chem_comp_id]
             _chem_comp_atom_dict = chem_comp_atom_dict[chem_comp_id]
             _chem_comp_bond_dict = chem_comp_bond_dict.get(chem_comp_id, None)
@@ -371,10 +392,13 @@ def compare_chem_comp() -> Callable[..., dict[str, FeatureContainer]]:
                 atom_edge_features[key] = cif_chem_comp["atom"].edge_features[key]
             else:
                 atom_edge_features[key] = ideal_chem_comp["atom"].edge_features[key]
-        output["atom"] = FeatureContainer(
-            node_features=atom_node_features,
-            edge_features=atom_edge_features,
-        )
+        try:
+            output["atom"] = FeatureContainer(
+                node_features=atom_node_features,
+                edge_features=atom_edge_features,
+            )
+        except IndexMismatchError:
+            output["atom"] = ideal_chem_comp["atom"]
         return output
 
     def _worker(
@@ -383,12 +407,18 @@ def compare_chem_comp() -> Callable[..., dict[str, FeatureContainer]]:
     ) -> dict[str, dict[str, NDArray]]:
         output = {}
         for chem_comp_id in chem_comp_dict:
+            if chem_comp_id == "UNL":
+                output[chem_comp_id] = None
+                continue
             ideal_chem_comp = read_lmdb(ccd_db_path, chem_comp_id)
             ideal_chem_comp = {
                 "atom": FeatureContainer.from_dict(ideal_chem_comp["atom"]),
                 "residue": FeatureContainer.from_dict(ideal_chem_comp["residue"]),
             }
             cif_chem_comp = chem_comp_dict[chem_comp_id]
+            if cif_chem_comp is None:
+                output[chem_comp_id] = ideal_chem_comp
+                continue
             parsed = _compare_each_chem_comp(cif_chem_comp, ideal_chem_comp)
             output[chem_comp_id] = parsed
         return output
@@ -403,22 +433,25 @@ def parse_scheme_dict() -> Callable[..., dict[str, dict[str, NDArray]] | None]:
         scheme_dict: dict[str, dict[str, NDArray]] | None,
     ) -> dict[str, NDArray] | None:
         entity_id = scheme_dict["entity_id"]
-        cif_idx = scheme_dict.get("seq_id", None)
+        if "seq_id" in scheme_dict:  # polymer
+            cif_idx = scheme_dict["seq_id"]
+        elif "num" in scheme_dict:  # branched
+            cif_idx = scheme_dict["num"]
+        else:  # non-polymer
+            cif_idx = None
         chem_comp = scheme_dict["mon_id"]
         auth_idx = scheme_dict["pdb_seq_num"]
         ins_code = scheme_dict.get("pdb_ins_code", None)
         hetero = scheme_dict.get("hetero", None)
 
-        if cif_idx is None:
-            cif_idx = np.arange(len(entity_id), dtype=int) + 1
-        else:
+        if cif_idx is not None:
             cif_idx = cif_idx.astype(int)
         if hetero is None:
-            hetero = np.zeros(len(cif_idx), dtype=int)
+            hetero = np.zeros(len(auth_idx), dtype=int)
         else:
             hetero = np.array([1 if h in {1, "y", "yes"} else 0 for h in hetero])
         if ins_code is None:
-            ins_code = np.array(["." for _ in range(len(cif_idx))])
+            ins_code = np.array(["." for _ in range(len(auth_idx))])
         auth_idx = [
             aa if ii == "." else f"{aa}.{ii}"
             for aa, ii in zip(auth_idx, ins_code, strict=True)
@@ -430,7 +463,7 @@ def parse_scheme_dict() -> Callable[..., dict[str, dict[str, NDArray]] | None]:
         new_cif_idx_list = []
         for idx in range(len(auth_idx)):
             _chem_comp = chem_comp[idx]
-            _cif_idx = cif_idx[idx]
+            _cif_idx = cif_idx[idx] if cif_idx is not None else -1
             _auth_idx = auth_idx[idx]
             _hetero = hetero[idx]
 
@@ -442,15 +475,17 @@ def parse_scheme_dict() -> Callable[..., dict[str, dict[str, NDArray]] | None]:
             if _auth_idx not in new_auth_idx_list:
                 new_auth_idx_list.append(_auth_idx)
                 new_cif_idx_list.append(_cif_idx)
+        if cif_idx is not None:
+            cif_idx = np.array(new_cif_idx_list)
+        else:
+            cif_idx = np.arange(len(new_auth_idx_list)) + 1
 
         chem_comp = list(auth_idx_to_chem_comp.values())
         max_hetero = max(len(cc) for cc in chem_comp)
         chem_comp = [cc + [""] * (max_hetero - len(cc)) for cc in chem_comp]
         chem_comp = np.array(chem_comp, dtype=str)
         hetero = np.array([1 if 1 in h else 0 for h in auth_idx_to_hetero.values()])
-        cif_idx = np.array(new_cif_idx_list)
         auth_idx = np.array(new_auth_idx_list)
-
         return {
             "entity_id": entity_id,
             "cif_idx": cif_idx.astype(str),
@@ -551,7 +586,9 @@ def parse_entity_dict() -> Callable[..., dict[str, dict[str, NDArray]] | None]:
         one_letter_code = np.array(one_letter_code)
 
         if entity_type == "branched":
-            descriptor = entity_dict["descriptor"]
+            descriptor = (
+                entity_dict["descriptor"] if "descriptor" in entity_dict else ""
+            )
         elif entity_type == "polymer":
             descriptor = entity_dict["type"]
         else:
@@ -623,7 +660,7 @@ def remove_unknown_atom_site() -> Callable[..., type[InputType]]:
         new_dict = {}
         for asym_id in atom_site_dict:
             label_comp_id_list = atom_site_dict[asym_id]["label_comp_id"]
-            unknown_mask = [cc == "UNL" for cc in label_comp_id_list]
+            unknown_mask = [cc in ("UNL", "UNK") for cc in label_comp_id_list]
             if all(unknown_mask):
                 continue
             for key in atom_site_dict[asym_id]:
@@ -709,7 +746,6 @@ def attach_entity() -> Callable[..., dict[str, dict[str, NDArray]] | None]:
 
             entity_seq_num = entity_info["seq_num"].astype(str)
             scheme_cif_idx = asym_info["cif_idx"]
-
             if not np.all(np.isin(scheme_cif_idx, entity_seq_num)):
                 msg = "Cif_idx values in scheme not consistent with entity."
                 raise ValueError(msg)
@@ -744,9 +780,24 @@ def attach_entity() -> Callable[..., dict[str, dict[str, NDArray]] | None]:
 def rearrange_atom_site_dict() -> Callable[..., dict | None]:
     """Rearrange atom_site_dict to have model id and alt is as keys."""
 
+    def _remove_hydrogen(
+        atom_site_dict: dict[str, dict[str, NDArray]] | None,
+    ) -> dict[str, dict[str, NDArray]] | None:
+        element = atom_site_dict["type_symbol"]
+        hydrogen_mask = ~np.isin(element, ["H", "D"])
+
+        for key in atom_site_dict:
+            values = atom_site_dict[key]
+            values = np.array(values)[hydrogen_mask]
+            atom_site_dict[key] = values
+        return atom_site_dict
+
     def _rearrange_each_asym_id(
         atom_site_dict: dict[str, NDArray] | None,
+        remove_hydrogen: bool = True,
     ) -> dict[str, dict[str, NDArray]] | None:
+        if remove_hydrogen:
+            atom_site_dict = _remove_hydrogen(atom_site_dict)
         if atom_site_dict is None:
             return None
 
@@ -803,10 +854,11 @@ def rearrange_atom_site_dict() -> Callable[..., dict | None]:
 
     def _worker(
         atom_site_dict: dict[str, dict[str, NDArray]] | None,
+        remove_hydrogen: bool = True,
     ) -> dict[str, dict[str, NDArray]] | None:
         output = {}
         for asym_id, _atom_site_dict in atom_site_dict.items():
-            rearranged = _rearrange_each_asym_id(_atom_site_dict)
+            rearranged = _rearrange_each_asym_id(_atom_site_dict, remove_hydrogen)
             output[asym_id] = rearranged
         return output
 
@@ -823,6 +875,7 @@ def build_full_length_asym_dict() -> Callable[..., dict | None]:
     ) -> dict[str, dict[str, NDArray]] | None:
         full_chem_comp_list = asym_dict["chem_comp"]
         auth_idx_list = asym_dict["auth_idx"]
+        cif_idx_list = asym_dict["cif_idx"]
         auth_idx_to_chem_comp = {
             str(aa): cc
             for aa, cc in zip(auth_idx_list, full_chem_comp_list, strict=False)
@@ -843,6 +896,11 @@ def build_full_length_asym_dict() -> Callable[..., dict | None]:
         auth_idx_to_atom_idx = {}
         for auth_idx in auth_idx_list:
             _chem_comp_list = auth_idx_to_chem_comp[auth_idx]
+            # remove empty string in case of heterogeneous sequence
+            _chem_comp_list = [cc for cc in _chem_comp_list if cc != ""]
+            if len(_chem_comp_list) == 0:
+                msg = f"No chem_comp found for residue {auth_idx}."
+                raise ValueError(msg)
             """
             If the residue is missing in atom_site, fill in with the first chem_comp.
             """
@@ -892,10 +950,18 @@ def build_full_length_asym_dict() -> Callable[..., dict | None]:
             chem_comp_atom_id = chem_comp["atom"]["atom_id"]
             atom_id = atom_atom[ii]
             auth_idx = atom_auth_idx[ii]
-            atom_idx = (
-                auth_idx_to_atom_idx[auth_idx]
-                + np.where(chem_comp_atom_id == atom_id)[0][0]
-            )
+            if auth_idx not in auth_idx_to_atom_idx:
+                # For H2O, it happens that auth_idx is not matched.
+                if chem_comp["residue"]["name"].value[0] != "WATER":
+                    msg = f"Auth_idx {auth_idx} not found in scheme for atom {atom_id} in residue {atom_chem_comp[ii]}."
+                    raise ValueError(msg)
+                continue
+            # for some cases (ex 7oui's JH AJP ligand), atom scheme is not consistent with chem_comp_atom
+            # in this case, we skip the atom
+            chem_comp_atom_idx = np.where(chem_comp_atom_id == atom_id)[0]
+            if len(chem_comp_atom_idx) == 0:
+                continue
+            atom_idx = auth_idx_to_atom_idx[auth_idx] + chem_comp_atom_idx
             full_xyz[atom_idx] = xyz[ii]
             full_b_factor[atom_idx] = b_factor[ii]
             full_occupancy[atom_idx] = occupancy[ii]
@@ -937,8 +1003,8 @@ def build_full_length_asym_dict() -> Callable[..., dict | None]:
         if asym_dict["branch_link"] is not None:  # Branched
             for residue_idx1, residue_idx2 in asym_dict["branch_link"]:
                 link_info = asym_dict["branch_link"][(residue_idx1, residue_idx2)]
-                res_idx1 = np.where(auth_idx_list == residue_idx1)[0][0]
-                res_idx2 = np.where(auth_idx_list == residue_idx2)[0][0]
+                res_idx1 = np.where(cif_idx_list == residue_idx1)[0][0]
+                res_idx2 = np.where(cif_idx_list == residue_idx2)[0][0]
                 residue_bond = EdgeFeature(
                     value=np.array([1], dtype=int),
                     src_indices=np.array([res_idx1], dtype=int),
@@ -1138,6 +1204,11 @@ def build_full_length_asym_dict() -> Callable[..., dict | None]:
     ) -> dict[str, dict[str, NDArray]] | None:
         output = {}
         for asym_id, _asym_dict in asym_dict.items():
+            if "atom_site" not in _asym_dict or len(_asym_dict.keys()) == 1:
+                # In case of UNL-only chain, atom_site cannot be constructed.
+                # Or there can be only atom_site without scheme info.
+                # We skip those chains.
+                continue
             rearranged = _function(_asym_dict, chem_comp_dict)
             output[asym_id] = rearranged
         return output
@@ -1267,17 +1338,23 @@ def parse_assembly_dict() -> Callable[..., dict[str, dict[str, NDArray]] | None]
     ) -> dict[str, dict[str, NDArray]] | None:
         output_dict = {}
         for assembly_id, infos in struct_assembly_gen_dict.items():
-            oper_expression = infos["oper_expression"]
-            oper_expression = parse_expression(oper_expression)
-            if oper_expression is None:
-                continue
-            asym_ids = infos["asym_id_list"][0].split(",")
             if assembly_id not in output_dict:
                 output_dict[assembly_id] = {}
-            for asym_id in asym_ids:
-                if asym_id not in output_dict[assembly_id]:
-                    output_dict[assembly_id][asym_id] = []
-                output_dict[assembly_id][asym_id].extend(oper_expression)
+            for _asym_ids, _oper_expression in zip(
+                infos["asym_id_list"],
+                infos["oper_expression"],
+                strict=True,
+            ):
+                if len(_asym_ids) == 0 or len(_oper_expression) == 0:
+                    continue
+                asym_ids = _asym_ids.split(",")
+                oper_expression = parse_expression(_oper_expression)
+                if oper_expression is None:
+                    continue
+                for asym_id in asym_ids:
+                    if asym_id not in output_dict[assembly_id]:
+                        output_dict[assembly_id][asym_id] = []
+                    output_dict[assembly_id][asym_id].extend(oper_expression)
         return output_dict
 
     return _worker
@@ -1342,7 +1419,10 @@ def build_assembly_dict() -> Callable[..., dict[str, dict[str, NDArray]] | None]
             _atom_indices = index_table.residues_to_atoms(np.array([residue_idx]))
 
             _atom_indices = np.where(atom_id_in_container[_atom_indices] == atom_id)[0]
-            atom_indices.append(_atom_indices)
+            if len(_atom_indices) == 0:
+                atom_indices.append(np.array([-1], dtype=int))  # e.g. hydrogen
+            else:
+                atom_indices.append(_atom_indices)
         return np.concatenate(atom_indices)
 
     def _worker(
@@ -1352,24 +1432,31 @@ def build_assembly_dict() -> Callable[..., dict[str, dict[str, NDArray]] | None]
         struct_conn_dict: dict[str, dict[str, NDArray]] | None,
     ) -> dict[str, dict[str, NDArray]] | None:
         output = {}
+        full_asym_id_list = list(asym_dict.keys())
         for assembly_id in struct_assembly_dict:
             asym_id_list = list(struct_assembly_dict[assembly_id].keys())
+            asym_id_list = [aid for aid in asym_id_list if aid in full_asym_id_list]
+            if len(asym_id_list) == 0:
+                # for the case where (X0) is included in oper_expression or unknown chain
+                continue
             asym_id_to_model_alt_id = {}
-            for asym_id in asym_id_list[0].split(","):
+            for asym_id in asym_id_list:
                 model_alt_id_list = list(asym_dict[asym_id].keys())
                 asym_id_to_model_alt_id[asym_id] = model_alt_id_list
 
             sets = [set(v) for v in asym_id_to_model_alt_id.values()]
 
-            model_alt_id_set = set.intersection(*sets)
+            model_alt_id_set = set.union(*sets)
 
             for model_alt_id in model_alt_id_set:
                 model_id, alt_id = model_alt_id
-                key = (assembly_id, model_id, alt_id)
+                key = f"{assembly_id}_{model_id}_{alt_id}"
                 asym_containers = {}
                 for asym_id in asym_id_list:
                     oper_id_list = struct_assembly_dict[assembly_id][asym_id]
                     if len(oper_id_list) == 0:
+                        continue
+                    if model_alt_id not in asym_id_to_model_alt_id[asym_id]:
                         continue
                     asym_container = asym_dict[asym_id][model_alt_id]
                     for oper_id in oper_id_list:
@@ -1434,7 +1521,20 @@ def build_assembly_dict() -> Callable[..., dict[str, dict[str, NDArray]] | None]
 
                 auth_idx_in_container = residue_container["auth_idx"]
                 atom_id_in_container = atom_container["atom_id"]
+
+                residue_src = []
+                residue_dst = []
+                atom_src = []
+                atom_dst = []
+                atom_value = []
                 for c1, c2 in struct_conn_dict:
+                    chain_id_with_oper = [
+                        (f"{c1}_{oper_id}", f"{c2}_{oper_id}")
+                        for oper_id, chains in oper_to_chains.items()
+                        if c1 in chains and c2 in chains
+                    ]
+                    if len(chain_id_with_oper) == 0:
+                        continue
                     _items = struct_conn_dict[(c1, c2)]
                     auth_idx1 = _items["ptnr1_auth_seq_id"]
                     auth_idx2 = _items["ptnr2_auth_seq_id"]
@@ -1472,16 +1572,6 @@ def build_assembly_dict() -> Callable[..., dict[str, dict[str, NDArray]] | None]
                         ],
                         dtype=str,
                     )
-                    chain_id_with_oper = [
-                        (f"{c1}_{oper_id}", f"{c2}_{oper_id}")
-                        for oper_id, chains in oper_to_chains.items()
-                        if c1 in chains and c2 in chains
-                    ]
-                    residue_src = []
-                    residue_dst = []
-                    atom_src = []
-                    atom_dst = []
-                    atom_value = []
                     for chain1, chain2 in chain_id_with_oper:
                         chain_idx1 = chain_id_list.index(chain1)
                         chain_idx2 = chain_id_list.index(chain2)
@@ -1515,17 +1605,21 @@ def build_assembly_dict() -> Callable[..., dict[str, dict[str, NDArray]] | None]
                             atom_id_in_container,
                         )
 
+                        valid_mask = (atom_indices1 != -1) & (atom_indices2 != -1)
+                        edge_value_masked = edge_value[valid_mask]
+                        atom_indices1 = atom_indices1[valid_mask]
+                        atom_indices2 = atom_indices2[valid_mask]
+
                         atom_src.append(atom_indices1)
                         atom_dst.append(atom_indices2)
-                        atom_value.append(edge_value)
+                        atom_value.append(edge_value_masked)
 
+                if len(residue_src) > 0 and len(atom_src) > 0:
                     residue_src = np.concatenate(residue_src)
                     residue_dst = np.concatenate(residue_dst)
                     atom_src = np.concatenate(atom_src)
                     atom_dst = np.concatenate(atom_dst)
                     atom_value = np.concatenate(atom_value)
-                    if len(atom_src) == 0:
-                        continue
                     residue_value = np.array(
                         [1] * len(residue_src),
                         dtype=int,
@@ -1536,24 +1630,20 @@ def build_assembly_dict() -> Callable[..., dict[str, dict[str, NDArray]] | None]
                         dst_indices=residue_dst,
                         description="struct_conn between residues. boolean.",
                     )
-                    try:
-                        atom_struct_conn = EdgeFeature(
-                            value=atom_value,
-                            src_indices=atom_src,
-                            dst_indices=atom_dst,
-                            description="struct_conn between atoms. (conn_type_id, pdbx_value_order)",
-                        )
-                    except:
-                        breakpoint()
+                    atom_struct_conn = EdgeFeature(
+                        value=atom_value,
+                        src_indices=atom_src,
+                        dst_indices=atom_dst,
+                        description="struct_conn between atoms. (conn_type_id, pdbx_value_order)",
+                    )
                     residue_container.edge_features["struct_conn"] = residue_struct_conn
                     atom_container.edge_features["struct_conn"] = atom_struct_conn
 
-                # struct_conn_dict TODO
                 output[key] = {
                     "atom": atom_container,
                     "residue": residue_container,
                     "chain": chain_container,
-                    "index_table": index_table,
+                    # "index_table": index_table,
                 }
         return output
 
