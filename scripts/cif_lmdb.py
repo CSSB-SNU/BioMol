@@ -1,5 +1,6 @@
 import importlib
 import os
+import glob
 from pathlib import Path
 
 import click
@@ -134,7 +135,7 @@ def merge(shard_pattern: str, output: Path, map_size: float, overwrite: bool) ->
     map_size = int(map_size)
 
     # Expand wildcard pattern
-    shard_paths = sorted(Path(p) for p in Path.glob(shard_pattern))
+    shard_paths = sorted(Path(p) for p in glob.glob(shard_pattern))
     if not shard_paths:
         msg = f"No LMDB files found for pattern: {shard_pattern}"
         raise click.ClickException(msg)
