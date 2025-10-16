@@ -10,11 +10,11 @@ from biomol.db.lmdb_handler import build_lmdb
 
 
 # ------------------------------
-# Helper: Load CIF file list
+# Helper: Load a3m file list
 # ------------------------------
-def load_cif_list(cif_dir: Path, pattern: str = "*.cif*") -> list[Path]:
-    """Load a list of CIF file paths from a directory."""
-    return list(cif_dir.rglob(pattern))
+def load_a3m_list(a3m_dir: Path, pattern: str = "*.a3m*") -> list[Path]:
+    """Load a list of a3m file paths from a directory."""
+    return list(a3m_dir.rglob(pattern))
 
 
 # ------------------------------
@@ -42,14 +42,14 @@ def load_lmdb_config(
 # ==============================================================
 @click.group()
 def cli() -> None:
-    """Build and merge LMDB databases from CIF files."""
+    """Build and merge LMDB databases from a3m files."""
 
 
 # ==============================================================
 # 1. Build Command
 # ==============================================================
 @cli.command("build")
-@click.argument("cif_dir", type=click.Path(exists=True, path_type=Path))
+@click.argument("a3m_dir", type=click.Path(exists=True, path_type=Path))
 @click.argument("env_path", type=click.Path(path_type=Path))
 @click.argument("parser", type=str)
 @click.argument("recipe_path", type=click.Path(path_type=Path))
@@ -62,45 +62,42 @@ def cli() -> None:
     help="Index of the shard to process (0-based).",
 )
 @click.option("--n-shards", "-n", type=int, default=1, show_default=True)
-@click.option("--ccd-db-path", type=click.Path(path_type=Path), default=None)
 def build(
-    cif_dir: Path,
+    a3m_dir: Path,
     env_path: Path,
     parser: str,
     recipe_path: Path,
     map_size: float,
     shard_idx: int | None,
     n_shards: int,
-    ccd_db_path: Path | None = None,
 ) -> None:
     """
-    Build an LMDB database from CIF_DIR into ENV_PATH.
+    Build an LMDB database from a3m_DIR into ENV_PATH.
 
     Example:
-        python cif_lmdb.py build ./cif ./cif.lmdb biomol.io.parsers.cif_parser:parse\\
+        python a3m_lmdb.py build ./a3m ./a3m.lmdb biomol.io.parsers.a3m_parser:parse\\
               ./plans/recipe.py \\
             --map-size 1e12 --shard-idx 0 --n-shards 4
     """
     map_size = int(map_size)
-    cif_list = load_cif_list(cif_dir)
+    a3m_list = load_a3m_list(a3m_dir)
 
     if shard_idx is not None:
         if shard_idx < 0 or shard_idx >= n_shards:
             msg = f"Invalid shard index {shard_idx} for {n_shards} shards."
             raise click.BadParameter(msg)
-        # Split CIF list into n_shards and take only the shard_idx part
-        cif_list = [cif for i, cif in enumerate(cif_list) if i % n_shards == shard_idx]
+        # Split a3m list into n_shards and take only the shard_idx part
+        a3m_list = [a3m for i, a3m in enumerate(a3m_list) if i % n_shards == shard_idx]
         click.echo(
-            f"Processing shard {shard_idx}/{n_shards} with {len(cif_list)} files.",
+            f"Processing shard {shard_idx}/{n_shards} with {len(a3m_list)} files.",
         )
     else:
-        click.echo(f"Processing all {len(cif_list)} files as a single shard.")
+        click.echo(f"Processing all {len(a3m_list)} files as a single shard.")
 
     config = load_lmdb_config(
         env_path,
         map_size=map_size,
         shard_idx=shard_idx,
-        ccd_db_path=ccd_db_path,
     )
 
     # Dynamically import parser function
@@ -108,7 +105,7 @@ def build(
     module = importlib.import_module(module_name)
     parser_func = getattr(module, func_name)
 
-    build_lmdb(*cif_list, **config, parser=parser_func, recipe=recipe_path)
+    build_lmdb(*a3m_list, **config, parser=parser_func, recipe=recipe_path)
 
 
 # ==============================================================
@@ -130,7 +127,7 @@ def merge(shard_pattern: str, output: Path, map_size: float, overwrite: bool) ->
     Merge multiple LMDB shard databases into a single LMDB file.
 
     Example:
-        python cif_lmdb.py merge "/data/BioMolDBv2_2024Oct21/cif_shard*.lmdb" -o /data/BioMolDBv2_2024Oct21/cif_merged.lmdb
+        python a3m_lmdb.py merge "/data/BioMolDBv2_2024Oct21/a3m_shard*.lmdb" -o /data/BioMolDBv2_2024Oct21/a3m_merged.lmdb
     """
     map_size = int(map_size)
 

@@ -668,7 +668,6 @@ def remove_unknown_atom_site() -> Callable[..., type[InputType]]:
                 values = np.array(values)[~np.array(unknown_mask)]
                 atom_site_dict[asym_id][key] = values
             new_dict[asym_id] = atom_site_dict[asym_id]
-
         return new_dict
 
     return _worker
@@ -836,20 +835,39 @@ def rearrange_atom_site_dict() -> Callable[..., dict | None]:
 
         key_list = list(rearranged_dict.keys() - {"alt_id", "model_id"})
 
+        # if alt id is present like 'A', 'B', then it can takes also alt_id=='.'
+        # which is wildcard in general.
+
         output = {}
         model_ids = np.unique(rearranged_dict["model_id"])
         for _model_id in model_ids:
             model_id = str(_model_id)
             model_mask = rearranged_dict["model_id"] == model_id
             alt_ids = np.unique(rearranged_dict["alt_id"][model_mask])
+            if len(alt_ids) > 1 and "." in alt_ids:
+                alt_ids = alt_ids[alt_ids != "."]
             output[model_id] = {}
             for _alt_id in alt_ids:
-                alt_id = str(_alt_id)
-                alt_mask = rearranged_dict["alt_id"] == alt_id
-                combined_mask = model_mask & alt_mask
-                output[model_id][alt_id] = {}
+                auth_idx_array = np.asarray(rearranged_dict["auth_idx"])
+                alt_id_array = np.asarray(rearranged_dict["alt_id"])
+                mask = np.zeros_like(alt_id_array, dtype=bool)
+                for idx in np.unique(auth_idx_array):
+                    group_mask = auth_idx_array == idx
+                    group_alt = alt_id_array[group_mask]
+                    has_target = np.any(group_alt == _alt_id)
+
+                    if has_target:
+                        # Mark True only where alt_id equals the reference alt_id
+                        mask[group_mask & (alt_id_array == _alt_id)] = True
+                    else:
+                        # If no reference alt_id exists, mark True where alt_id == '.'
+                        mask[group_mask & (alt_id_array == ".")] = True
+                combined_mask = model_mask & mask
+                output[model_id][str(_alt_id)] = {}
                 for key in key_list:
-                    output[model_id][alt_id][key] = rearranged_dict[key][combined_mask]
+                    output[model_id][str(_alt_id)][key] = rearranged_dict[key][
+                        combined_mask
+                    ]
         return {"atom_site": output}
 
     def _worker(
@@ -944,7 +962,6 @@ def build_full_length_asym_dict() -> Callable[..., dict | None]:
         full_xyz = np.full((full_atom_num, 3), np.nan, dtype=float)
         full_b_factor = np.full(full_atom_num, np.nan, dtype=float)
         full_occupancy = np.full(full_atom_num, np.nan, dtype=float)
-
         for ii in range(len(atom_atom)):
             chem_comp = chem_comp_dict[atom_chem_comp[ii]]
             chem_comp_atom_id = chem_comp["atom"]["atom_id"]
@@ -1450,6 +1467,7 @@ def build_assembly_dict() -> Callable[..., dict[str, dict[str, NDArray]] | None]
 
             for model_alt_id in model_alt_id_set:
                 model_id, alt_id = model_alt_id
+                wildcard_model_alt_id = (model_id, ".") if alt_id != "." else None
                 key = f"{assembly_id}_{model_id}_{alt_id}"
                 asym_containers = {}
                 for asym_id in asym_id_list:
@@ -1457,8 +1475,16 @@ def build_assembly_dict() -> Callable[..., dict[str, dict[str, NDArray]] | None]
                     if len(oper_id_list) == 0:
                         continue
                     if model_alt_id not in asym_id_to_model_alt_id[asym_id]:
-                        continue
-                    asym_container = asym_dict[asym_id][model_alt_id]
+                        if (
+                            wildcard_model_alt_id is not None
+                            and wildcard_model_alt_id
+                            in asym_id_to_model_alt_id[asym_id]
+                        ):
+                            asym_container = asym_dict[asym_id][wildcard_model_alt_id]
+                        else:
+                            continue
+                    else:
+                        asym_container = asym_dict[asym_id][model_alt_id]
                     for oper_id in oper_id_list:
                         asym_containers[f"{asym_id}_{oper_id}"] = _apply_RT(
                             asym_container,
