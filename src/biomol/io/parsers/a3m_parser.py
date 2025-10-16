@@ -30,11 +30,11 @@ def read_data(a3m_path: Path) -> dict:
 
 def parse(
     recipe_path: Path,
-    a3m_path: Path,
+    file_path: Path,
     targets: list[str] | None = None,
 ) -> dict:
     """Parse a a3m file using a predefined recipe."""
-    a3m_data = read_data(a3m_path)
+    a3m_data = read_data(file_path)
     parse_cache = ParsingCache()
     cooker = Cooker(parse_cache=parse_cache, recipebook=str(recipe_path))
     cooker.prep(a3m_data, fields=list(a3m_data.keys()))

@@ -33,7 +33,11 @@ def build_lmdb(
         key = data_file.stem
         key = key.split(".cif")[0]
         try:
-            data_dict = parser(ccd_db_path, recipe, data_file)
+            if ccd_db_path is not None:
+                data_dict = parser(recipe, data_file, ccd_db_path=ccd_db_path)
+            else:
+                data_dict = parser(recipe, data_file)
+            data_dict = parser(recipe, data_file)
             zcompressed_data = to_bytes(data_dict)
             return key.encode(), zcompressed_data, None
         except Exception as error:

@@ -40,13 +40,13 @@ def dot_transform(key: str) -> list[str]:
 
 
 def parse(
-    ccd_db_path: Path | None,
     recipe_path: Path,
-    cif_path: Path,
+    file_path: Path,
     targets: list[str] | None = None,
+    ccd_db_path: Path | None = None,
 ) -> dict:
     """Parse a CIF file using a predefined recipe."""
-    cif_data = get_cif_data(cif_path)
+    cif_data = get_cif_data(file_path)
     cif_data["ccd_db_path"] = ccd_db_path
     parse_cache = ParsingCache(dot_transform)
     cooker = Cooker(parse_cache=parse_cache, recipebook=str(recipe_path))
