@@ -1,3 +1,4 @@
+import gzip
 from pathlib import Path
 
 from biomol.io.cache import ParsingCache
@@ -6,8 +7,15 @@ from biomol.io.cooker import Cooker
 
 def read_data(a3m_path: Path) -> dict:
     """Parse a a3m file and return its data as a dictionary."""
-    with open(a3m_path) as f:
-        lines = f.readlines()
+    if a3m_path.suffix not in {".a3m", ".a3m.gz"}:
+        msg = f"Unsupported file format: {a3m_path}"
+        raise ValueError(msg)
+    if a3m_path.suffix == ".gz":
+        with gzip.open(a3m_path, "rt") as f:
+            lines = f.readlines()
+    else:
+        with open(a3m_path) as f:
+            lines = f.readlines()
     if len(lines) < 2 or not lines[0].startswith(">"):  # noqa: PLR2004
         msg = f"Unsupported file format: {a3m_path}"
         raise ValueError(msg)
