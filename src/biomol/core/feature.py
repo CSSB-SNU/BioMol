@@ -42,7 +42,7 @@ class Feature(ABC, NDArrayOperatorsMixin):
     This class supports numpy operations and can be indexed and cropped.
     """
 
-    value: np.ndarray
+    value: NDArray[Any]
     """The underlying numpy array representing the feature data."""
 
     description: str | None = None
@@ -70,19 +70,19 @@ class Feature(ABC, NDArrayOperatorsMixin):
         """Return the total number of elements in the feature."""
         return self.value.size
 
-    def mean(self, axis: int | None = None, **kwargs: dict) -> np.ndarray:
+    def mean(self, axis: int | None = None, **kwargs: Any) -> Any:  # noqa: ANN401
         """Return the mean of the feature along the specified axis."""
         return self.value.mean(axis=axis, **kwargs)
 
-    def sum(self, axis: int | None = None, **kwargs: dict) -> np.ndarray:
+    def sum(self, axis: int | None = None, **kwargs: Any) -> Any:  # noqa: ANN401
         """Return the sum of the feature along the specified axis."""
         return self.value.sum(axis=axis, **kwargs)
 
-    def min(self, axis: int | None = None, **kwargs: dict) -> np.ndarray:
+    def min(self, axis: int | None = None, **kwargs: Any) -> Any:  # noqa: ANN401
         """Return the minimum of the feature along the specified axis."""
         return self.value.min(axis=axis, **kwargs)
 
-    def max(self, axis: int | None = None, **kwargs: dict) -> np.ndarray:
+    def max(self, axis: int | None = None, **kwargs: Any) -> Any:  # noqa: ANN401
         """Return the maximum of the feature along the specified axis."""
         return self.value.max(axis=axis, **kwargs)
 
@@ -108,10 +108,7 @@ class Feature(ABC, NDArrayOperatorsMixin):
         """Prevent ambiguous truth value evaluation."""
         return bool(self.value)
 
-    def __array__(
-        self,
-        dtype: NDArray[np.generic] | None = None,
-    ) -> NDArray[np.generic]:
+    def __array__(self, dtype: DTypeLike | None = None) -> NDArray[Any]:
         """Convert the feature to a numpy array.
 
         This method is called when numpy functions are applied to the feature.
@@ -284,7 +281,7 @@ class EdgeFeature(Feature):
         )
 
     def _empty_like(self) -> Self:
-        empty = np.empty((0,) + self.value.shape[1:], dtype=self.value.dtype)
+        empty = np.empty((0, *self.value.shape[1:]), dtype=self.value.dtype)
         ind = np.empty((0,), dtype=self.src_indices.dtype)
         return replace(self, value=empty, src_indices=ind, dst_indices=ind)
 

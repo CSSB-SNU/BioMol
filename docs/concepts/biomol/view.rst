@@ -5,7 +5,7 @@
 View
 ====
 
-A :class:`View <core.ViewProtocol>` represents a *selection* at a specific structural level—**atoms, residues, or chains**.
+A :class:`View <core.View>` represents a *selection* at a specific structural level—**atoms, residues, or chains**.
 Views are lightweight, index-based projections of the parent :class:`BioMol`.
 
 Key characteristics of Views include:
@@ -24,7 +24,7 @@ To enter a view, first create a BioMol object:
    mol = BioMol(...)
 
 
-You can then access views via the :meth:`atoms <core.ViewProtocol.atoms>`, :meth:`residues <core.ViewProtocol.residues>`, and :meth:`chains <core.ViewProtocol.chains>` attributes:
+You can then access views via the :meth:`atoms <core.View.atoms>`, :meth:`residues <core.View.residues>`, and :meth:`chains <core.View.chains>` attributes:
 
 .. code-block:: python
 
@@ -33,7 +33,7 @@ You can then access views via the :meth:`atoms <core.ViewProtocol.atoms>`, :meth
     mol.chains # ChainView
 
 
-Access features with attribute syntax or the :meth:`get_feature <core.ViewProtocol.get_feature>` method:
+Access features with attribute syntax or the :meth:`get_feature <core.View.get_feature>` method:
 
 .. code-block:: python
 
@@ -41,7 +41,7 @@ Access features with attribute syntax or the :meth:`get_feature <core.ViewProtoc
     mol.atoms.get_feature("name")
 
 
-From any view, you can return to the parent :class:`BioMol` via the :attr:`mol <core.ViewProtocol.mol>` attribute:
+From any view, you can return to the parent :class:`BioMol` via the :attr:`mol <core.View.mol>` attribute:
 
 .. code-block:: python
     
@@ -51,11 +51,11 @@ From any view, you can return to the parent :class:`BioMol` via the :attr:`mol <
 Indexing and Selection
 ----------------------
 
-Views support two primary ways to filter data: NumPy-style indexing and the PyMOL-like :meth:`select <core.ViewProtocol.select>` method.
+Views support two primary ways to filter data: NumPy-style indexing and the PyMOL-like :meth:`select <core.View.select>` method.
 
 **NumPy-style Indexing**
 
-Views support standard NumPy indexing operations, which always return a new :class:`View <core.ViewProtocol>` object.
+Views support standard NumPy indexing operations, which always return a new :class:`View <core.View>` object.
 
 - **Slicing:**
 
@@ -108,7 +108,7 @@ Indexing operations can be chained—an indexed view can itself be indexed again
 
 **PyMOL-like Selection**
 
-The :meth:`select <core.ViewProtocol.select>` method provides a **PyMOL-like but Pythonic** way of filtering.
+The :meth:`select <core.View.select>` method provides a **PyMOL-like but Pythonic** way of filtering.
 
 - **Single condition:**
 
@@ -164,8 +164,8 @@ This is not strictly hierarchical: any view can navigate to another level.
 
 .. note::
     
-    Transitions using properties (:attr:`atoms <core.ViewProtocol.atoms>`, :attr:`residues <core.ViewProtocol.residues>`, :attr:`chains <core.ViewProtocol.chains>`) always return views with **unique indices**. 
-    If you want to preserve duplicates (element-wise), use the explicit methods (:meth:`to_atoms <core.ViewProtocol.to_atoms>`, :meth:`to_residues <core.ViewProtocol.to_residues>`, :meth:`to_chains <core.ViewProtocol.to_chains>`).
+    Transitions using properties (:attr:`atoms <core.View.atoms>`, :attr:`residues <core.View.residues>`, :attr:`chains <core.View.chains>`) always return views with **unique indices**. 
+    If you want to preserve duplicates (element-wise), use the explicit methods (:meth:`to_atoms <core.View.to_atoms>`, :meth:`to_residues <core.View.to_residues>`, :meth:`to_chains <core.View.to_chains>`).
 
     .. code-block:: python
         
@@ -182,7 +182,7 @@ This is not strictly hierarchical: any view can navigate to another level.
 Operations
 ----------
 
-:class:`View <core.ViewProtocol>` objects support concatenation and set-wise operations.
+:class:`View <core.View>` objects support concatenation and set-wise operations.
 
 .. note::
     Operations are only supported between views of the same structural level within the same parent :class:`BioMol`.
@@ -218,12 +218,12 @@ Additional Methods
 
 **Index Manipulation**
 
-- :attr:`.indices <core.ViewProtocol.indices>`: Accesses the raw NumPy array of indices.
-- :meth:`unique <core.ViewProtocol.unique>`: Returns a new view with duplicate indices removed.
-- :meth:`sort <core.ViewProtocol.sort>`: Returns a new view with indices sorted in ascending order.
-- :meth:`new <core.ViewProtocol.new>`: Creates a new view from a raw array of indices.
+- :attr:`.indices <core.View.indices>`: Accesses the raw NumPy array of indices.
+- :meth:`unique <core.View.unique>`: Returns a new view with duplicate indices removed.
+- :meth:`sort <core.View.sort>`: Returns a new view with indices sorted in ascending order.
+- :meth:`new <core.View.new>`: Creates a new view from a raw array of indices.
 
 **State Checking**
 
-- :meth:`is_empty <core.ViewProtocol.is_empty>`: Checks if a view contains no elements.
-- :meth:`is_subset <core.ViewProtocol.is_subset>`: Checks if one view is fully contained within another.
+- :meth:`is_empty <core.View.is_empty>`: Checks if a view contains no elements.
+- :meth:`is_subset <core.View.is_subset>`: Checks if one view is fully contained within another.

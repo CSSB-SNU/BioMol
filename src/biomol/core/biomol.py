@@ -1,4 +1,7 @@
+# pyright: reportImportCycles=none
+
 import json
+from collections.abc import Mapping
 from dataclasses import asdict
 from io import BytesIO
 from typing import Any, Generic
@@ -51,17 +54,17 @@ class BioMol(Generic[A_co, R_co, C_co]):
     @property
     def atoms(self) -> A_co:
         """View of the atoms in the selection."""
-        return AtomView(self, np.arange(len(self._atom_container)))
+        return AtomView(self, np.arange(len(self._atom_container)))  # pyright: ignore[reportReturnType]
 
     @property
     def residues(self) -> R_co:
         """View of the residues in the selection."""
-        return ResidueView(self, np.arange(len(self._residue_container)))
+        return ResidueView(self, np.arange(len(self._residue_container)))  # pyright: ignore[reportReturnType]
 
     @property
     def chains(self) -> C_co:
         """View of the chains in the selection."""
-        return ChainView(self, np.arange(len(self._chain_container)))
+        return ChainView(self, np.arange(len(self._chain_container)))  # pyright: ignore[reportReturnType]
 
     @property
     def index_table(self) -> IndexTable:
@@ -103,7 +106,7 @@ class BioMol(Generic[A_co, R_co, C_co]):
             "atoms": self._atom_container.to_dict(),
             "residues": self._residue_container.to_dict(),
             "chains": self._chain_container.to_dict(),
-            "index_table": asdict(self._index),
+            "index_table": asdict(self._index),  # pyright: ignore[reportReturnType]
             "metadata": self._metadata,
         }
 
@@ -138,7 +141,9 @@ class BioMol(Generic[A_co, R_co, C_co]):
             The compression level for zstd (default is 6).
         """
 
-        def _flatten_data(data: dict) -> tuple[dict, dict]:
+        def _flatten_data(
+            data: Mapping[str, Any],
+        ) -> tuple[dict[str, Any], dict[str, Any]]:
             template = {}
             flatten = {}
             for key, value in data.items():
@@ -172,7 +177,10 @@ class BioMol(Generic[A_co, R_co, C_co]):
     def from_bytes(cls, byte_data: bytes) -> Self:
         """Deserialize the container from zstd-compressed bytes."""
 
-        def _reconstruct_data(template: dict, flatten: dict) -> dict:
+        def _reconstruct_data(
+            template: dict[str, Any],
+            flatten: dict[str, Any],
+        ) -> dict[str, Any]:
             data = {}
             for key, value in template.items():
                 if isinstance(value, str) and value in flatten:
@@ -200,7 +208,7 @@ class BioMol(Generic[A_co, R_co, C_co]):
 
         template_dict = header["template"]
         data = _reconstruct_data(template_dict, flatten_data)
-        return cls.from_dict(data)
+        return cls.from_dict(data)  # pyright: ignore[reportArgumentType]
 
     def _check_lengths(self) -> None:
         """Check if the lengths of the containers and index table are consistent."""

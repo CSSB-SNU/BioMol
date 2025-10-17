@@ -73,7 +73,7 @@ class FeatureContainer:
 
     def to_dict(self) -> FeatureContainerDict:
         """Convert the container to a dictionary."""
-        return {
+        return {  # pyright: ignore[reportReturnType]
             "nodes": {k: asdict(v) for k, v in self.node_features.items()},
             "edges": {k: asdict(v) for k, v in self.edge_features.items()},
         }

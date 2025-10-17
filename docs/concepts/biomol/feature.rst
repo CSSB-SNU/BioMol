@@ -5,7 +5,7 @@
 Feature
 =======
 
-A :class:`Feature <core.Feature>` provides a NumPy array–like interface to the underlying data of a :class:`View <core.ViewProtocol>`, such as atom coordinates or residue names.  
+A :class:`Feature <core.Feature>` provides a NumPy array–like interface to the underlying data of a :class:`View <core.View>`, such as atom coordinates or residue names.  
 The primary purpose of the :class:`Feature <core.Feature>` is to enable efficient, vectorized computations while preserving the structural context of the molecule.
 
 Key characteristics include:
@@ -41,7 +41,7 @@ These arrays have the same length as the feature itself, ensuring that each edge
 Basic Usage
 -----------
 
-Features can be accessed either as attributes of a :class:`View <core.ViewProtocol>` or by name using the :meth:`get_feature <core.ViewProtocol.get_feature>` method.
+Features can be accessed either as attributes of a :class:`View <core.View>` or by name using the :meth:`get_feature <core.View.get_feature>` method.
 
 .. code-block:: python
 
@@ -52,7 +52,7 @@ Features can be accessed either as attributes of a :class:`View <core.ViewProtoc
     # Method access is useful for dynamic access
     chain_ids = mol.chains.get_feature("id")
 
-A key behavior is that features are automatically reindexed from the :class:`View <core.ViewProtocol>` they are accessed from. This ensures that feature values always correspond to the current selection in the view.
+A key behavior is that features are automatically reindexed from the :class:`View <core.View>` they are accessed from. This ensures that feature values always correspond to the current selection in the view.
 
 .. code-block:: python
 
@@ -61,7 +61,7 @@ A key behavior is that features are automatically reindexed from the :class:`Vie
 
 .. note::
 
-   :class:`Feature <core.Feature>` objects are reindexed on-the-fly when accessed from a :class:`View <core.ViewProtocol>`.  
+   :class:`Feature <core.Feature>` objects are reindexed on-the-fly when accessed from a :class:`View <core.View>`.  
    Features are not reindexed immediately when the view is filtered; instead, they are reindexed lazily upon access.
 
 
