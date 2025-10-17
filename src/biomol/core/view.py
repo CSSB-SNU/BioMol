@@ -14,6 +14,7 @@ from biomol.exceptions import (
 )
 
 from .feature import EdgeFeature
+from .index import IndexTable
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -250,6 +251,49 @@ class View(Generic[A_co, R_co, C_co, M_co]):
                 mask &= feature_mask
 
         return self.new(self.indices[mask])
+
+    def extract(self) -> M_co:
+        """Extract a new BioMol cropped to the current view.
+
+        Returns
+        -------
+        mol
+            Cropped BioMol object.
+
+        Examples
+        --------
+
+        .. code-block:: python
+
+            mol = BioMol(...)
+            cropped_mol = mol.atoms[:10].extract()
+
+        """
+        atoms = self.atoms
+        residues = self.residues
+        chains = self.chains
+
+        def _reindex_map(
+            ori_map: NDArray[np.integer],
+            query: NDArray[np.integer],
+        ) -> NDArray[np.integer]:
+            sorted_indices = np.argsort(ori_map)
+            return sorted_indices[
+                np.searchsorted(ori_map, query, sorter=sorted_indices)
+            ]
+
+        index_table = IndexTable.from_parents(
+            atom_to_res=_reindex_map(residues.indices, atoms.to_residues().indices),
+            res_to_chain=_reindex_map(chains.indices, residues.to_chains().indices),
+            n_chain=len(chains),
+        )
+        return self.mol.__class__(
+            atoms.get_container(),
+            residues.get_container(),
+            chains.get_container(),
+            index_table,
+            self.mol.metadata,
+        )
 
     def _check_same_level(self, other: Self) -> None:
         if not isinstance(other, View):

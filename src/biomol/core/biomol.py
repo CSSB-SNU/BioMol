@@ -7,7 +7,6 @@ from io import BytesIO
 from typing import Any, Generic
 
 import numpy as np
-from numpy.typing import NDArray
 from typing_extensions import Self
 from zstandard import ZstdCompressor, ZstdDecompressor
 
@@ -210,66 +209,6 @@ class BioMol(Generic[A_co, R_co, C_co]):
         template_dict = header["template"]
         data = _reconstruct_data(template_dict, flatten_data)
         return cls.from_dict(data)  # pyright: ignore[reportArgumentType]
-
-    @classmethod
-    def crop(cls, view: A_co | R_co | C_co) -> Self:
-        """Create a cropped BioMol object from a view.
-
-        Parameters
-        ----------
-        view: AtomView | ResidueView | ChainView
-            Specifies the view to crop. Based on the view indices, the corresponding
-            biomol will be cropped.
-
-        Returns
-        -------
-        Self
-            Cropped BioMol object.
-
-        Examples
-        --------
-        Cropping with instance method
-
-        .. code-block:: python
-
-            mol = BioMol(...)
-            first10_atoms = mol.atoms[:10]
-            cropped_mol = mol.crop(first10_atoms)
-
-        Cropping with class method
-
-        .. code-block:: python
-
-            mol = BioMol(...)
-            glycines = mol.residues.select(name="GLY")
-            cropped_mol = BioMol.crop(glycines)
-
-        """
-        atoms = view.atoms
-        residues = view.residues
-        chains = view.chains
-
-        def _reindex_map(
-            ori_map: NDArray[np.integer],
-            query: NDArray[np.integer],
-        ) -> NDArray[np.integer]:
-            sorted_indices = np.argsort(ori_map)
-            return sorted_indices[
-                np.searchsorted(ori_map, query, sorter=sorted_indices)
-            ]
-
-        index_table = IndexTable.from_parents(
-            atom_to_res=_reindex_map(residues.indices, atoms.to_residues().indices),
-            res_to_chain=_reindex_map(chains.indices, residues.to_chains().indices),
-            n_chain=len(chains),
-        )
-        return cls(
-            atoms.get_container(),
-            residues.get_container(),
-            chains.get_container(),
-            index_table,
-            view.mol.metadata,
-        )
 
     def _check_lengths(self) -> None:
         """Check if the lengths of the containers and index table are consistent."""
