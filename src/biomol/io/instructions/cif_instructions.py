@@ -844,15 +844,17 @@ def rearrange_atom_site_dict() -> Callable[..., dict | None]:
             model_id = str(_model_id)
             model_mask = rearranged_dict["model_id"] == model_id
             alt_ids = np.unique(rearranged_dict["alt_id"][model_mask])
-            if len(alt_ids) > 1 and "." in alt_ids:
-                alt_ids = alt_ids[alt_ids != "."]
             output[model_id] = {}
             for _alt_id in alt_ids:
+                atom_array = np.asarray(rearranged_dict["atom"])
                 auth_idx_array = np.asarray(rearranged_dict["auth_idx"])
+                determinant_array = np.asarray(
+                    [f"{a}.{b}" for a, b in zip(atom_array, auth_idx_array)]
+                )
                 alt_id_array = np.asarray(rearranged_dict["alt_id"])
                 mask = np.zeros_like(alt_id_array, dtype=bool)
-                for idx in np.unique(auth_idx_array):
-                    group_mask = auth_idx_array == idx
+                for determinant in np.unique(determinant_array):
+                    group_mask = determinant_array == determinant
                     group_alt = alt_id_array[group_mask]
                     has_target = np.any(group_alt == _alt_id)
 
@@ -1405,25 +1407,16 @@ def build_assembly_dict() -> Callable[..., dict[str, dict[str, NDArray]] | None]
     """Remove chains where all residues are UNL."""
 
     def _apply_RT(
-        asym_container: dict[str, FeatureContainer],
-        matrix: NDArray,
-        vector: NDArray,
-    ) -> dict[str, FeatureContainer]:
-        atom_container = asym_container["atom"]
+        atom_container: FeatureContainer, matrix: NDArray, vector: NDArray
+    ) -> FeatureContainer:
         xyz = atom_container.node_features["xyz"].value
         new_xyz = xyz @ matrix.T + vector
-        atom_node_features = atom_container.node_features
-        atom_edge_features = atom_container.edge_features
-        atom_node_features["xyz"] = NodeFeature(
+        new_atom_container = atom_container.copy()
+        new_atom_container.node_features["xyz"] = NodeFeature(
             value=new_xyz,
-            description=atom_node_features["xyz"].description,
+            description=atom_container.node_features["xyz"].description,
         )
-        new_atom_container = FeatureContainer(
-            node_features=atom_node_features,
-            edge_features=atom_edge_features,
-        )
-        asym_container["atom"] = new_atom_container
-        return asym_container
+        return new_atom_container
 
     def _get_atom_indices(
         residue_indices: np.ndarray,
@@ -1485,12 +1478,24 @@ def build_assembly_dict() -> Callable[..., dict[str, dict[str, NDArray]] | None]
                             continue
                     else:
                         asym_container = asym_dict[asym_id][model_alt_id]
+                    _atom_container = asym_container["atom"]
+                    _residue_container = asym_container["residue"]
+                    _chain_container = asym_container["chain"]
+                    _atom_to_residue_idx = asym_container["atom_to_residue_idx"]
+
                     for oper_id in oper_id_list:
-                        asym_containers[f"{asym_id}_{oper_id}"] = _apply_RT(
-                            asym_container,
+                        new_atom_container = _apply_RT(
+                            _atom_container,
                             struct_oper_dict[oper_id]["matrix"],
                             struct_oper_dict[oper_id]["vector"],
                         )
+                        asym_containers[f"{asym_id}_{oper_id}"] = {
+                            "atom": new_atom_container,
+                            "residue": _residue_container,
+                            "chain": _chain_container,
+                            "atom_to_residue_idx": _atom_to_residue_idx,
+                        }
+
                 chain_id_list = list(asym_containers.keys())
                 atom_container_list = [
                     asym_containers[asym_id]["atom"] for asym_id in asym_containers

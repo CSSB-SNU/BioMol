@@ -149,26 +149,57 @@ class CIFMol(BioMol["CIFAtomView", "CIFResidueView", "CIFChainView"]):
         5. ~_entity (TODO)
         """
 
-        # output = f"#\ndata_{self.metadata['id']}_{self.model_id}_{self.alt_id}\n"
+        def _to_mmcif_format(array: np.ndarray) -> list:
+            _list = [str(item) for item in array]
+            max_length = max([len(item) for item in _list])
+            return [item.ljust(max_length) for item in _list]
+
         output = f"#\ndata_{self.id}_{self.model_id}_{self.alt_id}\n"
 
+        header = [
+            "_atom_site.group_PDB",
+            "_atom_site.id",
+            "_atom_site.type_symbol",
+            "_atom_site.label_atom_id",
+            "_atom_site.label_alt_id",
+            "_atom_site.label_comp_id",
+            "_atom_site.label_asym_id",
+            "_atom_site.label_entity_id",
+            "_atom_site.label_seq_id",
+            "_atom_site.pdbx_PDB_ins_code",
+            "_atom_site.Cartn_x",
+            "_atom_site.Cartn_y",
+            "_atom_site.Cartn_z",
+            "_atom_site.occupancy",
+            "_atom_site.B_iso_or_equiv",
+            "_atom_site.pdbx_formal_charge",
+            "_atom_site.auth_seq_id",
+            "_atom_site.auth_comp_id",
+            "_atom_site.auth_asym_id",
+            "_atom_site.auth_atom_id",
+            "_atom_site.pdbx_PDB_model_num",
+        ]
+        output += "#\n"
+        output += "loop_\n"
+        output += "\n".join(header) + "\n"
+
         xyz = self.atoms.xyz
-        mask = ~np.isnan(xyz).any(axis=1)
+        mask = ~np.isnan(xyz).value.any(axis=1)
         length = mask.sum()
         atom_to_res = np.array(self.index_table.atom_to_res)
         res_to_chain = np.array(self.index_table.res_to_chain)
         atom_to_chain = res_to_chain[atom_to_res]
 
-        group_PDB_list = self.residues.hetero[atom_to_res][mask]
+        group_PDB_list = self.residues.hetero[atom_to_res][mask].value
         id_list = 1 + np.arange(length)
-        type_symbol_list = self.atoms.element[mask]
-        label_atom_id_list = self.atoms.atom_id[mask]
+        type_symbol_list = self.atoms.element[mask].value
+        label_atom_id_list = self.atoms.atom_id[mask].value
         label_alt_id_list = [self.alt_id] * length
-        label_comp_id_list = self.residues.chem_comp[atom_to_res][mask]
-        label_asym_id_list = self.chains.chain_id[atom_to_chain][mask]
-        label_entity_id_list = self.chains.entity_id[atom_to_chain][mask]
-        label_seq_id_list = self.residues.cif_idx[atom_to_res][mask]
-        auth_idx_list = self.residues.auth_idx[atom_to_res][mask]
+        label_comp_id_list = self.residues.chem_comp[atom_to_res][mask].value
+        label_asym_id_list = self.chains.chain_id[atom_to_chain][mask].value
+        label_entity_id_list = self.chains.entity_id[atom_to_chain][mask].value
+        label_seq_id_list = self.residues.cif_idx[atom_to_res][mask].value
+        auth_idx_list = self.residues.auth_idx[atom_to_res][mask].value
         auth_seq_id_list, ins_code_list = zip(
             *[
                 (p[0], p[1] if len(p) > 1 else "?")
@@ -177,231 +208,64 @@ class CIFMol(BioMol["CIFAtomView", "CIFResidueView", "CIFChainView"]):
             strict=False,
         )
 
-        # ins_code_list = [
-        Cartn_x_list = self.atoms.xyz[mask, 0]
-        Cartn_y_list = self.atoms.xyz[mask, 1]
-        Cartn_z_list = self.atoms.xyz[mask, 2]
-        occupancy_list = self.atoms.occupancy[mask]
-        B_iso_or_equiv_list = self.atoms.b_factor[mask]
-        pdbx_formal_charge_list = self.atoms.charge[mask]
+        cartn_x_list = self.atoms.xyz[mask, 0].value
+        cartn_y_list = self.atoms.xyz[mask, 1].value
+        cartn_z_list = self.atoms.xyz[mask, 2].value
+        occupancy_list = self.atoms.occupancy[mask].value
+        b_iso_or_equiv_list = self.atoms.b_factor[mask].value
+        pdbx_formal_charge_list = self.atoms.charge[mask].value
         pdbx_PDB_model_num_list = [self.model_id] * length
 
-        def _to_mmcif_format(list):
-            list = [str(item) for item in list]
-            max_length = max([len(item) for item in list])
-            list = [item.ljust(max_length) for item in list]
-            return list
+        # to mmcif format
+        group_PDB_list = _to_mmcif_format(group_PDB_list)
+        type_symbol_list = _to_mmcif_format(type_symbol_list)
+        label_atom_id_list = _to_mmcif_format(label_atom_id_list)
+        label_comp_id_list = _to_mmcif_format(label_comp_id_list)
+        label_asym_id_list = _to_mmcif_format(label_asym_id_list)
+        label_entity_id_list = _to_mmcif_format(label_entity_id_list)
+        label_seq_id_list = _to_mmcif_format(label_seq_id_list)
+        ins_code_list = _to_mmcif_format(ins_code_list)
+        auth_idx_list = _to_mmcif_format(auth_idx_list)
+        auth_seq_id_list = _to_mmcif_format(auth_seq_id_list)
+        id_list = _to_mmcif_format(id_list)
+        cartn_x_list = [f"{x:.3f}" for x in cartn_x_list]
+        cartn_y_list = [f"{y:.3f}" for y in cartn_y_list]
+        cartn_z_list = [f"{z:.3f}" for z in cartn_z_list]
+        cartn_x_list = _to_mmcif_format(cartn_x_list)
+        cartn_y_list = _to_mmcif_format(cartn_y_list)
+        cartn_z_list = _to_mmcif_format(cartn_z_list)
+        occupancy_list = [f"{o:.2f}" for o in occupancy_list]
+        b_iso_or_equiv_list = [f"{b:.2f}" for b in b_iso_or_equiv_list]
+        occupancy_list = _to_mmcif_format(occupancy_list)
+        b_iso_or_equiv_list = _to_mmcif_format(b_iso_or_equiv_list)
+        pdbx_formal_charge_list = _to_mmcif_format(pdbx_formal_charge_list)
+        pdbx_PDB_model_num_list = _to_mmcif_format(pdbx_PDB_model_num_list)
 
-        def _write_atom_site(self):
-            header = [
-                "_atom_site.group_PDB",
-                "_atom_site.id",
-                "_atom_site.type_symbol",
-                "_atom_site.label_atom_id",
-                "_atom_site.label_alt_id",
-                "_atom_site.label_comp_id",
-                "_atom_site.label_asym_id",
-                "_atom_site.label_entity_id",
-                "_atom_site.label_seq_id",
-                "_atom_site.pdbx_PDB_ins_code",
-                "_atom_site.Cartn_x",
-                "_atom_site.Cartn_y",
-                "_atom_site.Cartn_z",
-                "_atom_site.occupancy",
-                "_atom_site.B_iso_or_equiv",
-                "_atom_site.pdbx_formal_charge",
-                "_atom_site.auth_seq_id",
-                "_atom_site.auth_comp_id",
-                "_atom_site.auth_asym_id",
-                "_atom_site.auth_atom_id",
-                "_atom_site.pdbx_PDB_model_num",
+        for idx in range(length):
+            fields = [
+                group_PDB_list[idx],
+                id_list[idx],
+                type_symbol_list[idx],
+                label_atom_id_list[idx],
+                label_alt_id_list[idx],
+                label_comp_id_list[idx],
+                label_asym_id_list[idx],
+                label_entity_id_list[idx],
+                label_seq_id_list[idx],
+                ins_code_list[idx],
+                cartn_x_list[idx],
+                cartn_y_list[idx],
+                cartn_z_list[idx],
+                occupancy_list[idx],
+                b_iso_or_equiv_list[idx],
+                pdbx_formal_charge_list[idx],
+                auth_seq_id_list[idx],
+                label_comp_id_list[idx],
+                label_asym_id_list[idx],
+                label_atom_id_list[idx],
+                pdbx_PDB_model_num_list[idx],
             ]
-            output = "#\n"
-            output += "loop_\n"
-            output += "\n".join(header) + "\n"
+            output += " ".join(map(str, fields)) + "\n"
 
-            length = len(self.atoms)
-            group_PDB_list = self.atoms.hetero
-            id_list = 1 + np.arange(length)
-            type_symbol_list = self.atoms.element
-            label_atom_id_list = self.atoms.atom_id
-            label_alt_id_list = [self.alt_id] * length
-
-            atom_tensor = self.atom_tensor
-            length = len(atom_tensor)
-
-            residue_auth_idx_list = self.scheme.auth_idx_list
-            residue_ins_code_list = [
-                "?" if len(auth_idx.split(".")) == 1 else auth_idx.split(".")[1]
-                for auth_idx in residue_auth_idx_list
-            ]
-            residue_chem_comp_list = self.scheme.chem_comp_list
-            chem_comp_full_atom_dict = {}
-            for chem_comp_str in self.scheme.chem_comp_list:
-                chem_comp = self.chem_comp_dict[chem_comp_str]
-                full_atom_list = chem_comp.get_atoms(one_letter=False)
-                one_letter_atom_list = chem_comp.get_atoms(one_letter=True)
-                hydrogen_mask = [atom == "H" for atom in one_letter_atom_list]
-                chem_comp_full_atom_dict[chem_comp_str] = [
-                    full_atom
-                    for full_atom, mask in zip(full_atom_list, hydrogen_mask)
-                    if not mask
-                ]
-
-            residue_idx_to_chain_entity = {}
-
-            for entity_idx in range(len(self.entity_list)):
-                chain = list(self.residue_chain_break.keys())[entity_idx]
-                start, end = self.residue_chain_break[chain]
-                for idx in range(start, end + 1):
-                    residue_idx_to_chain_entity[idx] = (chain, entity_idx + 1)
-
-            group_PDB_list = []
-            auth_idx_list = []
-            ins_code_list = []
-            type_symbol_list = []
-            label_atom_id_list = []
-            label_comp_id_list = []
-            label_entity_id_list = []
-            label_asym_id_list = []
-            label_seq_list = []
-            before_residue_idx = -1
-            scheme_idx = -1
-            residue_start = 0
-            for line_idx in range(length):
-                hetero = int(atom_tensor[line_idx, 0].item()) == -1
-                hetero = "HETATM" if hetero else "ATOM  "
-                atom_idx = int(atom_tensor[line_idx, 3].item())
-                residue_idx = int(atom_tensor[line_idx, 2].item())
-                if before_residue_idx != residue_idx:
-                    residue_start = 0
-                    scheme_idx += 1
-                chem_comp_str = residue_chem_comp_list[scheme_idx]
-                chem_comp_full_atom = chem_comp_full_atom_dict[chem_comp_str]
-
-                auth_idx = residue_auth_idx_list[scheme_idx]
-                ins_code = residue_ins_code_list[scheme_idx]
-                type_symbol = num_to_atom[atom_idx]
-
-                label_atom_id = chem_comp_full_atom[residue_start]
-                chain, entity_id = residue_idx_to_chain_entity[scheme_idx]
-
-                group_PDB_list.append(hetero)
-                auth_idx_list.append(auth_idx)
-                ins_code_list.append(ins_code)
-                type_symbol_list.append(type_symbol)
-                label_atom_id_list.append(label_atom_id)
-                label_comp_id_list.append(chem_comp_str)
-                label_entity_id_list.append(entity_id)
-                label_asym_id_list.append(chain)
-                label_seq_list.append(residue_idx + 1)
-
-                before_residue_idx = residue_idx
-                residue_start += 1
-
-            atom_tensor_mask = atom_tensor[:, 4].bool()
-            atom_tensor = atom_tensor[atom_tensor_mask]  # (L, 10)
-
-            group_PDB_list = [
-                group_PDB_list[i] for i in range(length) if atom_tensor_mask[i]
-            ]
-            type_symbol_list = [
-                type_symbol_list[i] for i in range(length) if atom_tensor_mask[i]
-            ]
-            label_atom_id_list = [
-                label_atom_id_list[i] for i in range(length) if atom_tensor_mask[i]
-            ]
-            label_comp_id_list = [
-                label_comp_id_list[i] for i in range(length) if atom_tensor_mask[i]
-            ]
-            label_asym_id_list = [
-                label_asym_id_list[i] for i in range(length) if atom_tensor_mask[i]
-            ]
-            label_entity_id_list = [
-                label_entity_id_list[i] for i in range(length) if atom_tensor_mask[i]
-            ]
-            label_seq_list = [
-                label_seq_list[i] for i in range(length) if atom_tensor_mask[i]
-            ]
-            ins_code_list = [
-                ins_code_list[i] for i in range(length) if atom_tensor_mask[i]
-            ]
-            auth_idx_list = [
-                auth_idx_list[i] for i in range(length) if atom_tensor_mask[i]
-            ]
-
-            type_symbol_list = _to_mmcif_format(type_symbol_list)
-            label_atom_id_list = _to_mmcif_format(label_atom_id_list)
-            label_comp_id_list = _to_mmcif_format(label_comp_id_list)
-            label_asym_id_list = _to_mmcif_format(label_asym_id_list)
-            label_entity_id_list = _to_mmcif_format(label_entity_id_list)
-            label_seq_list = _to_mmcif_format(label_seq_list)
-            ins_code_list = _to_mmcif_format(ins_code_list)
-            auth_idx_list = _to_mmcif_format(auth_idx_list)
-
-            length = len(atom_tensor)
-
-            atom_idx_list = [i + 1 for i in range(length)]
-            atom_idx_list = _to_mmcif_format(atom_idx_list)
-
-            x, y, z = atom_tensor[:, 5], atom_tensor[:, 6], atom_tensor[:, 7]
-            x, y, z = x.tolist(), y.tolist(), z.tolist()
-            x, y, z = (
-                [round(i, 3) for i in x],
-                [round(i, 3) for i in y],
-                [round(i, 3) for i in z],
-            )
-            x, y, z = (
-                [f"{i:.3f}" for i in x],
-                [f"{i:.3f}" for i in y],
-                [f"{i:.3f}" for i in z],
-            )
-            x, y, z = _to_mmcif_format(x), _to_mmcif_format(y), _to_mmcif_format(z)
-
-            occup, bfactor = atom_tensor[:, 8].tolist(), atom_tensor[:, 9].tolist()
-            occup, bfactor = (
-                [round(i, 3) for i in occup],
-                [round(i, 3) for i in bfactor],
-            )
-            occup, bfactor = [f"{i:.2f}" for i in occup], [f"{i:.2f}" for i in bfactor]
-            occup, bfactor = _to_mmcif_format(occup), _to_mmcif_format(bfactor)
-            formal_charge_list = ["?"] * length
-            model_num_list = [self.model_id] * length
-            label_alt_id_list = [self.alt_id] * length
-
-            model_num_list = _to_mmcif_format(model_num_list)
-            label_alt_id_list = _to_mmcif_format(label_alt_id_list)
-
-            for idx in range(length):
-                fields = [
-                    group_PDB_list[idx],
-                    atom_idx_list[idx],
-                    type_symbol_list[idx],
-                    label_atom_id_list[idx],
-                    label_alt_id_list[idx],
-                    label_comp_id_list[idx],
-                    label_asym_id_list[idx],
-                    label_entity_id_list[idx],
-                    label_seq_list[idx],
-                    ins_code_list[idx],
-                    x[idx],
-                    y[idx],
-                    z[idx],
-                    occup[idx],
-                    bfactor[idx],
-                    formal_charge_list[idx],
-                    auth_idx_list[idx],
-                    label_comp_id_list[idx],
-                    label_asym_id_list[idx],
-                    label_atom_id_list[idx],
-                    model_num_list[idx],
-                ]
-                output += " ".join(map(str, fields)) + "\n"
-
-            return output
-
-        _atom_site = _write_atom_site(self)
-        output += _atom_site
-
-        with open(cif_path, "w") as f:
+        with open(output_path, "w") as f:
             f.write(output)

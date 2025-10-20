@@ -3,6 +3,8 @@ from pathlib import Path
 
 from Bio.PDB.MMCIF2Dict import MMCIF2Dict as mmcif2dict  # noqa: N813
 
+from biomol.cif import CIFMol
+from biomol.core.utils import to_dict
 from biomol.io.cache import ParsingCache
 from biomol.io.cooker import Cooker
 
@@ -75,9 +77,24 @@ def main() -> None:
         print(f"Error: CIF file '{cif_path}' does not exist.")
         sys.exit(1)
     result = parse(ccd_db_path, recipe_path, cif_path, targets=targets)
+    result = to_dict(result)
+
+    value, metadata = result["assembly_dict"], result["metadata_dict"]
+    cifmol_dict = {}
+    for cif_key in value:
+        item = value[cif_key]
+        # model_id = cif_key.
+        assembly_id, model_id, alt_id = cif_key.split("_")
+        metadata["assembly_id"] = assembly_id
+        metadata["model_id"] = model_id
+        metadata["alt_id"] = alt_id
+        item["metadata"] = metadata
+
+        cifmol_dict[cif_key] = CIFMol.from_dict(item)
+        cifmol_dict[cif_key].to_cif(f"test_{cif_key}.cif")
     breakpoint()
 
 
 if __name__ == "__main__":
     main()
-    # python scripts/parse_cif.py /public_data/CCD/biomol_CCD.lmdb/ plans/cif_recipe_book.py /public_data/BioMolDB_2024Oct21/cif/cif_raw/d8/1d8s.cif.gz
+    # python scripts/parse_cif.py /public_data/CCD/biomol_CCD.lmdb/ plans/cif_recipe_book.py /public_data/BioMolDB_2024Oct21/cif/cif_raw/e2/2e27.cif.gz

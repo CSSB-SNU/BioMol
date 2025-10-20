@@ -121,3 +121,10 @@ class FeatureContainer:
             duplicate_keys = {key for key in self.keys if self.keys.count(key) > 1}
             msg = f"Duplicate feature keys found in features: {duplicate_keys}"
             raise FeatureKeyError(msg)
+
+    def copy(self) -> "FeatureContainer":
+        """Create a deep copy of the FeatureContainer."""
+        return FeatureContainer(
+            node_features={k: v.copy() for k, v in self.node_features.items()},
+            edge_features={k: v.copy() for k, v in self.edge_features.items()},
+        )

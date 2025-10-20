@@ -125,7 +125,7 @@ class BioMol(Generic[A_co, R_co, C_co]):
             FeatureContainer.from_dict(data["atoms"]),
             FeatureContainer.from_dict(data["residues"]),
             FeatureContainer.from_dict(data["chains"]),
-            IndexTable(**data["index_table"]),
+            IndexTable.from_dict(data["index_table"]),
             data["metadata"],
         )
 

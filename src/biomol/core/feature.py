@@ -86,6 +86,10 @@ class Feature(ABC, NDArrayOperatorsMixin):
         """Return the maximum of the feature along the specified axis."""
         return self.value.max(axis=axis, **kwargs)
 
+    def copy(self) -> Self:
+        """Create a deep copy of the Feature."""
+        return replace(self, value=self.value.copy())
+
     @abstractmethod
     def crop(self, indices: NDArray[np.integer]) -> Self:
         """Crop the feature to only include the specified indices.
