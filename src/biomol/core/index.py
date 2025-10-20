@@ -254,3 +254,15 @@ class IndexTable:
             "chain_res_indptr": self.chain_res_indptr.tolist(),
             "chain_res_indices": self.chain_res_indices.tolist(),
         }
+
+    @classmethod
+    def from_dict(cls, data: dict) -> IndexTable:
+        """Create IndexTable from a dictionary."""
+        return cls(
+            atom_to_res=np.array(data["atom_to_res"], dtype=int),
+            res_to_chain=np.array(data["res_to_chain"], dtype=int),
+            res_atom_indptr=np.array(data["res_atom_indptr"], dtype=int),
+            res_atom_indices=np.array(data["res_atom_indices"], dtype=int),
+            chain_res_indptr=np.array(data["chain_res_indptr"], dtype=int),
+            chain_res_indices=np.array(data["chain_res_indices"], dtype=int),
+        )

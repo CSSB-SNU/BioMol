@@ -149,3 +149,16 @@ def from_bytes(byte_data: bytes) -> dict:
 
     template_dict = header["template"]
     return reconstruct_data(template_dict, flatten_data)
+
+
+def to_dict(data: dict) -> dict:
+    """Convert all FeatureContainer and IndexTable instances in the dictionary to regular dictionaries."""
+    result = {}
+    for key, value in data.items():
+        if isinstance(value, (FeatureContainer, IndexTable)):
+            result[key] = value.to_dict()
+        elif isinstance(value, dict):
+            result[key] = to_dict(value)
+        else:
+            result[key] = value
+    return result

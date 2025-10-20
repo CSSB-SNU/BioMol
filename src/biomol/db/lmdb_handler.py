@@ -37,7 +37,6 @@ def build_lmdb(
                 data_dict = parser(recipe, data_file, ccd_db_path=ccd_db_path)
             else:
                 data_dict = parser(recipe, data_file)
-            data_dict = parser(recipe, data_file)
             zcompressed_data = to_bytes(data_dict)
             return key.encode(), zcompressed_data, None
         except Exception as error:
