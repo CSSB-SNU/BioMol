@@ -1,61 +1,65 @@
-from collections.abc import Mapping
-from dataclasses import asdict, dataclass, field, replace
+from __future__ import annotations
+
+from dataclasses import asdict
+from typing import TYPE_CHECKING
 
 import numpy as np
-from numpy.typing import NDArray
-from typing_extensions import Self
 
 from biomol.exceptions import FeatureKeyError, IndexMismatchError, IndexOutOfBoundsError
 
 from .feature import EdgeFeature, Feature, NodeFeature
-from .types import FeatureContainerDict
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping
+
+    from numpy.typing import NDArray
+
+    from .types import FeatureContainerDict
 
 
-@dataclass(frozen=True, slots=True)
 class FeatureContainer:
     """Container for holding either node or edge features.
 
     Parameters
     ----------
-    node_features: Mapping[str, NodeFeature]
-        A mapping of feature names to node features. Must contain at least one feature.
-    edge_features: Mapping[str, EdgeFeature], optional
-        A mapping of feature names to edge features. Default is an empty dictionary.
+    features: Mapping[str, Feature]
+        A mapping of feature keys to Feature objects. Features can be either NodeFeature
+        or EdgeFeature.
+
+    Notes
+    -----
+    features must contain at least one NodeFeature. All NodeFeatures must have the same
+    length.
     """
 
-    node_features: Mapping[str, NodeFeature]
-    """A mapping of feature names to node features."""
+    def __init__(self, features: Mapping[str, Feature]) -> None:
+        self._features = dict(features)
 
-    edge_features: Mapping[str, EdgeFeature] = field(default_factory=dict)
-    """A mapping of feature names to edge features."""
-
-    def __post_init__(self) -> None:  # noqa: D105
         self._check_node_lengths()
         self._check_edge_indices()
-        self._check_duplicate_keys()
 
     def __len__(self) -> int:
         """Return the number of nodes in the container."""
-        return len(next(iter(self.node_features.values())).value)
-
-    def __getattr__(self, key: str) -> Feature:
-        """Get a feature by its key."""
-        return self.__getitem__(key)
+        node_lengths = {
+            len(f.value) for f in self._features.values() if isinstance(f, NodeFeature)
+        }
+        return node_lengths.pop()
 
     def __getitem__(self, key: str) -> Feature:
         """Get a feature by its key."""
-        if key in self.node_features:
-            return self.node_features[key]
-        if key in self.edge_features:
-            return self.edge_features[key]
+        if key in self._features:
+            return self._features[key]
         raise FeatureKeyError(key)
 
-    @property
+    def __repr__(self) -> str:
+        """Return a string representation of the container."""
+        return f"FeatureContainer(keys={list(self._features.keys())})"
+
     def keys(self) -> list[str]:
         """List of all features keys in the container."""
-        return list(self.node_features.keys()) + list(self.edge_features.keys())
+        return list(self._features.keys())
 
-    def crop(self, indices: NDArray[np.integer]) -> Self:
+    def crop(self, indices: NDArray[np.integer]) -> FeatureContainer:
         """Crop all features to only include the specified indices.
 
         Parameters
@@ -63,23 +67,26 @@ class FeatureContainer:
         indices: NDArray[np.integer]
             1D array of global node indices to keep. Only integer arrays is allowed.
         """
-        node_features = {
-            key: feat.crop(indices) for key, feat in self.node_features.items()
-        }
-        edge_features = {
-            key: feat.crop(indices) for key, feat in self.edge_features.items()
-        }
-        return replace(self, node_features=node_features, edge_features=edge_features)
+        return FeatureContainer(
+            {key: feat.crop(indices) for key, feat in self._features.items()},
+        )
 
     def to_dict(self) -> FeatureContainerDict:
         """Convert the container to a dictionary."""
-        return {  # pyright: ignore[reportReturnType]
-            "nodes": {k: asdict(v) for k, v in self.node_features.items()},
-            "edges": {k: asdict(v) for k, v in self.edge_features.items()},
+        nodes = {
+            key: asdict(values)
+            for key, values in self._features.items()
+            if isinstance(values, NodeFeature)
         }
+        edges = {
+            key: asdict(values)
+            for key, values in self._features.items()
+            if isinstance(values, EdgeFeature)
+        }
+        return {"nodes": nodes, "edges": edges}  # pyright: ignore[reportReturnType]
 
     @classmethod
-    def from_dict(cls, data: FeatureContainerDict) -> Self:
+    def from_dict(cls, data: FeatureContainerDict) -> FeatureContainer:
         """Create a FeatureContainer from a dictionary.
 
         Parameters
@@ -87,26 +94,34 @@ class FeatureContainer:
         data : FeatureContainerDict
             Dictionary containing node and edge features.
         """
-        node_features = {
+        nodes = {
             key: NodeFeature(**values) for key, values in data.get("nodes", {}).items()
         }
-        edge_features = {
+        edges = {
             key: EdgeFeature(**values) for key, values in data.get("edges", {}).items()
         }
-        return cls(node_features=node_features, edge_features=edge_features)
+        if nodes.keys() & edges.keys():
+            overlap_keys = nodes.keys() & edges.keys()
+            msg = f"Feature keys cannot be both node and edge features: {overlap_keys}"
+            raise FeatureKeyError(msg)
+        return FeatureContainer(features={**nodes, **edges})
 
     def _check_node_lengths(self) -> None:
-        if not self.node_features:
-            msg = "No node features defined."
+        node_lengths = {
+            len(f.value) for f in self._features.values() if isinstance(f, NodeFeature)
+        }
+        if not node_lengths:
+            msg = "FeatureContainer must contain at least one node feature."
             raise FeatureKeyError(msg)
-        node_lengths = {len(f.value) for f in self.node_features.values()}
         if len(node_lengths) > 1:
             msg = f"Inconsistent node feature lengths {node_lengths}"
             raise IndexMismatchError(msg)
 
     def _check_edge_indices(self) -> None:
-        length = len(next(iter(self.node_features.values())).value)
-        for key, feat in self.edge_features.items():
+        length = len(self)
+        for key, feat in self._features.items():
+            if not isinstance(feat, EdgeFeature):
+                continue
             if np.any(feat.src_indices >= length) or np.any(feat.dst_indices >= length):
                 msg = (
                     f"Pair feature '{key}' has out-of-bounds indices. "
@@ -115,9 +130,3 @@ class FeatureContainer:
                     f"dst_indices max={feat.dst_indices.max()}."
                 )
                 raise IndexOutOfBoundsError(msg)
-
-    def _check_duplicate_keys(self) -> None:
-        if len(self.keys) != len(set(self.keys)):
-            duplicate_keys = {key for key in self.keys if self.keys.count(key) > 1}
-            msg = f"Duplicate feature keys found in features: {duplicate_keys}"
-            raise FeatureKeyError(msg)
