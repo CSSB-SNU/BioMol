@@ -8,7 +8,6 @@ class NodeFeatureDict(TypedDict):
     """TypedDict for node features."""
 
     value: NDArray[Any]
-    description: str | None
 
 
 class EdgeFeatureDict(TypedDict):
@@ -17,7 +16,6 @@ class EdgeFeatureDict(TypedDict):
     src_indices: NDArray[np.integer]
     dst_indices: NDArray[np.integer]
     value: NDArray[Any]
-    description: str | None
 
 
 class FeatureContainerDict(TypedDict):
