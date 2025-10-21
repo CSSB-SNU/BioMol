@@ -6,13 +6,12 @@ readme = "README.md"
 requires-python = ">=3.10"
 authors = [{ name = "Sanggeun Park", email = "psk6950@snu.ac.kr" }]
 dependencies = [
-    "biopython>=1.85,<2",
-    "click>=8.1.8,<9",
-    "joblib >=1.4.2,<2",
-    "lmdb>=1.6.2,<2",
-    "zstandard>=0.24.0,<1",
-    "typing_extensions>=4.15.0,<5",
-    "numpy>=2.2.6,<3",
+  "biopython>=1.85,<2",
+  "joblib >=1.4.2,<2",
+  "lmdb>=1.6.2,<2",
+  "zstandard>=0.24.0,<1",
+  "typing_extensions>=4.15.0,<5",
+  "numpy>=2.2.6,<3",
 ]
 
 [build-system]
@@ -26,13 +25,11 @@ target-version = "py310"
 [tool.ruff.lint]
 select = ["ALL"]
 ignore = [
-    "F722", # Incompatible with jaxtyping
-    "D100", # Missing docstring in public module
-    "D104", # Missing docstring in public package
+  "F722", # Incompatible with jaxtyping
+  "D100", # Missing docstring in public module
+  "D104", # Missing docstring in public package
 ]
-exclude = [
-    "docs/conf.py"
-]
+exclude = ["docs/conf.py"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "numpy"
@@ -65,4 +62,4 @@ sphinx-favicon = ">=1.0.1,<2"
 
 [tool.pixi.feature.docs.tasks]
 build = "sphinx-build -b html docs docs/_build/html"
-live  = "sphinx-autobuild docs/ docs/_build/html --watch src --open-browser --port 8000"
+live = "sphinx-autobuild docs/ docs/_build/html --watch src --open-browser --port 8000"
