@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
@@ -105,6 +105,65 @@ class FeatureContainer:
             msg = f"Feature keys cannot be both node and edge features: {overlap_keys}"
             raise FeatureKeyError(msg)
         return FeatureContainer(features={**nodes, **edges})
+
+    def update(self, **features: Feature | NDArray[Any]) -> FeatureContainer:
+        """Update the container with new or modified features.
+
+        Parameters
+        ----------
+        **features: Feature | NDArray[Any]
+            Key-value pairs of features to add or update. Values can be either Feature
+            objects or numpy arrays (which will be converted to NodeFeature).
+
+        Notes
+        -----
+        This method returns a new FeatureContainer instance and does not modify the
+        current instance.
+
+        Examples
+        --------
+        .. code-block:: python
+
+            container = FeatureContainer(...)
+            new_container = container.update(coord=container["coord"] + 1.0)
+
+        """
+        _features = dict(self._features)
+        _features.update(
+            {
+                key: value if isinstance(value, Feature) else NodeFeature(value)
+                for key, value in features.items()
+            },
+        )
+        return FeatureContainer(_features)
+
+    def remove(self, *keys: str) -> FeatureContainer:
+        """Remove features by their keys.
+
+        Parameters
+        ----------
+        *keys: str
+            Keys of the features to remove.
+
+        Notes
+        -----
+        This method returns a new FeatureContainer instance and does not modify the
+        current instance.
+
+        Examples
+        --------
+        .. code-block:: python
+
+            container = FeatureContainer(...)
+            new_container = container.remove("coord", "element")
+
+        """
+        _features = dict(self._features)
+        for key in keys:
+            if key not in _features:
+                raise FeatureKeyError(key)
+            del _features[key]
+        return FeatureContainer(_features)
 
     def _check_node_lengths(self) -> None:
         node_lengths = {

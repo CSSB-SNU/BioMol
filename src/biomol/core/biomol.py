@@ -7,6 +7,7 @@ from io import BytesIO
 from typing import Any, Generic
 
 import numpy as np
+from numpy.typing import NDArray
 from typing_extensions import Self
 from zstandard import ZstdCompressor, ZstdDecompressor
 
@@ -14,6 +15,7 @@ from biomol.enums import StructureLevel
 from biomol.exceptions import IndexMismatchError, StructureLevelError
 
 from .container import FeatureContainer
+from .feature import Feature
 from .index import IndexTable
 from .types import BioMolDict
 from .view import A_co, AtomView, C_co, ChainView, R_co, ResidueView
@@ -209,6 +211,96 @@ class BioMol(Generic[A_co, R_co, C_co]):
         template_dict = header["template"]
         data = _reconstruct_data(template_dict, flatten_data)
         return cls.from_dict(data)  # pyright: ignore[reportArgumentType]
+
+    def update_features(
+        self,
+        level: StructureLevel,
+        **features: Feature | NDArray[Any],
+    ) -> Self:
+        """Update features at a specific structure level.
+
+        Parameters
+        ----------
+        level: StructureLevel
+            The structure level at which to update features.
+        **features: Feature | NDArray[Any]
+            Key-value pairs of features to update. Values can be either Feature
+            objects or numpy arrays (which will be converted to NodeFeature).
+
+        Returns
+        -------
+        mol
+            Updated BioMol object.
+
+        Notes
+        -----
+        Does not modify the current BioMol instance; instead, returns a new one.
+
+        Examples
+        --------
+        .. code-block:: python
+
+            mol = BioMol(...)
+            new_mol = mol.update_features(
+                StructureLevel.ATOM,
+                coord=mol.atoms.coord + 1.0,
+            )
+
+        """
+        containers = {
+            StructureLevel.ATOM: self._atom_container,
+            StructureLevel.RESIDUE: self._residue_container,
+            StructureLevel.CHAIN: self._chain_container,
+        }
+        containers[level] = containers[level].update(**features)
+        return self.__class__(
+            containers[StructureLevel.ATOM],
+            containers[StructureLevel.RESIDUE],
+            containers[StructureLevel.CHAIN],
+            self.index_table,
+            self.metadata,
+        )
+
+    def remove_features(self, level: StructureLevel, *keys: str) -> Self:
+        """Remove features at a specific structure level.
+
+        Parameters
+        ----------
+        level: StructureLevel
+            The structure level at which to remove features.
+        *keys: str
+            Keys of the features to remove.
+
+        Returns
+        -------
+        mol
+            Updated BioMol object.
+
+        Notes
+        -----
+        Does not modify the current BioMol instance; instead, returns a new one.
+
+        Examples
+        --------
+        .. code-block:: python
+
+            mol = BioMol(...)
+            new_mol = mol.remove_features(StructureLevel.ATOM, "coord", "element")
+
+        """
+        containers = {
+            StructureLevel.ATOM: self._atom_container,
+            StructureLevel.RESIDUE: self._residue_container,
+            StructureLevel.CHAIN: self._chain_container,
+        }
+        containers[level] = containers[level].remove(*keys)
+        return self.__class__(
+            containers[StructureLevel.ATOM],
+            containers[StructureLevel.RESIDUE],
+            containers[StructureLevel.CHAIN],
+            self.index_table,
+            self.metadata,
+        )
 
     def _check_lengths(self) -> None:
         """Check if the lengths of the containers and index table are consistent."""
