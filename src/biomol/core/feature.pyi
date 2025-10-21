@@ -10,12 +10,7 @@ from typing_extensions import Self, override
 @dataclass(frozen=True, slots=True)
 class Feature(ABC, NDArrayOperatorsMixin):
     value: NDArray[Any]
-    description: str | None
-    def __init__(
-        self,
-        value: NDArray[Any],
-        description: str | None = None,
-    ) -> None: ...
+    def __init__(self, value: NDArray[Any]) -> None: ...
     __array_priority__: int
     @property
     def shape(self) -> tuple[int, ...]: ...
@@ -91,7 +86,6 @@ class EdgeFeature(Feature):
     def __init__(
         self,
         value: NDArray[Any],
-        description: str | None = None,
         src_indices: NDArray[np.integer] = ...,
         dst_indices: NDArray[np.integer] = ...,
     ) -> None: ...

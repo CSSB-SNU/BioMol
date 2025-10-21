@@ -35,7 +35,7 @@ _COMPARISON_UFUNCS: Final[set[np.ufunc]] = {
 }
 
 
-@dataclass(frozen=True, slots=True, kw_only=True, eq=False)
+@dataclass(frozen=True, slots=True, eq=False)
 class Feature(ABC, NDArrayOperatorsMixin):
     """A base class for features in a structure.
 
@@ -44,9 +44,6 @@ class Feature(ABC, NDArrayOperatorsMixin):
 
     value: NDArray[Any]
     """The underlying numpy array representing the feature data."""
-
-    description: str | None = None
-    """An optional description of the feature."""
 
     __array_priority__ = 1000
 
@@ -150,7 +147,7 @@ class Feature(ABC, NDArrayOperatorsMixin):
         if ufunc in _COMPARISON_UFUNCS or ufunc in _LOGICAL_UFUNCS:
             return res
         if isinstance(res, tuple):
-            return (
+            return tuple(
                 replace(self, value=r)
                 if isinstance(r, np.ndarray) and r.shape == self.shape
                 else r
@@ -161,7 +158,7 @@ class Feature(ABC, NDArrayOperatorsMixin):
         return res
 
 
-@dataclass(frozen=True, slots=True, kw_only=True, eq=False)
+@dataclass(frozen=True, slots=True, eq=False)
 class NodeFeature(Feature):
     """A feature associated with nodes in a structure.
 
@@ -169,8 +166,6 @@ class NodeFeature(Feature):
     ----------
     value: np.ndarray
         A numpy array where the first dimension corresponds to the nodes.
-    description: str | None
-        An optional description of the feature.
     """
 
     @override
@@ -182,7 +177,7 @@ class NodeFeature(Feature):
         return replace(self, value=self.value[key])
 
 
-@dataclass(frozen=True, slots=True, kw_only=True, eq=False)
+@dataclass(frozen=True, slots=True, eq=False)
 class EdgeFeature(Feature):
     """A feature associated with edges (pairs of nodes) in a structure.
 
@@ -190,8 +185,6 @@ class EdgeFeature(Feature):
     ----------
     value: np.ndarray
         A numpy array where the first dimension corresponds to the edges.
-    description: str | None
-        An optional description of the feature.
     src_indices: NDArray[np.integer]
         A 1D numpy array of source node indices for each edge.
     dst_indices: NDArray[np.integer]

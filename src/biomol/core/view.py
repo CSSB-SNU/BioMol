@@ -8,12 +8,13 @@ from typing_extensions import Self, TypeVar
 
 from biomol.enums import StructureLevel
 from biomol.exceptions import (
+    FeatureOperationError,
     IndexInvalidError,
     IndexOutOfBoundsError,
     ViewOperationError,
 )
 
-from .feature import EdgeFeature
+from .feature import EdgeFeature, NodeFeature
 from .index import IndexTable
 
 if TYPE_CHECKING:
@@ -292,6 +293,65 @@ class View(Generic[A_co, R_co, C_co, M_co]):
             residues.get_container(),
             chains.get_container(),
             index_table,
+            self.mol.metadata,
+        )
+
+    def with_features(self, **features: NodeFeature | NDArray[Any]) -> M_co:
+        """Modify features in the current view and return an updated BioMol.
+
+        Parameters
+        ----------
+        **features: NodeFeature | NDArray[Any]
+            Key-value pairs of features to update. Values can be either NodeFeature
+            objects or numpy arrays (which will be converted to NodeFeature).
+
+        Returns
+        -------
+        mol
+            Updated BioMol object.
+
+        Notes
+        -----
+        - Features are updated only for the elements in the current view.
+        - Only NodeFeature is supported.
+        - Does not modify the current BioMol instance; instead, returns a new one.
+
+        Examples
+        --------
+        .. code-block:: python
+
+            mol = BioMol(...)
+            coord = mol.atoms.coord
+            new_mol = mol.atoms[:10].with_features(coord=coord[:10] + 1.0)
+
+        """
+
+        def _update_value(feature: Feature, value: NDArray[Any]) -> NodeFeature:
+            if not isinstance(feature, NodeFeature):
+                msg = f"Can only update node features. Got {type(feature)}."
+                raise FeatureOperationError(msg)
+            _value = feature.value.copy()
+            _value[self.indices] = value
+            return NodeFeature(_value)
+
+        containers = {
+            StructureLevel.ATOM: self.mol.get_container(StructureLevel.ATOM),
+            StructureLevel.RESIDUE: self.mol.get_container(StructureLevel.RESIDUE),
+            StructureLevel.CHAIN: self.mol.get_container(StructureLevel.CHAIN),
+        }
+
+        containers[self.level] = containers[self.level].update(
+            **{
+                key: _update_value(containers[self.level][key], np.asarray(new_value))
+                for key, new_value in features.items()
+            },
+        )
+
+        return self.mol.__class__(
+            containers[StructureLevel.ATOM],
+            containers[StructureLevel.RESIDUE],
+            containers[StructureLevel.CHAIN],
+            self.mol.index_table,
             self.mol.metadata,
         )
 
