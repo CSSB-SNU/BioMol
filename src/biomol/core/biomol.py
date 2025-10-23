@@ -302,6 +302,71 @@ class BioMol(Generic[A_co, R_co, C_co]):
             self.metadata,
         )
 
+    @classmethod
+    def concat(cls, mols: list[Self]) -> Self:
+        """Concatenate multiple BioMol objects.
+
+        Parameters
+        ----------
+        mols: list[Self]
+            List of BioMol objects to concatenate.
+
+        Returns
+        -------
+        Self
+            Concatenated BioMol object.
+
+        Notes
+        -----
+        All containers must have the same set of feature keys.
+        Metadata from the first BioMol object is retained.
+
+        Examples
+        --------
+        .. code-block:: python
+
+            mol1 = BioMol(...)
+            mol2 = BioMol(...)
+            concatenated_mol = BioMol.concat([mol1, mol2])
+
+        """
+        if not mols:
+            msg = "Cannot concatenate an empty list of BioMol objects."
+            raise ValueError(msg)
+        if len(mols) == 1:
+            return mols[0]
+
+        atom_containers = [mol.get_container(StructureLevel.ATOM) for mol in mols]
+        residue_containers = [mol.get_container(StructureLevel.RESIDUE) for mol in mols]
+        chain_containers = [mol.get_container(StructureLevel.CHAIN) for mol in mols]
+
+        residue_counts = [len(container) for container in residue_containers]
+        residue_offsets = np.cumsum([0, *residue_counts[:-1]])
+        atom_to_res = [
+            mol.index_table.atom_to_res + offset
+            for mol, offset in zip(mols, residue_offsets, strict=True)
+        ]
+
+        chain_counts = [len(container) for container in chain_containers]
+        chain_offsets = np.cumsum([0, *chain_counts[:-1]])
+        res_to_chain = [
+            mol.index_table.res_to_chain + offset
+            for mol, offset in zip(mols, chain_offsets, strict=True)
+        ]
+
+        concatenated_table = IndexTable.from_parents(
+            atom_to_res=np.concatenate(atom_to_res, axis=0),
+            res_to_chain=np.concatenate(res_to_chain, axis=0),
+            n_chain=sum(chain_counts),
+        )
+        return cls(
+            FeatureContainer.concat(atom_containers),
+            FeatureContainer.concat(residue_containers),
+            FeatureContainer.concat(chain_containers),
+            concatenated_table,
+            metadata=mols[0].metadata.copy(),
+        )
+
     def _check_lengths(self) -> None:
         """Check if the lengths of the containers and index table are consistent."""
         if len(self._atom_container) != len(self._index.atom_to_res):
@@ -335,3 +400,13 @@ class BioMol(Generic[A_co, R_co, C_co]):
             f"{len(self._residue_container)} residues, "
             f"and {len(self._chain_container)} chains>"
         )
+
+    def __add__(self, other: Self) -> Self:
+        """Concatenate two BioMol objects using the + operator.
+
+        Note
+        ----
+        For concatenating more than two objects, use BioMol.concat([mol1, mol2, mol3])
+        for better performance.
+        """
+        return self.concat([self, other])

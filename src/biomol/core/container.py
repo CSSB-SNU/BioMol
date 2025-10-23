@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 import numpy as np
 
@@ -164,6 +164,82 @@ class FeatureContainer:
                 raise FeatureKeyError(key)
             del _features[key]
         return FeatureContainer(_features)
+
+    @classmethod
+    def concat(cls, containers: list[FeatureContainer]) -> FeatureContainer:
+        """Concatenate multiple FeatureContainer instances.
+
+        Parameters
+        ----------
+        containers: list[FeatureContainer]
+            List of FeatureContainer instances to concatenate.
+
+        Returns
+        -------
+        FeatureContainer
+            Concatenated FeatureContainer.
+
+        Notes
+        -----
+        All containers must have the same set of feature keys.
+
+        Examples
+        --------
+        .. code-block:: python
+
+            container1 = FeatureContainer(...)
+            container2 = FeatureContainer(...)
+            concatenated = FeatureContainer.concat([container1, container2])
+
+        """
+        if not containers:
+            msg = "No FeatureContainer instances provided for concatenation."
+            raise ValueError(msg)
+        if len(containers) == 1:
+            return containers[0]
+
+        base_keys = containers[0].keys()
+        for container in containers[1:]:
+            if set(container.keys()) != set(base_keys):
+                msg = (
+                    "All containers must have the same feature keys. "
+                    f"Missing keys: {set(base_keys) - set(container.keys())}. "
+                    f"Extra keys: {set(container.keys()) - set(base_keys)}."
+                )
+                raise FeatureKeyError(msg)
+
+        new_features: dict[str, Feature] = {}
+        for key in base_keys:
+            features = [container[key] for container in containers]
+            if all(isinstance(feat, NodeFeature) for feat in features):
+                new_features[key] = NodeFeature(
+                    np.concatenate([feature.value for feature in features], axis=0),
+                )
+            elif all(isinstance(feat, EdgeFeature) for feat in features):
+                features = cast("list[EdgeFeature]", features)
+                counts = [len(c) for c in containers]
+                offsets = np.cumsum([0, *counts[:-1]])
+                all_src = [
+                    feature.src_indices + offset
+                    for feature, offset in zip(features, offsets, strict=True)
+                ]
+                all_dst = [
+                    feature.dst_indices + offset
+                    for feature, offset in zip(features, offsets, strict=True)
+                ]
+                new_features[key] = EdgeFeature(
+                    np.concatenate([feature.value for feature in features], axis=0),
+                    src_indices=np.concatenate(all_src, axis=0),
+                    dst_indices=np.concatenate(all_dst, axis=0),
+                )
+            else:
+                msg = (
+                    f"Feature '{key}' has mixed types across containers: "
+                    f"{ {type(f) for f in features} }"
+                )
+                raise FeatureKeyError(msg)
+
+        return FeatureContainer(new_features)
 
     def _check_node_lengths(self) -> None:
         node_lengths = {
