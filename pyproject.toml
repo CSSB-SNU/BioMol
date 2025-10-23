@@ -30,6 +30,7 @@ ignore = [
   "D104", # Missing docstring in public package
 ]
 exclude = ["docs/conf.py"]
+per-file-ignores = { "tests/*" = ["ANN201", "D", "S101", "INP001", "PLR2004"] }
 
 [tool.ruff.lint.pydocstyle]
 convention = "numpy"

@@ -360,7 +360,7 @@ packages:
 - pypi: ./
   name: biomol
   version: 0.2.0
-  sha256: 2fb1bc03a9854fe84f91204db88329adbd65321710e8338516264b6063046f45
+  sha256: f9fcda1b678c719a24b78afbec17ff9f7ba8c5c40235681a30a87956fb3673d2
   requires_dist:
   - biopython>=1.85,<2
   - joblib>=1.4.2,<2
