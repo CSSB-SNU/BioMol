@@ -97,8 +97,12 @@ class CIFResidueView(
         """Hetero flag."""
 
     @property
-    def residue_bond(self) -> EdgeFeature:
+    def bond(self) -> EdgeFeature:
         """Residue-level bonds 1 if exists else not."""
+
+    @property
+    def struct_conn(self) -> EdgeFeature:
+        """struct_conn of residues."""
 
 
 class CIFChainView(
@@ -113,6 +117,14 @@ class CIFChainView(
     @property
     def chain_id(self) -> NodeFeature:
         """Chain IDs. asym_id_oper_id. Example: 'A_1', 'B_1', etc."""
+
+    @property
+    def entity_type(self) -> NodeFeature:
+        """Entity types. Example: 'polymer', 'non-polymer', etc."""
+
+    @property
+    def contact(self) -> EdgeFeature:
+        """Contact graph of chains."""
 
 
 class CIFMol(BioMol["CIFAtomView", "CIFResidueView", "CIFChainView"]):
