@@ -97,4 +97,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-    # python scripts/parse_cif.py /public_data/CCD/biomol_CCD.lmdb/ plans/cif_recipe_book.py /public_data/BioMolDB_2024Oct21/cif/cif_raw/e2/2e27.cif.gz
+    # python scripts/parse_cif.py /public_data/CCD/biomol_CCD.lmdb/ plans/cif_recipe_book.py /public_data/BioMolDB_2024Oct21/cif/cif_raw/vl/6vl5.cif.gz

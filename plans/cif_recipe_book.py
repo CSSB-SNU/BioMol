@@ -5,6 +5,7 @@ from biomol.io.instructions.cif_instructions import (
     build_assembly_dict,
     build_full_length_asym_dict,
     compare_chem_comp,
+    extract_contact_graph,
     extract_float_single,
     get_smaller_dict,
     get_struct_oper,
@@ -507,7 +508,7 @@ cif_recipe.add(
 )
 
 cif_recipe.add(
-    targets=(("assembly_dict", dict | None),),
+    targets=(("_assembly_dict", dict | None),),
     instruction=build_assembly_dict(),
     inputs={
         "kwargs": {
@@ -515,6 +516,16 @@ cif_recipe.add(
             "struct_assembly_dict": ("struct_assembly_dict", dict | None),
             "struct_oper_dict": ("struct_oper_dict", dict),
             "struct_conn_dict": ("_struct_conn_wo_unknown_dict", dict | None),
+        },
+    },
+)
+
+cif_recipe.add(
+    targets=(("assembly_dict", dict | None),),
+    instruction=extract_contact_graph(d_thr=6.0, n_max=128),
+    inputs={
+        "kwargs": {
+            "assembly_dict": ("_assembly_dict", dict | None),
         },
     },
 )

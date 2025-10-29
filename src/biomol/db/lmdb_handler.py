@@ -7,6 +7,26 @@ from joblib import Parallel, delayed
 from biomol.core.utils import from_bytes, to_bytes
 
 
+def already_parsed_keys(env_path: Path) -> set[str]:
+    """
+    Retrieve all keys from the LMDB database.
+
+    Args:
+        env_path: Path to the LMDB environment.
+    Returns
+    -------
+        set
+            A set of all keys in the LMDB database.
+    """
+    env = lmdb.open(str(env_path), readonly=True, lock=False)
+    with env.begin() as txn:
+        key_set = {
+            key.decode() for key in txn.cursor().iternext(keys=True, values=False)
+        }
+    env.close()
+    return key_set
+
+
 def build_lmdb(
     *data_list: Path,
     env_path: Path,
@@ -44,20 +64,33 @@ def build_lmdb(
 
     # remove UNL
     data_list = [data for data in data_list if data.stem != "UNL"]
+    _already_parsed_keys = already_parsed_keys(env_path)
+    print(f"Already parsed {len(_already_parsed_keys)} entries.")
+    data_list = [
+        data
+        for data in data_list
+        if data.stem.split(".cif")[0] not in _already_parsed_keys
+    ]
 
     # --- Parallel processing ---
-    results = Parallel(n_jobs=n_jobs, verbose=10, prefer="processes")(
-        delayed(_process_file)(data_file) for data_file in data_list
-    )
+    chunk = 10_000
+    for i in range(0, len(data_list), chunk):
+        print(
+            f"Processing files {i} to {min(i + chunk, len(data_list))} / {len(data_list)}"
+        )
+        data_chunk = data_list[i : i + chunk]
+        results = Parallel(n_jobs=n_jobs, verbose=10, prefer="processes")(
+            delayed(_process_file)(data_file) for data_file in data_chunk
+        )
 
-    # --- Write results to LMDB ---
-    with env.begin(write=True) as txn:
-        for key, zcompressed_data, error in results:
-            if error is not None:
-                # Print error message but continue
-                print(f"Error processing {key.decode()}: {error}")
-                continue
-            txn.put(key, zcompressed_data)
+        # --- Write results to LMDB ---
+        with env.begin(write=True) as txn:
+            for key, zcompressed_data, error in results:
+                if error is not None:
+                    # Print error message but continue
+                    print(f"Error processing {key.decode()}: {error}")
+                    continue
+                txn.put(key, zcompressed_data)
 
     env.close()
 
