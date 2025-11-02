@@ -667,6 +667,8 @@ def remove_unknown_atom_site() -> Callable[..., type[InputType]]:
             label_comp_id_list = atom_site_dict[asym_id]["label_comp_id"]
             unknown_mask = [cc in ("UNL", "UNK") for cc in label_comp_id_list]
             if all(unknown_mask):
+                # it can be removed that some residues are known but all atoms in atom_site are unknown
+                # Ex) 7od8_F
                 continue
             for key in atom_site_dict[asym_id]:
                 values = atom_site_dict[asym_id][key]
@@ -838,6 +840,7 @@ def rearrange_atom_site_dict() -> Callable[..., dict | None]:
 
         rearranged_dict["alt_id"] = atom_site_dict["label_alt_id"].astype(str)
         rearranged_dict["model_id"] = atom_site_dict["pdbx_PDB_model_num"].astype(str)
+        rearranged_dict["auth_asym_id"] = atom_site_dict["auth_asym_id"].astype(str)
 
         key_list = list(rearranged_dict.keys() - {"alt_id", "model_id"})
 
@@ -1206,9 +1209,21 @@ def build_full_length_asym_dict() -> Callable[..., dict | None]:
             value=np.array(asym_dict["entity_type"], dtype=str),
             description="Entity type of the chain",
         )
+        auth_asym_id = atom_site_dict["auth_asym_id"]
+        if len(set(auth_asym_id)) != 1:
+            msg = "Multiple auth_asym_id found in atom_site for the same asym_id."
+            raise ValueError(msg)
+        auth_asym_id = NodeFeature(
+            value=np.array([auth_asym_id[0]], dtype=str),
+            description="Author asym ID of the chain",
+        )
 
         chain_container = FeatureContainer(
-            node_features={"entity_id": entity_id, "entity_type": entity_type},
+            node_features={
+                "entity_id": entity_id,
+                "entity_type": entity_type,
+                "auth_asym_id": auth_asym_id,
+            },
             edge_features={},
         )
 

@@ -115,12 +115,16 @@ class CIFChainView(
         """Entity IDs."""
 
     @property
+    def entity_type(self) -> NodeFeature:
+        """Entity types. Example: 'polymer', 'non-polymer', etc."""
+
+    @property
     def chain_id(self) -> NodeFeature:
         """Chain IDs. asym_id_oper_id. Example: 'A_1', 'B_1', etc."""
 
     @property
-    def entity_type(self) -> NodeFeature:
-        """Entity types. Example: 'polymer', 'non-polymer', etc."""
+    def auth_asym_id(self) -> NodeFeature:
+        """Author chain IDs. Example: 'A', 'B', etc."""
 
     @property
     def contact(self) -> EdgeFeature:

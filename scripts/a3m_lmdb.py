@@ -1,6 +1,6 @@
+import glob
 import importlib
 import os
-import glob
 from pathlib import Path
 
 import click
@@ -17,6 +17,22 @@ def load_a3m_list(a3m_dir: Path, pattern: str = "*.a3m*") -> list[Path]:
     return list(a3m_dir.rglob(pattern))
 
 
+def load_a3m(a3m_path: Path) -> dict[str, str]:
+    """Load a3m file into a dictionary."""
+    a3m_dict = {}
+    with a3m_path.open("r") as f:
+        lines = f.readlines()
+    current_header = ""
+    for _line in lines:
+        line = _line.strip()
+        if line.startswith(">"):
+            current_header = line[1:]
+            a3m_dict[current_header] = ""
+        else:
+            a3m_dict[current_header] += line
+    return a3m_dict
+
+
 # ------------------------------
 # Helper: Build LMDB config
 # ------------------------------
@@ -28,7 +44,7 @@ def load_lmdb_config(
 ) -> dict:
     """Build the LMDB configuration dictionary."""
     config = {"env_path": env_path, "map_size": map_size}
-    config["n_jobs"] = int(os.environ.get("SLURM_CPUS_PER_TASK", -11))
+    config["n_jobs"] = int(os.environ.get("SLURM_CPUS_PER_TASK", -1))
     if shard_idx is not None:
         config["env_path"] = Path(config["env_path"]).with_name(
             f"{Path(config['env_path']).stem}_shard{shard_idx}{Path(config['env_path']).suffix}",

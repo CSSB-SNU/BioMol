@@ -69,7 +69,7 @@ def build_lmdb(
     data_list = [
         data
         for data in data_list
-        if data.stem.split(".cif")[0] not in _already_parsed_keys
+        # if data.stem.split(".cif")[0] not in _already_parsed_keys
     ]
 
     # --- Parallel processing ---
