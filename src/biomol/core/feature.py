@@ -36,7 +36,7 @@ _COMPARISON_UFUNCS: Final[set[np.ufunc]] = {
 
 
 @dataclass(frozen=True, slots=True, eq=False)
-class Feature(ABC, NDArrayOperatorsMixin):
+class Feature(NDArrayOperatorsMixin, ABC):
     """A base class for features in a structure.
 
     This class supports numpy operations and can be indexed and cropped.
@@ -92,6 +92,10 @@ class Feature(ABC, NDArrayOperatorsMixin):
         indices: NDArray[np.integer]
             1D array of node indices to keep. Only integer arrays is allowed.
         """
+
+    def copy(self) -> Self:
+        """Return a copy of the feature."""
+        return replace(self)
 
     @abstractmethod
     def __getitem__(self, key: Any) -> Self:  # noqa: ANN401

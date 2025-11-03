@@ -365,6 +365,16 @@ class BioMol(Generic[A_co, R_co, C_co]):
             metadata=mols[0].metadata.copy(),
         )
 
+    def copy(self) -> Self:
+        """Create a deep copy of the BioMol."""
+        return self.__class__(
+            self._atom_container.copy(),
+            self._residue_container.copy(),
+            self._chain_container.copy(),
+            self._index.copy(),
+            self._metadata.copy(),
+        )
+
     def _check_lengths(self) -> None:
         """Check if the lengths of the containers and index table are consistent."""
         if len(self._atom_container) != len(self._index.atom_to_res):
@@ -408,13 +418,3 @@ class BioMol(Generic[A_co, R_co, C_co]):
         for better performance.
         """
         return self.concat([self, other])
-
-    def copy(self) -> Self:
-        """Create a deep copy of the BioMol."""
-        return self.__class__(
-            self._atom_container.copy(),
-            self._residue_container.copy(),
-            self._chain_container.copy(),
-            self._index.copy(),
-            self._metadata.copy(),
-        )

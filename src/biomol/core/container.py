@@ -239,6 +239,12 @@ class FeatureContainer:
 
         return FeatureContainer(new_features)
 
+    def copy(self) -> FeatureContainer:
+        """Create a deep copy of the FeatureContainer."""
+        return FeatureContainer(
+            {key: feat.copy() for key, feat in self._features.items()},
+        )
+
     def _check_node_lengths(self) -> None:
         node_lengths = {
             len(f.value) for f in self._features.values() if isinstance(f, NodeFeature)
@@ -263,9 +269,3 @@ class FeatureContainer:
                     f"dst_indices max={feat.dst_indices.max()}."
                 )
                 raise IndexOutOfBoundsError(msg)
-
-    def copy(self) -> FeatureContainer:
-        """Create a deep copy of the FeatureContainer."""
-        return FeatureContainer(
-            {key: feat.copy() for key, feat in self._features.items()},
-        )

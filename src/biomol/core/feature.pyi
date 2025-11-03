@@ -8,7 +8,7 @@ from numpy.typing import ArrayLike, DTypeLike, NDArray
 from typing_extensions import Self, override
 
 @dataclass(frozen=True, slots=True)
-class Feature(ABC, NDArrayOperatorsMixin):
+class Feature(NDArrayOperatorsMixin, ABC):
     value: NDArray[Any]
     def __init__(self, value: NDArray[Any]) -> None: ...
     __array_priority__: int
@@ -26,6 +26,7 @@ class Feature(ABC, NDArrayOperatorsMixin):
     def max(self, axis: int | None = None, **kwargs: Any) -> Any: ...  # noqa: ANN401
     @abstractmethod
     def crop(self, indices: NDArray[np.integer]) -> Self: ...
+    def copy(self) -> Self: ...
     @abstractmethod
     def __getitem__(self, key: Any) -> Self: ...  # noqa: ANN401
     def __len__(self) -> int: ...

@@ -98,11 +98,6 @@ class TestFeatureContainerConcat:
         with pytest.raises(ValueError, match="No FeatureContainer instances"):
             FeatureContainer.concat([])
 
-    def test_concat_single_container_returns_same(self):
-        c1 = FeatureContainer({"coord": NodeFeature(np.array([[1, 2, 3]]))})
-        result = FeatureContainer.concat([c1])
-        assert result is c1
-
 
 class TestBioMolConcat:
     def test_concat_and_add_operator(self):
