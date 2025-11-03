@@ -93,9 +93,15 @@ class Feature(NDArrayOperatorsMixin, ABC):
             1D array of node indices to keep. Only integer arrays is allowed.
         """
 
+    @abstractmethod
     def copy(self) -> Self:
-        """Return a copy of the feature."""
-        return replace(self)
+        """Return a deep copy of the feature.
+
+        Returns
+        -------
+        Self
+            A new instance with copied numpy arrays.
+        """
 
     @abstractmethod
     def __getitem__(self, key: Any) -> Self:  # noqa: ANN401
@@ -175,6 +181,10 @@ class NodeFeature(Feature):
     @override
     def crop(self, indices: NDArray[np.integer]) -> Self:
         return self[indices]
+
+    @override
+    def copy(self) -> Self:
+        return replace(self, value=self.value.copy())
 
     @override
     def __getitem__(self, key: Any) -> Self:
@@ -275,6 +285,22 @@ class EdgeFeature(Feature):
             value=self.value[row_mask],
             src_indices=new_src,
             dst_indices=new_dst,
+        )
+
+    @override
+    def copy(self) -> Self:
+        """Return a deep copy of the edge feature.
+
+        Returns
+        -------
+        Self
+            A new instance with all numpy arrays copied.
+        """
+        return replace(
+            self,
+            value=self.value.copy(),
+            src_indices=self.src_indices.copy(),
+            dst_indices=self.dst_indices.copy(),
         )
 
     def _empty_like(self) -> Self:

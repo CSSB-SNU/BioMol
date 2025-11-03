@@ -17,13 +17,13 @@ class TestFeatureCopy:
     def test_node_feature_copy_deep_copy(self):
         original = NodeFeature(np.array([[1, 2, 3], [4, 5, 6]]))
         copied = original.copy()
-        copied_modified = NodeFeature(copied.value + 10)
+
+        assert copied.value is not original.value
+
+        copied.value[0, 0] = 999
 
         np.testing.assert_array_equal(original.value, np.array([[1, 2, 3], [4, 5, 6]]))
-        np.testing.assert_array_equal(
-            copied_modified.value,
-            np.array([[11, 12, 13], [14, 15, 16]]),
-        )
+        np.testing.assert_array_equal(copied.value, np.array([[999, 2, 3], [4, 5, 6]]))
 
     def test_edge_feature_copy_creates_new_instance(self):
         original = EdgeFeature(
@@ -37,6 +37,7 @@ class TestFeatureCopy:
         assert isinstance(copied, EdgeFeature)
 
     def test_edge_feature_copy_deep_copy(self):
+        """Test that modifying copied edge feature doesn't affect original."""
         original = EdgeFeature(
             np.array([1.0, 2.0, 3.0]),
             src_indices=np.array([0, 1, 2]),
@@ -44,9 +45,20 @@ class TestFeatureCopy:
         )
         copied = original.copy()
 
-        np.testing.assert_array_equal(copied.value, original.value)
-        np.testing.assert_array_equal(copied.src_indices, original.src_indices)
-        np.testing.assert_array_equal(copied.dst_indices, original.dst_indices)
+        assert copied.value is not original.value
+        assert copied.src_indices is not original.src_indices
+        assert copied.dst_indices is not original.dst_indices
+
+        copied.value[0] = 999.0
+        copied.src_indices[0] = 99
+        copied.dst_indices[0] = 88
+
+        np.testing.assert_array_equal(original.value, np.array([1.0, 2.0, 3.0]))
+        np.testing.assert_array_equal(original.src_indices, np.array([0, 1, 2]))
+        np.testing.assert_array_equal(original.dst_indices, np.array([1, 2, 0]))
+        np.testing.assert_array_equal(copied.value, np.array([999.0, 2.0, 3.0]))
+        np.testing.assert_array_equal(copied.src_indices, np.array([99, 1, 2]))
+        np.testing.assert_array_equal(copied.dst_indices, np.array([88, 2, 0]))
 
 
 class TestFeatureContainerCopy:
