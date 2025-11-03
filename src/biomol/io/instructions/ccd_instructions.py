@@ -41,7 +41,6 @@ def your_new_instruction(
     def _worker(
         data: list,
         *,
-        description: str | None = None
     ) -> NodeFeature:
         \"\"\"This is the worker's docstring, explaining the core logic.\"\"\"
 
@@ -51,7 +50,7 @@ def your_new_instruction(
         processed_data = [dtype(x * some_config_value) for x in data]
         value = np.array(processed_data, dtype=dtype)
 
-        return NodeFeature(value=value, description=description)
+        return NodeFeature(value=value)
 
     # --- 6. Return the configured worker function ---
     return _worker
@@ -75,7 +74,8 @@ NumericType = TypeVar("NumericType", int, float)
 
 
 def identity_instruction(
-    *, dtype: type[InputType],
+    *,
+    dtype: type[InputType],
 ) -> Callable[..., tuple[NodeFeature, NodeFeature] | NodeFeature]:
     """
     Return a configured instruction function that maps fields to node features.
@@ -86,8 +86,6 @@ def identity_instruction(
     def _worker(
         data: list[InputType] | NDArray,
         on_missing: dict[str, NumericType] | None = None,
-        *,
-        description: str | None = None,
     ) -> tuple[NodeFeature, NodeFeature] | NodeFeature:
         if on_missing:
             formatted_data = [
@@ -95,13 +93,12 @@ def identity_instruction(
                 for datum in data
             ]
             mask = np.array([d not in on_missing for d in data], dtype=bool)
-            mask_description = f"{description}_mask" if description else "mask"
-            mask_feature = NodeFeature(value=mask, description=mask_description)
+            mask_feature = NodeFeature(value=mask)
         else:
             formatted_data = [dtype(datum) for datum in data]
 
         value = np.array(formatted_data, dtype=dtype)
-        data_feature = NodeFeature(value=value, description=description)
+        data_feature = NodeFeature(value=value)
 
         return (data_feature, mask_feature) if on_missing else data_feature
 
@@ -109,14 +106,14 @@ def identity_instruction(
 
 
 def stack_instruction(
-    *, dtype: type[NumericType],
+    *,
+    dtype: type[NumericType],
 ) -> Callable[..., tuple[NodeFeature, NodeFeature]]:
     """Return a configured instruction that stacks multiple fields."""
 
     def _worker(
         *args: list[InputType] | NDArray,
         on_missing: dict[str, NumericType],
-        description: str | None = None,
     ) -> tuple[NodeFeature, NodeFeature]:
         result_data, mask_data = [], []
         if not args:
@@ -136,11 +133,10 @@ def stack_instruction(
 
         stacked_value = np.stack(result_data, axis=-1)
         stacked_mask = np.all(np.array(mask_data, dtype=bool).T, axis=-1)
-        mask_desc = f"{description}_mask" if description else "mask"
 
         return (
-            NodeFeature(value=stacked_value, description=description),
-            NodeFeature(value=stacked_mask, description=mask_desc),
+            NodeFeature(value=stacked_value),
+            NodeFeature(value=stacked_mask),
         )
 
     return _worker
@@ -154,7 +150,6 @@ def bond_instruction(*, dtype: type[FeatureType]) -> Callable[..., EdgeFeature]:
         src: list[InputType] | NDArray,
         dst: list[InputType] | NDArray,
         atom_id: NodeFeature,
-        description: str = "",
     ) -> EdgeFeature:
         order = np.argsort(atom_id.value)
         src_indices = order[np.searchsorted(atom_id.value, np.array(src), sorter=order)]
@@ -171,7 +166,6 @@ def bond_instruction(*, dtype: type[FeatureType]) -> Callable[..., EdgeFeature]:
             value=final_value,
             src_indices=src_indices.astype(int),
             dst_indices=dst_indices.astype(int),
-            description=description,
         )
 
     return _worker

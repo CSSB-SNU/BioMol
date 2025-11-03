@@ -77,9 +77,12 @@ def build(
     Build an LMDB database from CIF_DIR into ENV_PATH.
 
     Example:
-        python cif_lmdb.py build ./cif ./cif.lmdb biomol.io.parsers.cif_parser:parse\\
-              ./plans/recipe.py \\
-            --map-size 1e12 --shard-idx 0 --n-shards 4
+        python cif_lmdb.py build \
+            ./cif \
+            ./cif.lmdb \
+            biomol.io.parsers.cif_parser:parse \
+            ./plans/recipe.py \
+            --map-size 1e12 --shard-idx 0 --n-shards 1
     """
     map_size = int(map_size)
     cif_list = load_cif_list(cif_dir)

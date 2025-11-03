@@ -1,9 +1,7 @@
+from pathlib import Path
 import sys
 
-from Bio.PDB.MMCIF2Dict import MMCIF2Dict as mmcif2dict
-
-from biomol.io.cooker import Cooker
-from biomol.io.cache import ParsingCache
+from biomol.io.parsers.cif_parser import parse
 
 
 def main():
@@ -14,16 +12,13 @@ def main():
     recipe_path = sys.argv[1].strip()
     cif_path = sys.argv[2].strip()
 
-    cif_data = mmcif2dict(cif_path)
-    breakpoint()
-    cooker = Cooker(parse_cache=ParsingCache(), recipebook=recipe_path)
-    cooker.prep(cif_data, fields=list(cif_data.keys()))
-    cooker.cook()
-
-    target_id = cooker.recipebook["id"]
-    print(target_id)
+    parsed_data = parse(
+        recipe_path=Path(recipe_path),
+        file_path=Path(cif_path),
+    )
+    return parsed_data
 
 
 if __name__ == "__main__":
+    # python ./scripts/parse_CCD.py ./plans/ccd_recipe_book.py /public_data/CCD/components_tmp/0/01R.cif
     main()
-

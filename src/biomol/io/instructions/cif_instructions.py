@@ -189,11 +189,9 @@ def parse_chem_comp() -> Callable[..., dict[str, FeatureContainer]]:
     ) -> dict[str, dict[str, NDArray]]:
         name = NodeFeature(
             value=chem_comp_dict["name"].astype(str),
-            description="name of the chemical component",
         )
         formula = NodeFeature(
             value=chem_comp_dict["formula"].astype(str),
-            description="chemical formula of the component",
         )
         elements = chem_comp_atom_dict["type_symbol"]
         if remove_hydrogen:
@@ -211,24 +209,12 @@ def parse_chem_comp() -> Callable[..., dict[str, FeatureContainer]]:
         model_y = chem_comp_atom_dict.get("model_Cartn_y", None)
         model_z = chem_comp_atom_dict.get("model_Cartn_z", None)
 
-        atom_id = NodeFeature(
-            value=atom_id,
-            description="atom id of the chemical component",
-        )
-        element = NodeFeature(
-            value=element,
-            description="element symbol of the chemical component",
-        )
-        atom_aromatic = NodeFeature(
-            value=atom_aromatic,
-            description="aromatic flag of the atom",
-        )
-        atom_stereo = NodeFeature(
-            value=atom_stereo,
-            description="stereochemistry flag of the atom",
-        )
+        atom_id = NodeFeature(value=atom_id)
+        element = NodeFeature(value=element)
+        atom_aromatic = NodeFeature(value=atom_aromatic)
+        atom_stereo = NodeFeature(value=atom_stereo)
 
-        atom_node_features = {
+        atom_features = {
             "atom_id": atom_id,
             "element": element,
             "atom_aromatic": atom_aromatic,
@@ -236,11 +222,8 @@ def parse_chem_comp() -> Callable[..., dict[str, FeatureContainer]]:
         }
 
         if charge is not None:
-            charge = NodeFeature(
-                value=charge[atom_mask].astype(str),
-                description="formal charge of the atom",
-            )
-            atom_node_features["charge"] = charge
+            charge = NodeFeature(value=charge[atom_mask].astype(str))
+            atom_features["charge"] = charge
         if model_x is not None:
             xyz = np.stack(
                 [
@@ -250,11 +233,8 @@ def parse_chem_comp() -> Callable[..., dict[str, FeatureContainer]]:
                 ],
                 axis=-1,
             )
-            model_xyz = NodeFeature(
-                value=xyz,
-                description="Cartesian coordinates of the atom",
-            )
-            atom_node_features["model_xyz"] = model_xyz
+            model_xyz = NodeFeature(value=xyz)
+            atom_features["model_xyz"] = model_xyz
 
         # handle edge features
         if chem_comp_bond_dict is not None:
@@ -285,42 +265,31 @@ def parse_chem_comp() -> Callable[..., dict[str, FeatureContainer]]:
                 value=bond_type,
                 src_indices=src_indices,
                 dst_indices=dst_indices,
-                description="bond type of the chemical component",
             )
 
             bond_aromatic = EdgeFeature(
                 value=bond_aromatic,
                 src_indices=src_indices,
                 dst_indices=dst_indices,
-                description="aromatic flag of the bond",
             )
 
             bond_stereo = EdgeFeature(
                 value=bond_stereo,
                 src_indices=src_indices,
                 dst_indices=dst_indices,
-                description="stereochemistry flag of the bond",
             )
-            edge_features = {
-                "bond_type": bond_type,
-                "bond_aromatic": bond_aromatic,
-                "bond_stereo": bond_stereo,
-            }
-        else:
-            edge_features = {}
+            atom_features["bond_type"] = bond_type
+            atom_features["bond_aromatic"] = bond_aromatic
+            atom_features["bond_stereo"] = bond_stereo
 
         residue_container = FeatureContainer(
-            node_features={
+            features={
                 "name": name,
                 "formula": formula,
             },
-            edge_features={},
         )
 
-        atom_container = FeatureContainer(
-            node_features=atom_node_features,
-            edge_features=edge_features,
-        )
+        atom_container = FeatureContainer(features=atom_features)
 
         return {
             "residue": residue_container,
@@ -379,23 +348,21 @@ def compare_chem_comp() -> Callable[..., dict[str, FeatureContainer]]:
         ideal_atom_dict = ideal_chem_comp["atom"].to_dict()
         ideal_node_key_list = list(ideal_atom_dict["nodes"].keys())
         ideal_edge_key_list = list(ideal_atom_dict["edges"].keys())
-        atom_node_features = {}
-        atom_edge_features = {}
+        atom_features = {}
         for key in ideal_node_key_list:
-            if key in cif_chem_comp["atom"].node_features:
+            if key in cif_chem_comp["atom"]:
                 # follow cif_chem_comp if exists
-                atom_node_features[key] = cif_chem_comp["atom"].node_features[key]
+                atom_features[key] = cif_chem_comp["atom"][key]
             else:
-                atom_node_features[key] = ideal_chem_comp["atom"].node_features[key]
+                atom_features[key] = ideal_chem_comp["atom"][key]
         for key in ideal_edge_key_list:
-            if key in cif_chem_comp["atom"].edge_features:
-                atom_edge_features[key] = cif_chem_comp["atom"].edge_features[key]
+            if key in cif_chem_comp["atom"]:
+                atom_features[key] = cif_chem_comp["atom"][key]
             else:
-                atom_edge_features[key] = ideal_chem_comp["atom"].edge_features[key]
+                atom_features[key] = ideal_chem_comp["atom"][key]
         try:
             output["atom"] = FeatureContainer(
-                node_features=atom_node_features,
-                edge_features=atom_edge_features,
+                features=atom_features,
             )
         except IndexMismatchError:
             output["atom"] = ideal_chem_comp["atom"]
@@ -967,8 +934,10 @@ def build_full_length_asym_dict() -> Callable[..., dict | None]:
         chem_comp_residue_list = [cc["residue"] for cc in chem_comp_list]
         chem_comp_atom_list = [cc["atom"] for cc in chem_comp_list]
 
-        chem_comp_residue_container = concat_containers(*chem_comp_residue_list)
-        chem_comp_atom_container = concat_containers(*chem_comp_atom_list)
+        chem_comp_residue_container = FeatureContainer.concat(
+            chem_comp_residue_list,
+        )
+        chem_comp_atom_container = FeatureContainer.concat(chem_comp_atom_list)
 
         full_xyz = np.full((full_atom_num, 3), np.nan, dtype=float)
         full_b_factor = np.full(full_atom_num, np.nan, dtype=float)
@@ -994,26 +963,16 @@ def build_full_length_asym_dict() -> Callable[..., dict | None]:
             full_b_factor[atom_idx] = b_factor[ii]
             full_occupancy[atom_idx] = occupancy[ii]
 
-        full_xyz = NodeFeature(
-            value=full_xyz,
-            description="atomic coordinates",
-        )
-        full_b_factor = NodeFeature(
-            value=full_b_factor,
-            description="B-factor",
-        )
-        full_occupancy = NodeFeature(
-            value=full_occupancy,
-            description="occupancy",
-        )
+        full_xyz = NodeFeature(value=full_xyz)
+        full_b_factor = NodeFeature(value=full_b_factor)
+        full_occupancy = NodeFeature(value=full_occupancy)
 
-        atom_node_features = chem_comp_atom_container.node_features
-        atom_edge_features = chem_comp_atom_container.edge_features
-        atom_node_features.update(
+        atom_features = chem_comp_atom_container._features
+        atom_features.update(
             {
-                "xyz": full_xyz,
-                "b_factor": full_b_factor,
-                "occupancy": full_occupancy,
+                "xyz": full_xyz.copy(),
+                "b_factor": full_b_factor.copy(),
+                "occupancy": full_occupancy.copy(),
             },
         )
 
@@ -1031,11 +990,11 @@ def build_full_length_asym_dict() -> Callable[..., dict | None]:
         if asym_dict["branch_link"] is not None:  # Branched
             residue_src = []
             residue_dst = []
-            atom_src = atom_edge_features["bond_type"].src_indices.tolist()
-            atom_dst = atom_edge_features["bond_type"].dst_indices.tolist()
-            bond_type_value = atom_edge_features["bond_type"].value.tolist()
-            aromatic_value = atom_edge_features["bond_aromatic"].value.tolist()
-            stereo_value = atom_edge_features["bond_stereo"].value.tolist()
+            atom_src = atom_features["bond_type"].src_indices.tolist()
+            atom_dst = atom_features["bond_type"].dst_indices.tolist()
+            bond_type_value = atom_features["bond_type"].value.tolist()
+            aromatic_value = atom_features["bond_aromatic"].value.tolist()
+            stereo_value = atom_features["bond_stereo"].value.tolist()
 
             for residue_idx1, residue_idx2 in asym_dict["branch_link"]:
                 link_info = asym_dict["branch_link"][(residue_idx1, residue_idx2)]
@@ -1063,30 +1022,26 @@ def build_full_length_asym_dict() -> Callable[..., dict | None]:
             aromatic_value = np.array(aromatic_value, dtype=str)
             stereo_value = np.array(stereo_value, dtype=str)
 
-            atom_edge_features["bond_type"] = EdgeFeature(
+            atom_features["bond_type"] = EdgeFeature(
                 value=bond_type_value,
                 src_indices=atom_src,
                 dst_indices=atom_dst,
-                description=atom_edge_features["bond_type"].description,
             )
-            atom_edge_features["bond_aromatic"] = EdgeFeature(
+            atom_features["bond_aromatic"] = EdgeFeature(
                 value=aromatic_value,
                 src_indices=atom_src,
                 dst_indices=atom_dst,
-                description=atom_edge_features["bond_aromatic"].description,
             )
-            atom_edge_features["bond_stereo"] = EdgeFeature(
+            atom_features["bond_stereo"] = EdgeFeature(
                 value=stereo_value,
                 src_indices=atom_src,
                 dst_indices=atom_dst,
-                description=atom_edge_features["bond_stereo"].description,
             )
 
             residue_bond = EdgeFeature(
                 value=np.array([1] * len(residue_src), dtype=int),
                 src_indices=residue_src,
                 dst_indices=residue_dst,
-                description="bond between residues. boolean.",
             )
         else:  # Polymer or Non-polymer
             match asym_dict["descriptor"]:
@@ -1109,7 +1064,6 @@ def build_full_length_asym_dict() -> Callable[..., dict | None]:
                     value=np.array([1] * len(residue_src), dtype=int),
                     src_indices=residue_src,
                     dst_indices=residue_dst,
-                    description="bond between residues. boolean.",
                 )
             if i_atom is not None and i_1_atom is not None:
                 atom_src = []
@@ -1128,103 +1082,77 @@ def build_full_length_asym_dict() -> Callable[..., dict | None]:
 
                 atom_src, atom_dst = (
                     np.concatenate(
-                        [atom_edge_features["bond_type"].src_indices, atom_src],
+                        [atom_features["bond_type"].src_indices, atom_src],
                     ),
                     np.concatenate(
-                        [atom_edge_features["bond_type"].dst_indices, atom_dst],
+                        [atom_features["bond_type"].dst_indices, atom_dst],
                     ),
                 )
                 bond_type_value = np.concatenate(
-                    [atom_edge_features["bond_type"].value, atom_bond_type_can],
+                    [atom_features["bond_type"].value, atom_bond_type_can],
                 )
-                atom_edge_features["bond_type"] = EdgeFeature(
+                atom_features["bond_type"] = EdgeFeature(
                     value=bond_type_value,
                     src_indices=atom_src,
                     dst_indices=atom_dst,
-                    description=atom_edge_features["bond_type"].description,
                 )
                 aromatic_value = np.concatenate(
-                    [atom_edge_features["bond_aromatic"].value, atom_aromatic_can],
+                    [atom_features["bond_aromatic"].value, atom_aromatic_can],
                 )
-                atom_edge_features["bond_aromatic"] = EdgeFeature(
+                atom_features["bond_aromatic"] = EdgeFeature(
                     value=aromatic_value,
                     src_indices=atom_src,
                     dst_indices=atom_dst,
-                    description=atom_edge_features["bond_aromatic"].description,
                 )
                 stereo_value = np.concatenate(
-                    [atom_edge_features["bond_stereo"].value, atom_stereo_can],
+                    [atom_features["bond_stereo"].value, atom_stereo_can],
                 )
-                atom_edge_features["bond_stereo"] = EdgeFeature(
+                atom_features["bond_stereo"] = EdgeFeature(
                     value=stereo_value,
                     src_indices=atom_src,
                     dst_indices=atom_dst,
-                    description=atom_edge_features["bond_stereo"].description,
                 )
 
-        atom_container = FeatureContainer(
-            node_features=atom_node_features,
-            edge_features=atom_edge_features,
-        )
-        residue_node_features = chem_comp_residue_container.node_features
-        residue_node_features.update(
+        atom_container = FeatureContainer(features=atom_features)
+        residue_features = chem_comp_residue_container._features
+        residue_features.update(
             {
-                "cif_idx": NodeFeature(
-                    value=asym_dict["cif_idx"],
-                    description="CIF index of the residue",
-                ),
-                "auth_idx": NodeFeature(
-                    value=asym_dict["auth_idx"],
-                    description="Author index of the residue",
-                ),
-                "chem_comp": NodeFeature(
-                    value=chem_comp_id_list,
-                    description="Chemical component ID of the residue",
-                ),
-                "hetero": NodeFeature(
-                    value=asym_dict["hetero"].astype(int),
-                    description="Heterogeneous flag of the residue",
-                ),
+                "cif_idx": NodeFeature(value=asym_dict["cif_idx"]).copy(),
+                "auth_idx": NodeFeature(value=asym_dict["auth_idx"]).copy(),
+                "chem_comp": NodeFeature(value=chem_comp_id_list).copy(),
+                "hetero": NodeFeature(value=asym_dict["hetero"].astype(int)).copy(),
                 "one_letter_code_can": NodeFeature(
                     value=asym_dict["one_letter_code_can"],
-                    description="One letter code (canonical) of the residue",
-                ),
+                ).copy(),
                 "one_letter_code": NodeFeature(
-                    value=asym_dict["one_letter_code"],
-                    description="One letter code (asym) of the residue",
-                ),
+                    value=asym_dict["one_letter_code"]
+                ).copy(),
             },
         )
-        residue_edge_features = {} if residue_bond is None else {"bond": residue_bond}
-        residue_container = FeatureContainer(
-            node_features=residue_node_features,
-            edge_features=residue_edge_features,
-        )
+        if residue_bond is not None:
+            residue_features["bond"] = residue_bond
+        else:
+            residue_features["bond"] = EdgeFeature(
+                value=np.array([], dtype=int),
+                src_indices=np.array([], dtype=int),
+                dst_indices=np.array([], dtype=int),
+            )  # to avoid key error later
+        residue_container = FeatureContainer(features=residue_features)
 
-        entity_id = NodeFeature(
-            value=np.array(asym_dict["entity_id"][0:1], dtype=str),
-            description="Entity ID of the chain",
-        )
-        entity_type = NodeFeature(
-            value=np.array(asym_dict["entity_type"], dtype=str),
-            description="Entity type of the chain",
-        )
+        entity_id = NodeFeature(value=np.array(asym_dict["entity_id"][0:1], dtype=str))
+        entity_type = NodeFeature(value=np.array(asym_dict["entity_type"], dtype=str))
         auth_asym_id = atom_site_dict["auth_asym_id"]
         if len(set(auth_asym_id)) != 1:
             msg = "Multiple auth_asym_id found in atom_site for the same asym_id."
             raise ValueError(msg)
-        auth_asym_id = NodeFeature(
-            value=np.array([auth_asym_id[0]], dtype=str),
-            description="Author asym ID of the chain",
-        )
+        auth_asym_id = NodeFeature(value=np.array([auth_asym_id[0]], dtype=str))
 
         chain_container = FeatureContainer(
-            node_features={
+            features={
                 "entity_id": entity_id,
                 "entity_type": entity_type,
                 "auth_asym_id": auth_asym_id,
             },
-            edge_features={},
         )
 
         return {
@@ -1438,16 +1366,14 @@ def build_assembly_dict() -> Callable[..., dict[str, dict[str, NDArray]] | None]
     """Remove chains where all residues are UNL."""
 
     def _apply_RT(
-        atom_container: FeatureContainer, matrix: NDArray, vector: NDArray
+        atom_container: FeatureContainer,
+        matrix: NDArray,
+        vector: NDArray,
     ) -> FeatureContainer:
-        xyz = atom_container.node_features["xyz"].value
+        xyz = atom_container["xyz"].value
         new_xyz = xyz @ matrix.T + vector
         new_atom_container = atom_container.copy()
-        new_atom_container.node_features["xyz"] = NodeFeature(
-            value=new_xyz,
-            description=atom_container.node_features["xyz"].description,
-        )
-        return new_atom_container
+        return new_atom_container.update(xyz=NodeFeature(new_xyz).copy())
 
     def _get_atom_indices(
         residue_indices: np.ndarray,
@@ -1547,9 +1473,9 @@ def build_assembly_dict() -> Callable[..., dict[str, dict[str, NDArray]] | None]
                     asym_containers[asym_id]["atom_to_residue_idx"]
                     for asym_id in asym_containers
                 ]
-                atom_container = concat_containers(*atom_container_list)
-                residue_container = concat_containers(*residue_container_list)
-                chain_container = concat_containers(*chain_container_list)
+                atom_container = FeatureContainer.concat(atom_container_list)
+                residue_container = FeatureContainer.concat(residue_container_list)
+                chain_container = FeatureContainer.concat(chain_container_list)
 
                 increments = np.array(
                     [arr.max() + 1 for arr in atom_to_residue_idx_list]
@@ -1560,11 +1486,8 @@ def build_assembly_dict() -> Callable[..., dict[str, dict[str, NDArray]] | None]
                 ]
                 atom_to_residue_idx = np.concatenate(atom_to_residue_idx)
 
-                chain_id = NodeFeature(
-                    value=np.array(chain_id_list, dtype=str),
-                    description="Chain ID in the assembly",
-                )
-                chain_container.node_features["chain_id"] = chain_id
+                chain_id = NodeFeature(value=np.array(chain_id_list, dtype=str))
+                chain_container = chain_container.update(chain_id=chain_id.copy())
 
                 # Indextable TODO
                 index_table = IndexTable.from_parents(
@@ -1690,16 +1613,18 @@ def build_assembly_dict() -> Callable[..., dict[str, dict[str, NDArray]] | None]
                         value=residue_value,
                         src_indices=residue_src,
                         dst_indices=residue_dst,
-                        description="struct_conn between residues. boolean.",
                     )
                     atom_struct_conn = EdgeFeature(
                         value=atom_value,
                         src_indices=atom_src,
                         dst_indices=atom_dst,
-                        description="struct_conn between atoms. (conn_type_id, pdbx_value_order)",
                     )
-                    residue_container.edge_features["struct_conn"] = residue_struct_conn
-                    atom_container.edge_features["struct_conn"] = atom_struct_conn
+                    residue_container = residue_container.update(
+                        struct_conn=residue_struct_conn.copy(),
+                    )
+                    atom_container = atom_container.update(
+                        struct_conn=atom_struct_conn.copy(),
+                    )
 
                 output[key] = {
                     "atoms": atom_container,
@@ -1912,7 +1837,7 @@ def extract_contact_graph(
     """
 
     def _function(container_dict: dict) -> FeatureContainer:
-        xyz = container_dict["atoms"].node_features["xyz"].value  # (L,3)
+        xyz = container_dict["atoms"]["xyz"].value  # (L,3)
         chain_idx = container_dict["index_table"].atoms_to_chains(
             np.arange(xyz.shape[0])
         )  # (L,)
@@ -1944,7 +1869,7 @@ def extract_contact_graph(
                 dst_indices=np.empty((0,), dtype=chain_idx.dtype),
             )
             chain_container = container_dict["chains"]
-            chain_container.edge_features["contact"] = contact_edges
+            chain_container["contact"] = contact_edges
             container_dict["chains"] = chain_container
             return container_dict
 
@@ -1974,7 +1899,7 @@ def extract_contact_graph(
             dst_indices=contact_dst,
         )
         chain_container = container_dict["chains"]
-        chain_container.edge_features["contact"] = contact_edges
+        chain_container.update(contact=contact_edges.copy())
         container_dict["chains"] = chain_container
         return container_dict
 

@@ -222,12 +222,10 @@ def build_container() -> Callable[..., dict[str, FeatureContainer]]:
         headers: dict[str, list[str]],
     ) -> dict[str, FeatureContainer]:
         residue_container = FeatureContainer(
-            node_features=sequences,
-            edge_features={},
+            features=sequences,
         )
         chain_container = FeatureContainer(
-            node_features=headers,
-            edge_features={},
+            features=headers,
         )
         return {
             "residue_container": residue_container,

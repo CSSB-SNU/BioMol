@@ -91,7 +91,7 @@ def main() -> None:
         item["metadata"] = metadata
 
         cifmol_dict[cif_key] = CIFMol.from_dict(item)
-        cifmol_dict[cif_key].to_cif(f"test_{cif_key}.cif")
+        cifmol_dict[cif_key].to_cif(Path(f"test_{cif_key}.cif"))
     breakpoint()
 
 

@@ -1,4 +1,3 @@
-import sys
 from pathlib import Path
 
 from Bio.PDB.MMCIF2Dict import MMCIF2Dict as mmcif2dict  # noqa: N813

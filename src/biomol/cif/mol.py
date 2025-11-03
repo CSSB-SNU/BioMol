@@ -1,12 +1,13 @@
 from pathlib import Path
+
 import numpy as np
 
 from biomol import BioMol
-from biomol.core import EdgeFeature, NodeFeature, ViewProtocol
+from biomol.core import EdgeFeature, NodeFeature, View
 
 
 class CIFAtomView(
-    ViewProtocol["CIFAtomView", "CIFResidueView", "CIFChainView", "CIFMol"],
+    View["CIFAtomView", "CIFResidueView", "CIFChainView", "CIFMol"],
 ):
     """View class for CIF atoms."""
 
@@ -60,7 +61,7 @@ class CIFAtomView(
 
 
 class CIFResidueView(
-    ViewProtocol["CIFAtomView", "CIFResidueView", "CIFChainView", "CIFMol"],
+    View["CIFAtomView", "CIFResidueView", "CIFChainView", "CIFMol"],
 ):
     """View class for CIF residues."""
 
@@ -106,7 +107,7 @@ class CIFResidueView(
 
 
 class CIFChainView(
-    ViewProtocol["CIFAtomView", "CIFResidueView", "CIFChainView", "CIFMol"],
+    View["CIFAtomView", "CIFResidueView", "CIFChainView", "CIFMol"],
 ):
     """View class for CIF chains."""
 
@@ -154,10 +155,10 @@ class CIFMol(BioMol["CIFAtomView", "CIFResidueView", "CIFChainView"]):
         """Alternate location ID of the molecule."""
         return self.metadata["alt_id"]
 
-    def to_cif(self, output_path: Path) -> None:
-        """Write a CIFMol object to a CIF file."""
-
+    def to_cif(self, output_path: Path) -> None:  # noqa: PLR0915
         """
+        Write a CIFMol object to a CIF file.
+
         1. _atom_site
         2. _struct_conn (TODO)
         3. ~_scheme (TODO)
@@ -206,7 +207,7 @@ class CIFMol(BioMol["CIFAtomView", "CIFResidueView", "CIFChainView"]):
         res_to_chain = np.array(self.index_table.res_to_chain)
         atom_to_chain = res_to_chain[atom_to_res]
 
-        group_PDB_list = self.residues.hetero[atom_to_res][mask].value
+        group_PDB_list = self.residues.hetero[atom_to_res][mask].value  # noqa: N806
         id_list = 1 + np.arange(length)
         type_symbol_list = self.atoms.element[mask].value
         label_atom_id_list = self.atoms.atom_id[mask].value
@@ -230,10 +231,10 @@ class CIFMol(BioMol["CIFAtomView", "CIFResidueView", "CIFChainView"]):
         occupancy_list = self.atoms.occupancy[mask].value
         b_iso_or_equiv_list = self.atoms.b_factor[mask].value
         pdbx_formal_charge_list = self.atoms.charge[mask].value
-        pdbx_PDB_model_num_list = [self.model_id] * length
+        pdbx_PDB_model_num_list = [self.model_id] * length  # noqa: N806
 
         # to mmcif format
-        group_PDB_list = _to_mmcif_format(group_PDB_list)
+        group_PDB_list = _to_mmcif_format(group_PDB_list)  # noqa: N806
         type_symbol_list = _to_mmcif_format(type_symbol_list)
         label_atom_id_list = _to_mmcif_format(label_atom_id_list)
         label_comp_id_list = _to_mmcif_format(label_comp_id_list)
@@ -255,7 +256,7 @@ class CIFMol(BioMol["CIFAtomView", "CIFResidueView", "CIFChainView"]):
         occupancy_list = _to_mmcif_format(occupancy_list)
         b_iso_or_equiv_list = _to_mmcif_format(b_iso_or_equiv_list)
         pdbx_formal_charge_list = _to_mmcif_format(pdbx_formal_charge_list)
-        pdbx_PDB_model_num_list = _to_mmcif_format(pdbx_PDB_model_num_list)
+        pdbx_PDB_model_num_list = _to_mmcif_format(pdbx_PDB_model_num_list)  # noqa: N806
 
         for idx in range(length):
             fields = [
@@ -283,5 +284,4 @@ class CIFMol(BioMol["CIFAtomView", "CIFResidueView", "CIFChainView"]):
             ]
             output += " ".join(map(str, fields)) + "\n"
 
-        with open(output_path, "w") as f:
-            f.write(output)
+        output_path.write_text(output)
