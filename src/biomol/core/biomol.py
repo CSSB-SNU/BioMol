@@ -320,6 +320,7 @@ class BioMol(Generic[A_co, R_co, C_co]):
         -----
         All containers must have the same set of feature keys.
         Metadata from the first BioMol object is retained.
+        Always returns a new BioMol instance, even if only one object is provided.
 
         Examples
         --------

@@ -181,7 +181,8 @@ class FeatureContainer:
 
         Notes
         -----
-        All containers must have the same set of feature keys.
+        All containers must have the same set of feature keys. Always returns a new
+        FeatureContainer instance, even if only one container is provided.
 
         Examples
         --------
