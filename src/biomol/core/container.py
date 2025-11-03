@@ -195,8 +195,6 @@ class FeatureContainer:
         if not containers:
             msg = "No FeatureContainer instances provided for concatenation."
             raise ValueError(msg)
-        if len(containers) == 1:
-            return containers[0]
 
         base_keys = containers[0].keys()
         for container in containers[1:]:
@@ -265,3 +263,9 @@ class FeatureContainer:
                     f"dst_indices max={feat.dst_indices.max()}."
                 )
                 raise IndexOutOfBoundsError(msg)
+
+    def copy(self) -> FeatureContainer:
+        """Create a deep copy of the FeatureContainer."""
+        return FeatureContainer(
+            {key: feat.copy() for key, feat in self._features.items()},
+        )

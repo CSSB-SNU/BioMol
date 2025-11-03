@@ -333,8 +333,6 @@ class BioMol(Generic[A_co, R_co, C_co]):
         if not mols:
             msg = "Cannot concatenate an empty list of BioMol objects."
             raise ValueError(msg)
-        if len(mols) == 1:
-            return mols[0]
 
         atom_containers = [mol.get_container(StructureLevel.ATOM) for mol in mols]
         residue_containers = [mol.get_container(StructureLevel.RESIDUE) for mol in mols]
@@ -410,3 +408,13 @@ class BioMol(Generic[A_co, R_co, C_co]):
         for better performance.
         """
         return self.concat([self, other])
+
+    def copy(self) -> Self:
+        """Create a deep copy of the BioMol."""
+        return self.__class__(
+            self._atom_container.copy(),
+            self._residue_container.copy(),
+            self._chain_container.copy(),
+            self._index.copy(),
+            self._metadata.copy(),
+        )

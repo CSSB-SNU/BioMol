@@ -243,3 +243,14 @@ class IndexTable:
         if np.any(indices < 0):
             msg = "Indices contain negative values"
             raise IndexInvalidError(msg)
+
+    def copy(self) -> IndexTable:
+        """Create a deep copy of the IndexTable."""
+        return IndexTable(
+            self.atom_to_res.copy(),
+            self.res_to_chain.copy(),
+            self.res_atom_indptr.copy(),
+            self.res_atom_indices.copy(),
+            self.chain_res_indptr.copy(),
+            self.chain_res_indices.copy(),
+        )
