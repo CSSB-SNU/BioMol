@@ -320,6 +320,7 @@ class BioMol(Generic[A_co, R_co, C_co]):
         -----
         All containers must have the same set of feature keys.
         Metadata from the first BioMol object is retained.
+        Always returns a new BioMol instance, even if only one object is provided.
 
         Examples
         --------
@@ -333,8 +334,6 @@ class BioMol(Generic[A_co, R_co, C_co]):
         if not mols:
             msg = "Cannot concatenate an empty list of BioMol objects."
             raise ValueError(msg)
-        if len(mols) == 1:
-            return mols[0]
 
         atom_containers = [mol.get_container(StructureLevel.ATOM) for mol in mols]
         residue_containers = [mol.get_container(StructureLevel.RESIDUE) for mol in mols]
@@ -365,6 +364,16 @@ class BioMol(Generic[A_co, R_co, C_co]):
             FeatureContainer.concat(chain_containers),
             concatenated_table,
             metadata=mols[0].metadata.copy(),
+        )
+
+    def copy(self) -> Self:
+        """Create a deep copy of the BioMol."""
+        return self.__class__(
+            self._atom_container.copy(),
+            self._residue_container.copy(),
+            self._chain_container.copy(),
+            self._index.copy(),
+            self._metadata.copy(),
         )
 
     def _check_lengths(self) -> None:

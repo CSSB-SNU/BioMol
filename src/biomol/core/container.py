@@ -181,7 +181,8 @@ class FeatureContainer:
 
         Notes
         -----
-        All containers must have the same set of feature keys.
+        All containers must have the same set of feature keys. Always returns a new
+        FeatureContainer instance, even if only one container is provided.
 
         Examples
         --------
@@ -195,8 +196,6 @@ class FeatureContainer:
         if not containers:
             msg = "No FeatureContainer instances provided for concatenation."
             raise ValueError(msg)
-        if len(containers) == 1:
-            return containers[0]
 
         base_keys = containers[0].keys()
         for container in containers[1:]:
@@ -240,6 +239,12 @@ class FeatureContainer:
                 raise FeatureKeyError(msg)
 
         return FeatureContainer(new_features)
+
+    def copy(self) -> FeatureContainer:
+        """Create a deep copy of the FeatureContainer."""
+        return FeatureContainer(
+            {key: feat.copy() for key, feat in self._features.items()},
+        )
 
     def _check_node_lengths(self) -> None:
         node_lengths = {
