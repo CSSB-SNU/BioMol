@@ -51,6 +51,10 @@ class FeatureContainer:
             return self._features[key]
         raise FeatureKeyError(key)
 
+    def __contains__(self, key: str) -> bool:
+        """Check if a feature key exists in the container."""
+        return key in self._features
+
     def __repr__(self) -> str:
         """Return a string representation of the container."""
         return f"FeatureContainer(keys={list(self._features.keys())})"

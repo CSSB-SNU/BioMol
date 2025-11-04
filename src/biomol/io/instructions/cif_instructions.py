@@ -281,6 +281,22 @@ def parse_chem_comp() -> Callable[..., dict[str, FeatureContainer]]:
             atom_features["bond_type"] = bond_type
             atom_features["bond_aromatic"] = bond_aromatic
             atom_features["bond_stereo"] = bond_stereo
+        else:
+            atom_features["bond_type"] = EdgeFeature(
+                value=np.array([], dtype=str),
+                src_indices=np.array([], dtype=int),
+                dst_indices=np.array([], dtype=int),
+            )
+            atom_features["bond_aromatic"] = EdgeFeature(
+                value=np.array([], dtype=str),
+                src_indices=np.array([], dtype=int),
+                dst_indices=np.array([], dtype=int),
+            )
+            atom_features["bond_stereo"] = EdgeFeature(
+                value=np.array([], dtype=str),
+                src_indices=np.array([], dtype=int),
+                dst_indices=np.array([], dtype=int),
+            )
 
         residue_container = FeatureContainer(
             features={
@@ -1112,6 +1128,22 @@ def build_full_length_asym_dict() -> Callable[..., dict | None]:
                     src_indices=atom_src,
                     dst_indices=atom_dst,
                 )
+            else:
+                atom_features["bond_type"] = EdgeFeature(
+                    value=np.array([], dtype=int),
+                    src_indices=np.array([], dtype=int),
+                    dst_indices=np.array([], dtype=int),
+                )  # to avoid key error later
+                atom_features["bond_aromatic"] = EdgeFeature(
+                    value=np.array([], dtype=str),
+                    src_indices=np.array([], dtype=int),
+                    dst_indices=np.array([], dtype=int),
+                )  # to avoid key error later
+                atom_features["bond_stereo"] = EdgeFeature(
+                    value=np.array([], dtype=str),
+                    src_indices=np.array([], dtype=int),
+                    dst_indices=np.array([], dtype=int),
+                )  # to avoid key error later
 
         atom_container = FeatureContainer(features=atom_features)
         residue_features = chem_comp_residue_container._features
@@ -1869,7 +1901,7 @@ def extract_contact_graph(
                 dst_indices=np.empty((0,), dtype=chain_idx.dtype),
             )
             chain_container = container_dict["chains"]
-            chain_container["contact"] = contact_edges
+            chain_container = chain_container.update(contact=contact_edges.copy())
             container_dict["chains"] = chain_container
             return container_dict
 
@@ -1899,7 +1931,7 @@ def extract_contact_graph(
             dst_indices=contact_dst,
         )
         chain_container = container_dict["chains"]
-        chain_container.update(contact=contact_edges.copy())
+        chain_container = chain_container.update(contact=contact_edges.copy())
         container_dict["chains"] = chain_container
         return container_dict
 

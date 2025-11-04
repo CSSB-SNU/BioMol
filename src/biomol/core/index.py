@@ -266,3 +266,14 @@ class IndexTable:
             chain_res_indptr=np.array(data["chain_res_indptr"], dtype=int),
             chain_res_indices=np.array(data["chain_res_indices"], dtype=int),
         )
+
+    def copy(self) -> IndexTable:
+        """Create a deep copy of the IndexTable."""
+        return IndexTable(
+            atom_to_res=self.atom_to_res.copy(),
+            res_to_chain=self.res_to_chain.copy(),
+            res_atom_indptr=self.res_atom_indptr.copy(),
+            res_atom_indices=self.res_atom_indices.copy(),
+            chain_res_indptr=self.chain_res_indptr.copy(),
+            chain_res_indices=self.chain_res_indices.copy(),
+        )

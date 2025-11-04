@@ -10,7 +10,8 @@ from numpy.typing import NDArray
 from pathlib import Path
 
 from biomol.core.container import FeatureContainer
-from biomol.core.feature import NodeFeature
+from biomol.core.feature import NodeFeature, EdgeFeature
+from biomol.core.utils import to_bytes
 from biomol.mapping import ResidueMapping
 from biomol.cif.mol import CIFMol
 from joblib import Parallel, delayed
@@ -23,6 +24,87 @@ from postprocessing.instructions.seq_instructions import graph_to_canonical_sequ
 InputType = TypeVar("InputType", str, int, float)
 FeatureType = TypeVar("FeatureType")
 NumericType = TypeVar("NumericType", int, float)
+
+
+def extract_graph_per_cifmol() -> Callable[..., bytes]:
+    """Read CIFMol and extract chain-level contact graphs with cluster labels."""
+
+    def _worker(
+        cifmol: CIFMol,
+        seq_to_seq_hash_list: dict[str, list[str]],
+        seq_hash_to_cluster: dict[str, str],
+    ) -> type[InputType]:
+        chain_id_to_cluster = {}
+        chain_ids = cifmol.chains.chain_id.value
+
+        for full_chain_id in chain_ids:
+            entity_type = cifmol.chains[
+                cifmol.chains.chain_id == full_chain_id
+            ].entity_type.value[0]
+            if entity_type == "non-polymer":
+                seq = cifmol.chains[
+                    cifmol.chains.chain_id == full_chain_id
+                ].residues.chem_comp.value
+                seq = f"({seq[0]})"
+            elif entity_type == "branched":
+                seq_list = cifmol.chains[
+                    cifmol.chains.chain_id == full_chain_id
+                ].residues.chem_comp.value
+                bonds = cifmol.chains[
+                    cifmol.chains.chain_id == full_chain_id
+                ].residues.bond
+                seq = graph_to_canonical_sequence(
+                    seq_list,
+                    bonds.src_indices,
+                    bonds.dst_indices,
+                )
+            else:  # polymer
+                seq = cifmol.chains[
+                    cifmol.chains.chain_id == full_chain_id
+                ].residues.one_letter_code_can.value
+                seq = "".join(seq)
+
+            match entity_type:
+                case "polypeptide(L)":
+                    mol_identifier = "P"
+                case "polypeptide(D)":
+                    mol_identifier = "Q"
+                case "polydeoxyribonucleotide":
+                    mol_identifier = "D"
+                case "polyribonucleotide":
+                    mol_identifier = "R"
+                case "polydeoxyribonucleotide/polyribonucleotide hybrid":
+                    mol_identifier = "N"
+                case "branched":
+                    mol_identifier = "B"
+                case "non-polymer":
+                    mol_identifier = "L"
+                case _:
+                    mol_identifier = "X"
+
+            seq_hash_list = seq_to_seq_hash_list[seq]
+            seq_hash = [h for h in seq_hash_list if h.startswith(mol_identifier)][0]
+            chain_id_to_cluster[full_chain_id] = seq_hash_to_cluster[seq_hash]
+
+        # chain level contact graph
+        contact_graph = cifmol.chains.contact
+        chain_id_list = cifmol.chains.chain_id.value
+        cluster_list = [chain_id_to_cluster[chain_id] for chain_id in chain_id_list]
+        src, dst = contact_graph.src_indices, contact_graph.dst_indices
+
+        cluster_list = np.array(cluster_list)
+        features = {
+            "seq_clusters": NodeFeature(cluster_list),
+            "contact_edges": EdgeFeature(
+                value=np.array([1] * len(src)),
+                src_indices=np.array(src),
+                dst_indices=np.array(dst),
+            ),
+        }
+        container = FeatureContainer(features)
+        return to_bytes({"cluster_graph": container})
+
+    return _worker
 
 
 def extract_graphs(n_jobs: int = -1) -> Callable[..., type[InputType]]:
@@ -247,7 +329,6 @@ def build_graph_hash(n_jobs: int = -1) -> Callable[..., type[InputType]]:
             unique_map[cur] = graph_map[rep_gid]
             for gid in members:
                 gid_to_id[gid] = cur
-        breakpoint()
         return unique_map, gid_to_id
 
     return _worker
@@ -376,16 +457,39 @@ def graph_edge_cluster(n_jobs: int = -1) -> Callable[..., type[InputType]]:
     return _worker
 
 
-def convert_graph_to_container(
-    graph: nx.Graph,
-) -> FeatureContainer[NodeFeature, NumericType]:
-    """Convert a NetworkX graph to a FeatureContainer with NodeFeatures."""
+def convert_graph_to_bytes(n_jobs: int = -1) -> Callable[..., bytes]:
+    """Convert a NetworkX graph to a FeatureContainer."""
 
-    features: list[NodeFeature] = []
-    for node, data in graph.nodes(data=True):
-        label = data.get("label", None)
-        feature = NodeFeature(id=node, label=label)
-        features.append(feature)
+    def _function(
+        graph: nx.Graph,
+    ) -> bytes:
+        label_list = []
+        src_list, dst_list = [], []
+        for _, data in graph.nodes(data=True):
+            label = data.get("label")
+            label_list.append(label)
+        for u, v in graph.edges():
+            src_list.append(u)
+            dst_list.append(v)
 
-    container = FeatureContainer[NodeFeature, NumericType](features=features)
-    return container
+        label_list = np.array(label_list)
+        features = {
+            "seq_clusters": NodeFeature(label_list),
+            "contact_edges": EdgeFeature(
+                value=np.array([1] * len(src_list)),
+                src_indices=np.array(src_list),
+                dst_indices=np.array(dst_list),
+            ),
+        }
+        container = FeatureContainer(features)
+        return to_bytes({"cluster_graph": container})
+
+    def _worker(
+        graph_map: dict[str, nx.Graph],
+    ) -> dict[str, bytes]:
+        results = Parallel(n_jobs=n_jobs, verbose=10)(
+            delayed(_function)(graph) for graph in graph_map.values()
+        )
+        return dict(zip(graph_map.keys(), results, strict=True))
+
+    return _worker

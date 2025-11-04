@@ -9,6 +9,7 @@ from biomol.cif import CIFMol
 from biomol.core.utils import from_bytes
 from biomol.io.cache import ParsingCache
 from biomol.io.cooker import Cooker
+import networkx as nx
 
 
 def extract_key_list(env_path: Path) -> list[str]:
@@ -35,27 +36,47 @@ def load_cif(key: str, env_path: Path) -> dict[str, CIFMol]:
         dict
             The data dictionary retrieved from the LMDB database.
     """
-    env = lmdb.open(str(env_path), readonly=True, lock=False)
-    with env.begin() as txn:
+    cache = getattr(load_cif, "_env_cache", None)
+    if cache is None:
+        cache = {}
+        setattr(load_cif, "_env_cache", cache)
+
+    env_key = str(env_path)
+    env = cache.get(env_key)
+    if env is None:
+        env = lmdb.open(
+            env_key,
+            readonly=True,
+            lock=False,
+            max_readers=4096,
+            readahead=True,
+        )
+        cache[env_key] = env
+
+    with env.begin(buffers=True) as txn:
         value = txn.get(key.encode())
-    env.close()
+
     if value is None:
-        msg = f"Key '{key}' not found in LMDB database."
+        msg = f"Key '{key}' not found in LMDB database at '{env_path}'."
         raise KeyError(msg)
-    value = from_bytes(value)  # remove metadata dict
+
+    value = from_bytes(bytes(value))
     value, metadata = value["assembly_dict"], value["metadata_dict"]
 
-    cifmol_dict = {}
-    for cif_key in value:
-        item = value[cif_key]
-        # model_id = cif_key.
+    cifmol_dict: dict[str, dict[str, CIFMol]] = {}
+    for cif_key, item in value.items():
         assembly_id, model_id, alt_id = cif_key.split("_")
-        metadata["assembly_id"] = assembly_id
-        metadata["model_id"] = model_id
-        metadata["alt_id"] = alt_id
-        item["metadata"] = metadata
+
+        md = dict(metadata)
+        md["assembly_id"] = assembly_id
+        md["model_id"] = model_id
+        md["alt_id"] = alt_id
+
+        item = dict(item)
+        item["metadata"] = md
 
         cifmol_dict[cif_key] = {"cifmol": CIFMol.from_dict(item)}
+
     return cifmol_dict
 
 
@@ -89,6 +110,54 @@ def load_a3m(a3m_path: Path) -> dict[str, str]:
         else:
             a3m_dict[current_header] += line
     return a3m_dict
+
+
+def load_graph(key: str, env_path: Path) -> nx.Graph:
+    """
+    Read a value from the LMDB database by key.
+
+    Args:
+        env_path: Path to the LMDB environment.
+        key: Key of the data to retrieve.
+    Returns
+    -------
+        dict
+            The data dictionary retrieved from the LMDB database.
+    """
+    cache = getattr(load_graph, "_env_cache", None)
+    if cache is None:
+        cache = {}
+        setattr(load_graph, "_env_cache", cache)
+
+    env_key = str(env_path)
+    env = cache.get(env_key)
+    if env is None:
+        env = lmdb.open(
+            env_key,
+            readonly=True,
+            lock=False,
+            max_readers=4096,
+            readahead=True,
+        )
+        cache[env_key] = env
+
+    with env.begin(buffers=True) as txn:
+        value = txn.get(key.encode())
+
+    if value is None:
+        msg = f"Key '{key}' not found in LMDB database at '{env_path}'."
+        raise KeyError(msg)
+
+    value = from_bytes(bytes(value))["cluster_graph"]
+    node_list = value["nodes"]["seq_clusters"]["value"]
+    edge_list = value["edges"]["contact_edges"]
+    src, dst = edge_list["src_indices"], edge_list["dst_indices"]
+    graph = nx.Graph()
+    for ii, seq_cluster in enumerate(node_list):
+        graph.add_node(ii, label=seq_cluster)
+    for s, d in zip(src, dst, strict=True):
+        graph.add_edge(s, d)
+    return graph
 
 
 def base_process(
@@ -232,14 +301,14 @@ def build_seq_hash_map(
     seq_hash_map = dict(
         sorted(
             seq_hash_map.items(),
-            key=lambda item: (item[1][0], len(item[0])),
+            key=lambda item: (item[0][0], len(item[1])),
         ),
     )
 
     # write to output_path
     output_path.parent.mkdir(parents=True, exist_ok=True)
     with output_path.open("w") as f:
-        for sequence, seq_hash in seq_hash_map.items():
+        for seq_hash, sequence in seq_hash_map.items():
             f.write(f"{seq_hash}\t{sequence}\n")
 
 
@@ -314,65 +383,191 @@ def seq_cluster(
     click.echo(f"Saved {cluster_num} clusters with {total_members} total members.")
 
 
-@cli.command("graph_cluster")
+@cli.command("graph_lmdb")
 @click.argument("cif_db_path", type=click.Path(path_type=Path))
 @click.argument("seq_hash_map", type=click.Path(path_type=Path))
 @click.argument("seq_cluster_map", type=click.Path(path_type=Path))
-@click.argument("output_dir", type=click.Path(path_type=Path))
-@click.option("n_digits", "--n_digits", "-d", type=int, default=6, show_default=True)
-def graph_cluster(
+@click.argument("graph_lmdb_path", type=click.Path(path_type=Path))
+def graph_lmdb(
     cif_db_path: Path,
     seq_hash_map: Path,
     seq_cluster_map: Path,
+    graph_lmdb_path: Path,
+) -> None:
+    """
+    Extract graphs of CIFMol objects stored in LMDB database.
+
+    Example:
+    python -m postprocessing.run graph_lmdb \
+        /public_data/BioMolDBv2_2024Oct21/cif.lmdb \
+        /public_data/BioMolDBv2_2024Oct21/metadata/seq_hash_map.tsv \
+        /public_data/BioMolDBv2_2024Oct21/seq_cluster/seq_clusters.tsv \
+        /public_data/BioMolDBv2_2024Oct21/graph.lmdb
+    """
+    key_list = extract_key_list(cif_db_path)
+    graph_lmdb_recipe_path = "postprocessing/recipes/graph_lmdb.py"
+
+    seq_hash_to_seq: dict[str, int] = {}
+    with seq_hash_map.open("r") as f:
+        for line in f:
+            seq_hash, seq = line.strip().split("\t")
+            seq_hash_to_seq[seq_hash] = seq
+
+    seq_hash_to_cluster: dict[int, str] = {}
+    with seq_cluster_map.open("r") as f:
+        for line in f:
+            rep, members = line.strip().split("\t")
+            for m in members.split(","):
+                seq_hash_to_cluster[m] = rep
+
+    seq_to_seq_hash_list = {}
+    for seq_hash, seq in seq_hash_to_seq.items():
+        if seq in seq_to_seq_hash_list:
+            seq_to_seq_hash_list[seq].append(seq_hash)
+        else:
+            seq_to_seq_hash_list[seq] = [seq_hash]
+
+    # ---------------------------------------
+    # Worker on CHUNK basis
+    # ---------------------------------------
+    def _process_chunk(keys: list[str]) -> dict[str, bytes]:
+        out: dict[str, bytes] = {}
+        for cif_id in keys:
+            cifmol_dict = load_cif(cif_id, env_path=cif_db_path)
+            for inner_key, obj in cifmol_dict.items():
+                cifmol = obj["cifmol"]
+                result = base_process(
+                    {
+                        "cifmol": cifmol,
+                        "seq_to_seq_hash_list": seq_to_seq_hash_list,
+                        "seq_hash_to_cluster": seq_hash_to_cluster,
+                    },
+                    recipe_path=graph_lmdb_recipe_path,
+                )
+                graph_bytes = result["graph_bytes"]
+                full_key = f"{cif_id}_{inner_key}"
+                out[full_key] = graph_bytes
+        return out
+
+    # make chunks
+    CHUNK = 200  # tuneable
+    key_chunks = [key_list[i : i + CHUNK] for i in range(0, len(key_list), CHUNK)]
+    click.echo(f"Processing {len(key_chunks)} chunks of size {CHUNK}...")
+
+    # parallel batch
+    chunk_results = Parallel(n_jobs=-1, verbose=10)(
+        delayed(_process_chunk)(chunk) for chunk in key_chunks
+    )
+
+    # merge
+    graph_dict: dict[str, bytes] = {}
+    for d in chunk_results:
+        graph_dict.update(d)
+
+    # write to lmdb (original behaviour)
+    all_keys = list(graph_dict.keys())
+    click.echo(f"Writing {len(graph_dict)} graphs to LMDB at {graph_lmdb_path}...")
+    env = lmdb.open(str(graph_lmdb_path), map_size=int(1e12))
+
+    WRITE_CHUNK = 10_000
+    for i in range(0, len(all_keys), WRITE_CHUNK):
+        click.echo(
+            f"Processing files {i} to {min(i + WRITE_CHUNK, len(all_keys))} / {len(all_keys)}"
+        )
+        data_chunk = all_keys[i : i + WRITE_CHUNK]
+        with env.begin(write=True) as txn:
+            for key in data_chunk:
+                zcompressed = graph_dict[key]
+                txn.put(key.encode(), zcompressed)
+
+
+@cli.command("graph_cluster")
+@click.argument("graph_lmdb_path", type=click.Path(path_type=Path))
+@click.argument("output_dir", type=click.Path(path_type=Path))
+@click.argument("unique_graph_lmdb_path", type=click.Path(path_type=Path))
+def graph_cluster(
+    graph_lmdb_path: Path,
     output_dir: Path,
-    n_digits: int,
+    unique_graph_lmdb_path: Path,
 ) -> None:
     """
     Clustering graphs of CIFMol objects stored in LMDB database.
 
     Example:
     python -m postprocessing.run graph_cluster \
-        /public_data/BioMolDBv2_2024Oct21/cif.lmdb/ \
-        /public_data/BioMolDBv2_2024Oct21/metadata/seq_hash_map.tsv \
-        /public_data/BioMolDBv2_2024Oct21/seq_cluster/seq_clusters.tsv \
-        /public_data/BioMolDBv2_2024Oct21/cluster/graph_cluster/
+        /public_data/BioMolDBv2_2024Oct21/graph.lmdb \
+        /public_data/BioMolDBv2_2024Oct21/cluster/graph_cluster/ \
+        /public_data/BioMolDBv2_2024Oct21/unique_graph.lmdb
     """
-    key_list = extract_key_list(cif_db_path)
+    key_list = extract_key_list(graph_lmdb_path)
+    graph_cluster_recipe_path = "postprocessing/recipes/graph_cluster.py"
 
-    # test
-    key_list = key_list[:10]
-    graph_hash_recipe_path = "postprocessing/recipes/graph_cluster.py"
+    # ---------------------------------------
+    # Worker on CHUNK basis
+    # ---------------------------------------
+    def _process_chunk(keys: list[str]) -> dict[str, nx.Graph]:
+        out: dict[str, nx.Graph] = {}
+        for cif_id in keys:
+            graph = load_graph(cif_id, env_path=graph_lmdb_path)
+            out[cif_id] = graph
+        return out
 
-    cifmols = {}
-    for cif_id in key_list:
-        _cifmol_dict = load_cif(cif_id, env_path=cif_db_path)
-        for key in _cifmol_dict:
-            full_key = f"{cif_id}_{key}"
-            cifmols[full_key] = _cifmol_dict[key]["cifmol"]
-    click.echo(f"Loaded {len(cifmols)} CIFMol objects from {cif_db_path}.")
+    # make chunks
+    CHUNK = 200  # tuneable
+    key_chunks = [key_list[i : i + CHUNK] for i in range(0, len(key_list), CHUNK)]
+    click.echo(f"Processing {len(key_chunks)} chunks of size {CHUNK}...")
+
+    # parallel batch
+    graph_list = Parallel(n_jobs=-1, verbose=10)(
+        delayed(_process_chunk)(chunk) for chunk in key_chunks
+    )
+    graph_map = {}
+    for d in graph_list:
+        graph_map.update(d)
+
+    click.echo(f"Loaded {len(graph_map)} graphs from {graph_lmdb_path}.")
+
     results = base_process(
         {
-            "cifmol_dict": cifmols,
-            "seq_hash_map": seq_hash_map,
-            "seq_cluster_map": seq_cluster_map,
+            "graph_map": graph_map,
         },
-        recipe_path=graph_hash_recipe_path,
+        recipe_path=graph_cluster_recipe_path,
     )
     graph_clusters = results["graph_clusters"]  # list of set of graph IDs
     graph_hash_map = results["graph_hash_map"]
+    graph_dict = results["graph_dict"]
     graph_cluster_save_path = output_dir / "graph_clusters.tsv"
     graph_hash_map_save_path = output_dir / "graph_hash_map.tsv"
 
     with graph_cluster_save_path.open("w") as f:
-        for cluster_id, graph_hash_set in enumerate(graph_clusters):
+        for _cluster_id, _graph_hash_set in enumerate(graph_clusters):
             # 123 -> 000123
-            graph_hash_set = [f"g{int(gid):06d}" for gid in graph_hash_set]
-            cluster_id = f"gc{cluster_id:06d}"  # gc = graph cluster
+            graph_hash_set = [f"g{int(gid):06d}" for gid in _graph_hash_set]
+            cluster_id = f"gc{_cluster_id:06d}"  # gc = graph cluster
             f.write(f"{cluster_id}\t{','.join(graph_hash_set)}\n")
     with graph_hash_map_save_path.open("w") as f:
         for cif_id in graph_hash_map:
             graph_hash = f"g{graph_hash_map[cif_id]:06d}"
             f.write(f"{cif_id}\t{graph_hash}\n")
+
+    key_list = list(graph_dict.keys())  # graph_hash -> graph bytes
+    click.echo(
+        f"Writing {len(graph_dict)} graphs to LMDB at {unique_graph_lmdb_path}..."
+    )
+    env = lmdb.open(str(unique_graph_lmdb_path), map_size=int(1e12))  # ~1TB
+    chunk = 10_000  # write in chunks of 10000
+    for i in range(0, len(graph_dict), chunk):
+        click.echo(
+            f"Processing files {i} to {min(i + chunk, len(graph_dict))} / {len(graph_dict)}",
+        )
+        data_chunk = key_list[i : i + chunk]
+
+        # --- Write results to LMDB ---
+        with env.begin(write=True) as txn:
+            for key in data_chunk:
+                zcompressed_data = graph_dict[key]
+                key = f"g{int(key):06d}"
+                txn.put(key.encode(), zcompressed_data)
 
 
 if __name__ == "__main__":

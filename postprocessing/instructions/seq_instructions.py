@@ -273,6 +273,7 @@ def build_seq_hash_map() -> Callable[..., type[InputType]]:
         seq_hash = 0
 
         for header, sequence in fasta_dict.items():
+            cif_ID = header.split("|")[0].strip().split("_")[0]
             mol_type = header.split("|")[1].strip()
             match mol_type:
                 case "polypeptide(L)":
@@ -300,7 +301,7 @@ def build_seq_hash_map() -> Callable[..., type[InputType]]:
         new_seq_hash_map = {}
         for key, value in seq_hash_map.items():
             sequence = key[1:]
-            new_seq_hash_map[sequence] = value
+            new_seq_hash_map[value] = sequence
         seq_hash_map = new_seq_hash_map
 
         return seq_hash_map

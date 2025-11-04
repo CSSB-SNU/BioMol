@@ -186,17 +186,8 @@ def protein_cluster() -> Callable[..., type[InputType]]:
         mmseqs2_protein_d_tmp_dir.mkdir(parents=True, exist_ok=True)
         protein_clustered_path = tmp_dir / "mmseqs2_protein_cluster.tsv"
         protein_d_clustered_path = tmp_dir / "mmseqs2_protein_D_cluster.tsv"
-        # if already clustered, skip
-        if (
-            protein_path.stat().st_size > 0
-            and not protein_clustered_path.stat().st_size > 0
-        ):
-            run_mmseqs2(protein_path, tmp_dir)
-        if (
-            protein_d_path.stat().st_size > 0
-            and not protein_d_clustered_path.stat().st_size > 0
-        ):
-            run_mmseqs2(protein_d_path, tmp_dir)
+        run_mmseqs2(protein_path, mmseqs2_protein_tmp_dir)
+        run_mmseqs2(protein_d_path, mmseqs2_protein_d_tmp_dir)
         protein_cluster_dict = parse_mmseqs2_cluster(protein_clustered_path)
         protein_d_cluster_dict = parse_mmseqs2_cluster(protein_d_clustered_path)
         return protein_cluster_dict, protein_d_cluster_dict
@@ -335,8 +326,9 @@ def antibody_cluster() -> Callable[..., type[InputType]]:
         ab_L_cluster_dict = parse_cdhit_cluster(ab_L_cluster_output)
         ab_cluster_dict = {**ab_H_cluster_dict, **ab_L_cluster_dict}
         # TODO(psk) 20251103 : 이유는 모르겠지만, 씹히는 애들이 있음 (CDHIT에서)
+        output_ab = sum(ab_cluster_dict.values(), [])
         for ab_hash in ab_seq_hash_list:
-            if ab_hash not in sum(ab_cluster_dict.values(), []):
+            if ab_hash not in output_ab:
                 ab_cluster_dict[ab_hash.replace("P", "A")] = [ab_hash]
         return ab_cluster_dict
 
