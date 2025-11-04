@@ -402,7 +402,7 @@ packages:
 - pypi: .
   name: biomol
   version: 0.2.0
-  sha256: 81b779c45448dfb75099a304440fcb7abe37ddea92a990fab1aedfa08df9de97
+  sha256: 4735948ccf2884a06c8d7593b887857e4b90b87f484e412db0edd833c6e86ba4
   requires_dist:
   - biopython>=1.85,<2
   - click>=8.1.8,<9
@@ -411,7 +411,7 @@ packages:
   - zstandard>=0.24.0,<1
   - typing-extensions>=4.15.0,<5
   - numpy>=2.2.6,<3
-  - networkx>=3.5
+  - networkx>=3.2
   requires_python: '>=3.10'
   editable: true
 - conda: https://conda.anaconda.org/conda-forge/linux-64/biopython-1.86-py312h4c3975b_0.conda

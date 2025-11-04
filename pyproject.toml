@@ -13,7 +13,7 @@ dependencies = [
     "zstandard>=0.24.0,<1",
     "typing_extensions>=4.15.0,<5",
     "numpy>=2.2.6,<3",
-    "networkx>=3.5",
+    "networkx>=3.2",
 ]
 
 [build-system]
