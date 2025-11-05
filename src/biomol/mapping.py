@@ -18,6 +18,146 @@ class PolymerType(Enum):
     LIGAND = "ligand"
 
 
+atom_mapping = {
+    "H": 0,
+    "HE": 1,
+    "LI": 2,
+    "BE": 3,
+    "B": 4,
+    "C": 5,
+    "N": 6,
+    "O": 7,
+    "F": 8,
+    "NE": 9,
+    "NA": 10,
+    "MG": 11,
+    "AL": 12,
+    "SI": 13,
+    "P": 14,
+    "S": 15,
+    "CL": 16,
+    "AR": 17,
+    "K": 18,
+    "CA": 19,
+    "SC": 20,
+    "TI": 21,
+    "V": 22,
+    "CR": 23,
+    "MN": 24,
+    "FE": 25,
+    "CO": 26,
+    "NI": 27,
+    "CU": 28,
+    "ZN": 29,
+    "GA": 30,
+    "GE": 31,
+    "AS": 32,
+    "SE": 33,
+    "BR": 34,
+    "KR": 35,
+    "RB": 36,
+    "SR": 37,
+    "Y": 38,
+    "ZR": 39,
+    "NB": 40,
+    "MO": 41,
+    "TC": 42,
+    "RU": 43,
+    "RH": 44,
+    "PD": 45,
+    "AG": 46,
+    "CD": 47,
+    "IN": 48,
+    "SN": 49,
+    "SB": 50,
+    "TE": 51,
+    "I": 52,
+    "XE": 53,
+    "CS": 54,
+    "BA": 55,
+    "LA": 56,
+    "CE": 57,
+    "PR": 58,
+    "ND": 59,
+    "PM": 60,
+    "SM": 61,
+    "EU": 62,
+    "GD": 63,
+    "TB": 64,
+    "DY": 65,
+    "HO": 66,
+    "ER": 67,
+    "TM": 68,
+    "YB": 69,
+    "LU": 70,
+    "HF": 71,
+    "TA": 72,
+    "W": 73,
+    "RE": 74,
+    "OS": 75,
+    "IR": 76,
+    "PT": 77,
+    "AU": 78,
+    "HG": 79,
+    "TL": 80,
+    "PB": 81,
+    "BI": 82,
+    "PO": 83,
+    "AT": 84,
+    "RN": 85,
+    "FR": 86,
+    "RA": 87,
+    "AC": 88,
+    "TH": 89,
+    "PA": 90,
+    "U": 91,
+    "NP": 92,
+    "PU": 93,
+    "AM": 94,
+    "CM": 95,
+    "BK": 96,
+    "CF": 97,
+    "ES": 98,
+    "FM": 99,
+    "MD": 100,
+    "NO": 101,
+    "LR": 102,
+    "RF": 103,
+    "DB": 104,
+    "SG": 105,
+    "BH": 106,
+    "HS": 107,
+    "MT": 108,
+    "DS": 109,
+    "RG": 110,
+    "CN": 111,
+    "NH": 112,
+    "FL": 113,
+    "MC": 114,
+    "LV": 115,
+    "TS": 116,
+    "OG": 117,
+    "X": 118,  # for unknown atoms
+    "D": 119,  # for deuterium
+}
+
+
+class AtomMapping:
+    """Mapping of atom symbols to their corresponding indices."""
+
+    def __init__(self) -> None:
+        self._atom_to_index = atom_mapping
+        self._index_to_atom = {v: k for k, v in atom_mapping.items()}
+
+    def atom_to_index(self, atom: str) -> int:
+        """Convert an atom symbol to its corresponding index."""
+        return self._atom_to_index.get(atom, -1)
+
+    def index_to_atom(self, index: int) -> str:
+        """Convert an index to its corresponding atom symbol."""
+        return self._index_to_atom.get(index, "X")
+
+
 class BaseResidueView:
     """Base view class for residue-to-index mappings."""
 
