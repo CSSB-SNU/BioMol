@@ -149,13 +149,13 @@ class AtomMapping:
         self._atom_to_index = atom_mapping
         self._index_to_atom = {v: k for k, v in atom_mapping.items()}
 
-    def atom_to_index(self, atom: str) -> int:
+    def atom_to_index(self, atom: list[str] | np.ndarray) -> np.ndarray:
         """Convert an atom symbol to its corresponding index."""
-        return self._atom_to_index.get(atom, -1)
+        return np.array([self._atom_to_index.get(a, -1) for a in atom])
 
-    def index_to_atom(self, index: int) -> str:
-        """Convert an index to its corresponding atom symbol."""
-        return self._index_to_atom.get(index, "X")
+    def index_to_atom(self, index: list[int] | np.ndarray) -> np.ndarray:
+        """Convert an index back to its corresponding atom symbol."""
+        return np.array([self._index_to_atom.get(i, "X") for i in index])
 
 
 class BaseResidueView:
