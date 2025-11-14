@@ -20,7 +20,7 @@
    - Using **SignalP**, build SignalP lmdb (seq_hash -> signal peptide container)
 4. **Build A3M LMDB**
 5. **Sequence Clustering**
-   - **Antibody:** SabDab, CD-HIT (H3 if exists, else L3) cluster ID = A1234567 (rep ID, P->A)
+   - **Antibody:** SabDab, CD-HIT, Anarci (H3 if exists, else L3) cluster ID = A1234567 (rep ID, P->A)
    - **Peptides** <10 residues, 100%
    - **Polypeptide(D)** (따로 나눠서)
    - **Other Proteins:** MMseqs2 easy-cluster (seq_id=0.3,cov=0.8,covmode=0,clustmode=1) cluster ID = rep ID

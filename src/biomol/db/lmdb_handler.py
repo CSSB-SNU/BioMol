@@ -1,5 +1,6 @@
 from collections.abc import Callable
 from pathlib import Path
+import re
 
 import lmdb
 from joblib import Parallel, delayed
@@ -65,12 +66,13 @@ def build_lmdb(
     # remove UNL
     data_list = [data for data in data_list if data.stem != "UNL"]
     _already_parsed_keys = already_parsed_keys(env_path)
-    print(f"Already parsed {len(_already_parsed_keys)} entries.")
+    print(f"Already parsed {len(_already_parsed_keys)} entries. ({env_path})")
     data_list = [
         data
         for data in data_list
-        # if data.stem.split(".cif")[0] not in _already_parsed_keys
+        if data.stem not in _already_parsed_keys
     ]
+    print(f"To be parsed {len(data_list)} entries.")
 
     # --- Parallel processing ---
     chunk = 10_000

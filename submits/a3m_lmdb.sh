@@ -1,10 +1,10 @@
 #!/bin/bash
 #SBATCH -J a3m_DB
 #SBATCH --ntasks-per-node=1         
-#SBATCH -c 60                        
-#SBATCH --mem=360g
-#SBATCH -p cpu
-#SBATCH -w node02
+#SBATCH -c 20                        
+#SBATCH --mem=200g
+#SBATCH -p gpu
+#SBATCH -w gpu04
 #SBATCH -o ./log/a3m_lmdb_%a.out
 #SBATCH -e ./log/a3m_lmdb_%a.err
 #SBATCH --array=0

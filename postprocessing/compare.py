@@ -5,6 +5,7 @@ import io
 import json
 import pickle
 from pathlib import Path
+import os
 
 import click
 import lmdb
@@ -126,7 +127,7 @@ def load_data_from_lmdb_and_write(
     skip_if_exists: bool = True,
 ) -> None:
     if skip_if_exists and to_path.exists():
-        return
+        return 0
     new_hash = to_path.stem
 
     env = _ensure_env(lmdb_path)
@@ -134,7 +135,7 @@ def load_data_from_lmdb_and_write(
     with env.begin(buffers=True) as txn:
         buf = txn.get(key.encode("utf-8"))
     if buf is None:
-        return  # 혹은 raise
+        return 0 # 혹은 raise
 
     gz_bytes = pickle.loads(bytes(buf))
     decompressed = gzip.decompress(gz_bytes)
@@ -147,6 +148,7 @@ def load_data_from_lmdb_and_write(
     to_path.parent.mkdir(parents=True, exist_ok=True)
     with to_path.open("w") as f:
         f.write(text)
+    return 1
 
 
 @cli.command("remap_seq_hash")
@@ -187,25 +189,25 @@ def remap_seq_hash(v1_path: Path, v2_path: Path, njobs: int = -1) -> None:
             v2_seq_hash = v2_seq_hash_map[sequence]
             v1_to_v2_seq_hash[v1_seq_hash] = v2_seq_hash
 
-    # # remap signalp files
-    # v1_signalp_path = v1_path.parent.parent / "signalp"
-    # signalp_lines = {}
-    # for file in os.listdir(v1_signalp_path):
-    #     if not file.endswith(".gff3"):
-    #         continue
-    #     with (v1_signalp_path / file).open("r") as f:
-    #         lines = f.readlines()
-    #     v1_seq_hash = file.split(".")[0]
-    #     sequence = v1_seq_hash_to_seq[v1_seq_hash]
-    #     if sequence not in v2_seq_hash_map:
-    #         continue
-    #     v2_seq_hash = v2_seq_hash_map[sequence]
-    #     signalp_lines[v2_seq_hash] = lines
-    # # write to v2 signalp path
-    # v2_signalp_path = v2_path.parent.parent / "signalp"
-    # for v2_seq_hash in signalp_lines:
-    #     with (v2_signalp_path / f"{v2_seq_hash}.gff3").open("w") as f:
-    #         f.writelines(signalp_lines[v2_seq_hash])
+    # remap signalp files
+    v1_signalp_path = v1_path.parent.parent / "signalp"
+    signalp_lines = {}
+    for file in os.listdir(v1_signalp_path):
+        if not file.endswith(".gff3"):
+            continue
+        with (v1_signalp_path / file).open("r") as f:
+            lines = f.readlines()
+        v1_seq_hash = file.split(".")[0]
+        sequence = v1_seq_hash_to_seq[v1_seq_hash]
+        if sequence not in v2_seq_hash_map:
+            continue
+        v2_seq_hash = v2_seq_hash_map[sequence]
+        signalp_lines[v2_seq_hash] = lines
+    # write to v2 signalp path
+    v2_signalp_path = v2_path.parent.parent / "signalp"
+    for v2_seq_hash in signalp_lines:
+        with (v2_signalp_path / f"{v2_seq_hash}.gff3").open("w") as f:
+            f.writelines(signalp_lines[v2_seq_hash])
 
     v1_seq_hash_list = list(v1_seq_hash_to_seq.keys())
     # remap a3m.lmdb
@@ -213,12 +215,13 @@ def remap_seq_hash(v1_path: Path, v2_path: Path, njobs: int = -1) -> None:
 
     v2_a3m_path = v2_path.parent.parent / "a3m"
     print(f"Total a3m to remap: {len(v1_seq_hash_list)}")
+    total_rewritten = 0
     for start in range(0, len(v1_seq_hash_list), 1000):
         end = min(start + 1000, len(v1_seq_hash_list))
         batch = v1_seq_hash_list[start:end]
         print(f"Processing batch {start}–{end - 1}...")
 
-        Parallel(n_jobs=njobs, verbose=10)(
+        results = Parallel(n_jobs=njobs, verbose=10)(
             delayed(load_data_from_lmdb_and_write)(
                 lmdb_path=v1_a3m_lmdb_path,
                 key=v1_seq_hash,
@@ -229,6 +232,8 @@ def remap_seq_hash(v1_path: Path, v2_path: Path, njobs: int = -1) -> None:
             for v1_seq_hash in batch
             if v1_seq_hash in v1_to_v2_seq_hash
         )
+        total_rewritten += sum(results)
+    print(f"Total a3m files remapped: {total_rewritten}")
 
 
 if __name__ == "__main__":
