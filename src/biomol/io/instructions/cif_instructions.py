@@ -35,6 +35,7 @@ def single_value_instruction(
         if len(formatted_data) != 1:
             msg = f"Expected single value, got {len(formatted_data)}"
             raise ValueError(msg)
+
         return formatted_data[0]
 
     return _worker
@@ -45,14 +46,23 @@ def extract_float_single(*args: str | None) -> float | None:
     pattern = re.compile(r"^-?\d+(?:\.\d+)?$")
 
     # Build mask: True if value is a valid float string
+    value = None
     mask = []
     for a in args:
+        if isinstance(a, list):
+            if len(a) != 1:
+                msg = "List input must have a single element"
+                raise ValueError(msg)
+            a = a[0]
         if a is None:
             mask.append(False)
         elif isinstance(a, (int, float)):
+            value = float(a)
             mask.append(True)
         elif isinstance(a, str):
             mask.append(bool(pattern.match(a)))
+            if pattern.match(a):
+                value = float(a)
         else:
             mask.append(False)
     mask = np.array(mask)
@@ -64,10 +74,7 @@ def extract_float_single(*args: str | None) -> float | None:
     if n_valid > 1:
         msg = "More than one input is a valid float"
         raise ValueError(msg)
-
-    # Return the parsed float
-    valid_idx = np.where(mask)[0].item()
-    return float(args[valid_idx])
+    return value
 
 
 def key_stack() -> Callable[..., type[InputType]]:
