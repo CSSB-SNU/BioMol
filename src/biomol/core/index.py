@@ -15,6 +15,8 @@ from biomol.exceptions import (
 if TYPE_CHECKING:
     from numpy.typing import NDArray
 
+    from .types import IndexTableDict
+
 
 def _build_csr(
     parent_of_child: NDArray[np.integer],
@@ -254,7 +256,8 @@ class IndexTable:
             self.chain_res_indptr.copy(),
             self.chain_res_indices.copy(),
         )
-    def to_dict(self) -> dict:
+
+    def to_dict(self) -> IndexTableDict:
         """Convert IndexTable to a JSON-serializable dictionary."""
         return {
             "atom_to_res": self.atom_to_res.tolist(),
@@ -266,7 +269,7 @@ class IndexTable:
         }
 
     @classmethod
-    def from_dict(cls, data: dict) -> IndexTable:
+    def from_dict(cls, data: IndexTableDict) -> IndexTable:
         """Create IndexTable from a dictionary."""
         return cls(
             atom_to_res=np.array(data["atom_to_res"], dtype=int),

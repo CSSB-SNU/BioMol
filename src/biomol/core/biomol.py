@@ -2,7 +2,6 @@
 
 import json
 from collections.abc import Mapping
-from dataclasses import asdict
 from io import BytesIO
 from typing import Any, Generic
 
@@ -108,7 +107,7 @@ class BioMol(Generic[A_co, R_co, C_co]):
             "atoms": self._atom_container.to_dict(),
             "residues": self._residue_container.to_dict(),
             "chains": self._chain_container.to_dict(),
-            "index_table": asdict(self._index),  # pyright: ignore[reportReturnType]
+            "index_table": self._index.to_dict(),
             "metadata": self._metadata,
         }
 
@@ -130,7 +129,7 @@ class BioMol(Generic[A_co, R_co, C_co]):
             FeatureContainer.from_dict(data["atoms"]),
             FeatureContainer.from_dict(data["residues"]),
             FeatureContainer.from_dict(data["chains"]),
-            IndexTable(**data["index_table"]),
+            IndexTable.from_dict(data["index_table"]),
             data["metadata"],
         )
 
