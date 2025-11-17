@@ -15,6 +15,8 @@ from biomol.exceptions import (
 if TYPE_CHECKING:
     from numpy.typing import NDArray
 
+    from .types import IndexTableDict
+
 
 def _build_csr(
     parent_of_child: NDArray[np.integer],
@@ -253,4 +255,27 @@ class IndexTable:
             self.res_atom_indices.copy(),
             self.chain_res_indptr.copy(),
             self.chain_res_indices.copy(),
+        )
+
+    def to_dict(self) -> IndexTableDict:
+        """Convert IndexTable to a JSON-serializable dictionary."""
+        return {
+            "atom_to_res": self.atom_to_res.tolist(),
+            "res_to_chain": self.res_to_chain.tolist(),
+            "res_atom_indptr": self.res_atom_indptr.tolist(),
+            "res_atom_indices": self.res_atom_indices.tolist(),
+            "chain_res_indptr": self.chain_res_indptr.tolist(),
+            "chain_res_indices": self.chain_res_indices.tolist(),
+        }
+
+    @classmethod
+    def from_dict(cls, data: IndexTableDict) -> IndexTable:
+        """Create IndexTable from a dictionary."""
+        return cls(
+            atom_to_res=np.array(data["atom_to_res"], dtype=int),
+            res_to_chain=np.array(data["res_to_chain"], dtype=int),
+            res_atom_indptr=np.array(data["res_atom_indptr"], dtype=int),
+            res_atom_indices=np.array(data["res_atom_indices"], dtype=int),
+            chain_res_indptr=np.array(data["chain_res_indptr"], dtype=int),
+            chain_res_indices=np.array(data["chain_res_indices"], dtype=int),
         )
