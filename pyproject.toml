@@ -6,9 +6,6 @@ readme = "README.md"
 requires-python = ">=3.10"
 authors = [{ name = "Sanggeun Park", email = "psk6950@snu.ac.kr" }]
 dependencies = [
-  "biopython>=1.85,<2",
-  "joblib >=1.4.2,<2",
-  "lmdb>=1.6.2,<2",
   "zstandard>=0.24.0,<1",
   "typing_extensions>=4.15.0,<5",
   "numpy>=2.2.6,<3",
