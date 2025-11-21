@@ -272,8 +272,8 @@ class EdgeFeature(Feature):
             return self._empty_like()
 
         kept, idx = np.unique(indices, return_index=True)
-        src_in_kept = np.isin(self.src_indices, kept, assume_unique=True)
-        dst_in_kept = np.isin(self.dst_indices, kept, assume_unique=True)
+        src_in_kept = np.isin(self.src_indices, kept)
+        dst_in_kept = np.isin(self.dst_indices, kept)
         row_mask = src_in_kept & dst_in_kept
         if not row_mask.any():
             return self._empty_like()
