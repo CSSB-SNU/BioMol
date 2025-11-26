@@ -16,10 +16,12 @@ except PackageNotFoundError:
     __version__ = "unknown"
 
 from . import enums, exceptions
+from .cif import CIFMol
 from .core import BioMol
 
 __all__ = [
     "BioMol",
+    "CIFMol",
     "__version__",
     "enums",
     "exceptions",
