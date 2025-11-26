@@ -1,6 +1,5 @@
 # pyright: reportReturnType=false
-from biomol import BioMol
-from biomol.core import EdgeFeature, NodeFeature, View
+from biomol.core import BioMol, EdgeFeature, NodeFeature, View
 
 
 class CIFAtomView(
@@ -160,7 +159,8 @@ class CIFChainView(
 
 
 class CIFMol(BioMol["CIFAtomView", "CIFResidueView", "CIFChainView"]):
-    """Class for CIF molecules."""
+    """A class representing a biomolecular structure in CIF format."""
+
 
     @property
     def id(self) -> str:

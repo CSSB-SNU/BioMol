@@ -12,3 +12,4 @@ Constructor
    :nosignatures:
 
    BioMol
+   CIFMol
