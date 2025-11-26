@@ -51,13 +51,7 @@ class CIFAtomView(
 
     @property
     def bond_type(self) -> EdgeFeature:
-        """Chemical bond types between atoms.
-
-        Labels:
-        - 'SING' : Single bond
-        - 'DOUB' : Double bond
-        - 'TRIP' : Triple bond
-        """
+        """Chemical bond types between atoms."""
 
     @property
     def bond_aromatic(self) -> EdgeFeature:
@@ -80,8 +74,8 @@ class CIFResidueView(
     """View class for CIF residues."""
 
     @property
-    def name(self) -> NodeFeature:
-        """Residue names."""
+    def id(self) -> NodeFeature:
+        """Residue identifiers from the CIF file."""
 
     @property
     def formula(self) -> NodeFeature:
@@ -160,7 +154,6 @@ class CIFChainView(
 
 class CIFMol(BioMol["CIFAtomView", "CIFResidueView", "CIFChainView"]):
     """A class representing a biomolecular structure in CIF format."""
-
 
     @property
     def id(self) -> str:
