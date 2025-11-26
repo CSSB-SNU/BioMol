@@ -1,14 +1,10 @@
 # pyright: reportImportCycles=none
 
-import json
-from collections.abc import Mapping
-from io import BytesIO
 from typing import Any, Generic
 
 import numpy as np
 from numpy.typing import NDArray
 from typing_extensions import Self
-from zstandard import ZstdCompressor, ZstdDecompressor
 
 from biomol.enums import StructureLevel
 from biomol.exceptions import IndexMismatchError, StructureLevelError
@@ -17,6 +13,7 @@ from .container import FeatureContainer
 from .feature import Feature
 from .index import IndexTable
 from .types import BioMolDict
+from .utils import load_bytes, to_bytes
 from .view import A_co, AtomView, C_co, ChainView, R_co, ResidueView
 
 
@@ -141,75 +138,12 @@ class BioMol(Generic[A_co, R_co, C_co]):
         level: int, optional
             The compression level for zstd (default is 6).
         """
-
-        def _flatten_data(
-            data: Mapping[str, Any],
-        ) -> tuple[dict[str, Any], dict[str, Any]]:
-            template = {}
-            flatten = {}
-            for key, value in data.items():
-                if isinstance(value, np.ndarray):
-                    _key = str(id(value))
-                    template[key] = _key
-                    buffer = BytesIO()
-                    np.save(buffer, np.ascontiguousarray(value), allow_pickle=False)
-                    flatten[_key] = buffer.getvalue()
-                elif isinstance(value, dict):
-                    _template, _flatten = _flatten_data(value)
-                    template[key] = _template
-                    flatten.update(_flatten)
-                else:
-                    template[key] = value
-            return template, flatten
-
-        data = self.to_dict()
-        template, flatten_data = _flatten_data(data)
-        header = {
-            "class": f"{self.__class__.__module__}.{self.__class__.__name__}",
-            "template": template,
-            "arrays": {key: len(value) for key, value in flatten_data.items()},
-        }
-        header_bytes = json.dumps(header).encode("utf-8")
-        payload = b"".join(flatten_data[key] for key in flatten_data)
-        raw = len(header_bytes).to_bytes(8, "little") + header_bytes + payload
-        return ZstdCompressor(level=level).compress(raw)
+        return to_bytes(self.to_dict(), level=level)
 
     @classmethod
     def from_bytes(cls, byte_data: bytes) -> Self:
         """Deserialize the container from zstd-compressed bytes."""
-
-        def _reconstruct_data(
-            template: dict[str, Any],
-            flatten: dict[str, Any],
-        ) -> dict[str, Any]:
-            data = {}
-            for key, value in template.items():
-                if isinstance(value, str) and value in flatten:
-                    buffer = BytesIO(flatten[value])
-                    buffer.seek(0)
-                    arr = np.load(buffer, allow_pickle=False)
-                    data[key] = arr
-                elif isinstance(value, dict):
-                    data[key] = _reconstruct_data(value, flatten)
-                else:
-                    data[key] = value
-            return data
-
-        raw = ZstdDecompressor().decompress(byte_data)
-        hlen = int.from_bytes(raw[:8], "little")
-        header = json.loads(raw[8 : 8 + hlen].decode("utf-8"))
-        payload = raw[8 + hlen :]
-
-        offset = 0
-        flatten_data = {}
-        for key, ln in header["arrays"].items():
-            chunk = payload[offset : offset + ln]
-            offset += ln
-            flatten_data[key] = chunk
-
-        template_dict = header["template"]
-        data = _reconstruct_data(template_dict, flatten_data)
-        return cls.from_dict(data)  # pyright: ignore[reportArgumentType]
+        return cls.from_dict(load_bytes(byte_data))  # pyright: ignore[reportArgumentType]
 
     def update_features(
         self,

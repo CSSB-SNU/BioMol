@@ -18,6 +18,7 @@ except PackageNotFoundError:
 from . import enums, exceptions
 from .cif import CIFMol
 from .core import BioMol
+from .core.utils import load_bytes, to_bytes
 
 __all__ = [
     "BioMol",
@@ -25,4 +26,6 @@ __all__ = [
     "__version__",
     "enums",
     "exceptions",
+    "load_bytes",
+    "to_bytes",
 ]
