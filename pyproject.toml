@@ -4,12 +4,29 @@ version = "0.2.0"
 description = "Biomolecule data loader library"
 readme = "README.md"
 requires-python = ">=3.10"
-authors = [{ name = "Sanggeun Park", email = "psk6950@snu.ac.kr" }]
+license = { text = "MIT" }
+authors = [
+  { name = "Sanggeun Park", email = "psk6950@snu.ac.kr" },
+  { name = "Howon Lee", email = "hwlee7771@snu.ac.kr" },
+]
+keywords = [
+  "bioinformatics",
+  "molecular-biology",
+  "structural-biology",
+  "machine-learning",
+]
 dependencies = [
   "zstandard>=0.24.0,<1",
   "typing_extensions>=4.15.0,<5",
   "numpy>=2.2.6,<3",
 ]
+
+[project.urls]
+Homepage = "https://biomol.readthedocs.io"
+Documentation = "https://biomol.readthedocs.io"
+Repository = "https://github.com/CSSB-SNU/BioMol"
+Issues = "https://github.com/CSSB-SNU/BioMol/issues"
+Changelog = "https://github.com/CSSB-SNU/BioMol/releases"
 
 [build-system]
 build-backend = "hatchling.build"
