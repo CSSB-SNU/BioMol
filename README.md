@@ -1,5 +1,8 @@
 # BioMol
 
+[![Python Version](https://img.shields.io/pypi/pyversions/biomol.svg)](https://pypi.org/project/biomol/)
+[![PyPI](https://img.shields.io/pypi/v/biomol.svg)](https://pypi.org/project/biomol/)
+
 <p align="center">
   <img src="https://raw.githubusercontent.com/CSSB-SNU/BioMol/main/docs/_static/logo-light.png" width="450" alt="BioMol Logo">
 </p>
