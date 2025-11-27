@@ -28,10 +28,16 @@ pip install git+https://github.com/CSSB-SNU/BioMol.git
 
 ### Install from Source
 
-BioMol can be installed from source using [pixi](https://pixi.sh/latest/), a modern Python package manager.
+For development, BioMol uses [uv](https://docs.astral.sh/uv/) for fast dependency management:
 
 ```bash
 git clone https://github.com/CSSB-SNU/BioMol
 cd BioMol
-pixi install
+uv sync
+```
+
+For development with all tools (linting, testing, etc.):
+
+```bash
+uv sync --extra dev
 ```
