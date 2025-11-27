@@ -1,10 +1,11 @@
 # BioMol
 
 <p align="center">
-  <img src="docs/_static/logo-light.svg" alt="BioMol Logo" width="80%">
+  <img src="docs/_static/logo-light.png" width="450">
 </p>
 
-BioMol is a molecular data engine that provides PyMOL-like selections and NumPy-style operations, designed for machine learning and large-scale molecular analysis.
+BioMol is a molecular data engine that provides PyMOL-like selections and NumPy-style
+operations, designed for machine learning and large-scale molecular analysis.
 
 For more details, see the [documentation](https://biomol.readthedocs.io/en/latest/index.html).
 
