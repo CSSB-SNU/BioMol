@@ -1,7 +1,7 @@
 # BioMol
 
 <p align="center">
-  <img src="docs/_static/logo-light.png" width="450">
+  <img src="https://raw.githubusercontent.com/CSSB-SNU/BioMol/main/docs/_static/logo-light.png" width="450" alt="BioMol Logo">
 </p>
 
 BioMol is a molecular data engine that provides PyMOL-like selections and NumPy-style
@@ -9,23 +9,15 @@ operations, designed for machine learning and large-scale molecular analysis.
 
 For more details, see the [documentation](https://biomol.readthedocs.io/en/latest/index.html).
 
-> [!WARNING]
-> BioMol is under active development. The API may change without notice.
-
 ## Installation
 
 BioMol supports Python 3.10 and above.
 
-### Install from GitHub
-
-BioMol can be installed directly from GitHub using pip:
+### Install from PyPI
 
 ```bash
-pip install git+https://github.com/CSSB-SNU/BioMol.git
+pip install biomol
 ```
-
-> [!Note]
-> Currently, BioMol does not support PyPI installations because it's under active development. We plan to release it on PyPI once the API stabilizes.
 
 ### Install from Source
 
