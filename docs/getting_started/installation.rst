@@ -10,25 +10,26 @@ BioMol supports Python 3.10 and above.
 Install with pip
 ----------------
 
-BioMol can be installed directly from GitHub using pip:
+BioMol can be installed from PyPI:
 
 .. code-block:: bash
 
-   pip install git+https://github.com/CSSB-SNU/BioMol.git
-
-.. Note::
-
-   Currently, BioMol does not support PyPI installations because it's under active development.
-   We plan to release it on PyPI once the API stabilizes.
+   pip install biomol
 
 
 Install from source
 -------------------
 
-BioMol can be installed from source using `pixi <https://pixi.sh/latest/>`_, a modern Python package manager.
+For development, BioMol uses `uv <https://docs.astral.sh/uv/>`_ for fast dependency management:
 
 .. code-block:: bash
 
    git clone https://github.com/CSSB-SNU/BioMol
    cd BioMol
-   pixi install
+   uv sync
+
+For development with all tools (linting, testing, etc.):
+
+.. code-block:: bash
+
+   uv sync --extra dev

@@ -1,11 +1,5 @@
-/logs/
 *__pycache__/
-BioMol/configs/datapath.json
-
-# pixi environments
-.pixi
-*.egg-info
-
+/dist/
 
 docs/_build/
 docs/api/generated/
