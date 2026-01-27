@@ -69,10 +69,11 @@ def load_bytes(byte_data: bytes) -> Mapping[str, Any]:
                 data[key] = value
         return data
 
-    raw = ZstdDecompressor().decompress(byte_data)
+    with ZstdDecompressor().stream_reader(BytesIO(byte_data)) as reader:
+        raw = reader.read()
     hlen = int.from_bytes(raw[:8], "little")
     header = json.loads(raw[8 : 8 + hlen].decode("utf-8"))
-    payload = raw[8 + hlen :]
+    payload = memoryview(raw)[8 + hlen :]
 
     offset = 0
     flatten_data = {}
