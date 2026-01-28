@@ -2,7 +2,7 @@ import enum
 
 
 @enum.unique
-class StructureLevel(enum.Enum):
+class StructureLevel(str, enum.Enum):
     """Levels of structural hierarchy in biomolecules."""
 
     ATOM = "atom"
