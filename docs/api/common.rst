@@ -10,8 +10,6 @@ Enums
     :toctree: ./generated
     :nosignatures:
 
-    MoleculeType
-    PolymerType
     StructureLevel
 
 
