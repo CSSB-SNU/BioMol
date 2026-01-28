@@ -15,17 +15,16 @@ try:
 except PackageNotFoundError:
     __version__ = "unknown"
 
-from . import enums, exceptions
 from .cif import CIFMol
 from .core import BioMol
 from .core.utils import load_bytes, to_bytes
+from .enums import StructureLevel
 
 __all__ = [
     "BioMol",
     "CIFMol",
+    "StructureLevel",
     "__version__",
-    "enums",
-    "exceptions",
     "load_bytes",
     "to_bytes",
 ]
