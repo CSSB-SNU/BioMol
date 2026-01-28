@@ -1,6 +1,6 @@
 [project]
 name = "biomol"
-version = "1.0.0"
+version = "1.0.1"
 description = "ML-ready biomolecular data handling package."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -74,7 +74,6 @@ target-version = "py310"
 [tool.ruff.lint]
 select = ["ALL"]
 ignore = [
-  "F722", # Incompatible with jaxtyping
   "D100", # Missing docstring in public module
   "D104", # Missing docstring in public package
 ]
